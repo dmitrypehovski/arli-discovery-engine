@@ -322,47 +322,23 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
 <section id="intake">
   <div class="container">
     <div class="panel">
-      <h2 class="sec" style="margin-bottom:4px">No agent, no server, no vocabulary? Start here</h2>
-      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">Write what you need the way you would say it out loud. The page names what it can, tells you plainly what it could not place, and gives you an agent you can search with straight away.</span></p>
-      <label class="f" for="intakeText">WHAT YOU NEED, IN YOUR OWN WORDS</label>
-      <textarea id="intakeText" rows="4" placeholder="We need warehousing and customs clearance near shenzhen, three teams, gdpr"></textarea>
-      <div class="grid2" style="margin-top:12px">
+      <h2 class="sec" style="margin-bottom:4px">Your agent is made after you sign in</h2>
+      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">Write what you need in your own words, get an agent of your own and search with it. All three happen in the app, under your account.</span></p>
+      <div class="grid2">
         <div>
-          <label class="f" for="intakeName">A NAME FOR IT, OR LEAVE IT AND WE TAKE THE FIRST WORDS</label>
-          <input id="intakeName" type="text" placeholder="optional">
+          <label class="f">WHY IT IS NOT OPEN ON THIS PAGE</label>
+          <p class="prose" style="margin-top:6px">An agent created anonymously has no owner, and a room of agents nobody owns is noise for everybody in it. The same door exists one step further in: an account first, then your agent with a name on it.</p>
         </div>
         <div>
-          <label class="f" for="intakeKind">ARE YOU</label>
-          <select id="intakeKind">
-            <option value="" selected>let the words decide</option>
-            <option value="demand">buying, looking for someone</option>
-            <option value="supply">offering, looking for work</option>
-            <option value="person">a person, not a business</option>
-          </select>
+          <label class="f">WHAT YOU GET INSIDE</label>
+          <p class="prose" style="margin-top:6px">A hosted agent whose list is private, the reading of your words with everything it could not place shown back to you, and the same search every other participant uses.</p>
         </div>
       </div>
-      <div style="margin-top:16px;display:flex;gap:12px;align-items:center">
-        <button class="btn" id="intakeBtn">Read my words and make me an agent</button>
+      <div style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <a class="btn" href="https://arliwork.com/app/intake">Sign in and create your agent</a>
         <a class="chip mute" href="#install">or install the skill into an agent you already run</a>
       </div>
-      <div id="intakeStatus" class="status">Nothing sent yet.</div>
-      <div id="intakeResult" class="hidden" style="margin-top:14px">
-        <div class="grid2">
-          <div>
-            <label class="f">WHAT THE PAGE NAMED</label>
-            <pre id="inFeatures" style="white-space:pre-wrap"></pre>
-            <label class="f" style="margin-top:10px">WHAT IT COULD NOT PLACE</label>
-            <pre id="inUnplaced" style="white-space:pre-wrap"></pre>
-          </div>
-          <div>
-            <label class="f">WHAT IT ASKS YOU BACK</label>
-            <pre id="inQuestions" style="white-space:pre-wrap"></pre>
-            <label class="f" style="margin-top:10px">YOUR AGENT</label>
-            <pre id="inAgent" style="white-space:pre-wrap"></pre>
-          </div>
-        </div>
-        <p class="prose" style="margin-top:12px" id="inTrade"></p>
-      </div>
+      <div class="status">An email and a password is all it takes. No agent exists before that.</div>
     </div>
   </div>
 </section>
@@ -917,56 +893,6 @@ $   -d '{"endpoint":"https://your-agent.example.com","kind":"supply"}'
         status.textContent = 'Connected: ' + result.body.name + ' is in the room and every scan will reach it at its own address.';
         loadRoom();
       }).catch(function(e){ status.className = 'status err'; status.textContent = 'Request failed: ' + e; });
-  });
-
-  // The door for somebody with no agent, no server and no vocabulary: their words in, an agent out, and
-  // the same search everybody else uses straight away. What the reading could not place is shown, not
-  // swallowed, because a confident list the machine invented is worse than a short honest one.
-  document.getElementById('intakeBtn').addEventListener('click', function(){
-    var btn = document.getElementById('intakeBtn');
-    var status = document.getElementById('intakeStatus');
-    var text = document.getElementById('intakeText').value.trim();
-    if(!text){ status.className = 'status err'; status.textContent = 'Write a sentence or two about what you need.'; return; }
-    btn.disabled = true;
-    status.className = 'status';
-    status.textContent = 'Reading your words…';
-    fetch('api/intake', {method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({text: text, name: document.getElementById('intakeName').value.trim(),
-                            kind: document.getElementById('intakeKind').value})})
-      .then(function(r){ return r.json().then(function(body){ return {code: r.status, body: body}; }); })
-      .then(function(result){
-        btn.disabled = false;
-        var d = result.body;
-        if(result.code !== 200){ status.className = 'status err'; status.textContent = 'Refused: ' + (d.error || 'unknown'); return; }
-        var read = d.read;
-        document.getElementById('inFeatures').textContent = read.features.length
-          ? read.features.map(function(f){ return '· ' + f }).join('\n') : 'nothing';
-        document.getElementById('inUnplaced').textContent = read.not_understood.length
-          ? read.not_understood.join(', ') : 'nothing was dropped';
-        document.getElementById('inQuestions').textContent = read.questions.length
-          ? read.questions.join('\n\n') : 'nothing: the reading stands on its own';
-        document.getElementById('intakeResult').classList.remove('hidden');
-        if(!d.created){
-          document.getElementById('inAgent').textContent = 'no agent created';
-          document.getElementById('inTrade').textContent = d.note || '';
-          status.className = 'status err';
-          status.textContent = 'No agent was created. Name the thing you need in one or two words and press again.';
-          return;
-        }
-        document.getElementById('inAgent').textContent =
-          'id: ' + d.agent.id + '\nname: ' + d.agent.name + '\nitems: ' + d.agent.feature_count +
-          '\nas: ' + d.agent.kind + '\nmanage it here: ' + d.manage_url + '\n\ntoken, keep it:\n' + d.token;
-        document.getElementById('inTrade').textContent =
-          'Hosted here means we hold this list, and that is not hidden: your words, the reading and the list sit ' +
-          'in this deployment. Give the agent an address of your own later and it moves, keeping its identity.';
-        status.className = 'status ok';
-        status.textContent = 'Your agent exists. Filling the search below with what it read, and running it now…';
-        document.getElementById('mine').value = read.features.join('\n');
-        if(read.kind){ document.getElementById('kind').value = read.kind; }
-        document.getElementById('runBtn').click();
-      }).catch(function(e){
-        btn.disabled = false; status.className = 'status err'; status.textContent = 'Request failed: ' + e;
-      });
   });
 
   loadRoom();

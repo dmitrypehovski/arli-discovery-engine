@@ -387,3 +387,17 @@ def test_a_real_room_shows_no_example_agents(monkeypatch) -> None:
     monkeypatch.setenv("ARLI_MATCH_ROOM_MODE", "demo")
     assert service.shows_examples() is True
     assert [agent for agent in service.room_view() if agent.get("sample")], "the demo room keeps its examples"
+
+
+def test_the_intake_door_is_closed_without_the_key(monkeypatch) -> None:
+    """Creating an agent from a sentence is for a signed-in person in the app, not for the open network."""
+    from app import service
+
+    monkeypatch.delenv(service.INTAKE_KEY_ENV, raising=False)
+    assert service.intake_allowed(None) is False, "a deployment without a key must fail closed, not open"
+    assert service.intake_allowed("") is False
+
+    monkeypatch.setenv(service.INTAKE_KEY_ENV, "k3y-from-the-platform")
+    assert service.intake_allowed("k3y-from-the-platform") is True
+    assert service.intake_allowed("something-else") is False
+    assert service.intake_allowed(None) is False, "no header, no door"

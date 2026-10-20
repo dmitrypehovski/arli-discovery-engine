@@ -434,6 +434,7 @@ def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
     }
 
 
+INTAKE_KEY_ENV = "ARLI_INTAKE_KEY"
 TAXONOMY_PATH_ENV = "ARLI_MATCH_TAXONOMY"
 DEFAULT_TAXONOMY_PATH = "/llm-gateway/skill_taxonomy_v2.json"
 
@@ -449,6 +450,20 @@ def taxonomy() -> Taxonomy:
     if path and Path(path).is_file():
         return Taxonomy.from_file(path)
     return Taxonomy.built_in()
+
+
+def intake_allowed(header_value: str | None) -> bool:
+    """Whether this caller may create an agent from written words.
+
+    The door is not open to the network. Creating an agent out of a sentence is something a signed-in person
+    does in the app, where the agent has an owner from the first moment; an anonymous endpoint would leave
+    unowned agents in the room and put the store behind a free entrance. A missing key closes the door rather
+    than opening it, so a deployment that forgets to configure one fails closed.
+    """
+    expected = os.environ.get(INTAKE_KEY_ENV, "").strip()
+    if not expected:
+        return False
+    return secrets.compare_digest(str(header_value or "").strip(), expected)
 
 
 def intake(payload: dict) -> dict:
@@ -631,6 +646,14 @@ class Handler(BaseHandler):
             return
 
         if path == "/api/intake":
+            if not intake_allowed(self.headers.get("X-ARLI-Intake-Key")):
+                self._json(403, {
+                    "error": "intake_not_open",
+                    "detail": "Writing a sentence and getting an agent happens in the app, after signing in: "
+                              "an agent made anonymously would have no owner. This deployment creates them "
+                              "for the platform only.",
+                })
+                return
             try:
                 self._json(200, intake(payload))
             except ValueError as error:
