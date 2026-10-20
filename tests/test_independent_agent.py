@@ -103,8 +103,11 @@ def test_an_exchange_with_a_foreign_harness_reaches_the_intersection(foreign, mo
         remote_kind="supply",
     )
     assert outcome["opened"], outcome.get("rejection")
-    assert outcome.get("matched_features") == ["city:sf", "skill:design"], outcome
-    assert outcome["overlap_basis_points"] == 5000
+    # Three of four now, not two: the requester's "need:infra" meets the foreign agent's
+    # "offer:infra" as one token under the published vocabulary. That is the point of the rule, and
+    # this test is what says the foreign implementation applies it too.
+    assert outcome.get("matched_features") == ["city:sf", "need:infra", "skill:design"], outcome
+    assert outcome["overlap_basis_points"] == 7500
     assert outcome["passed_floor"] is True
     assert outcome["agreed"], "the negotiation must reach a recorded agreement"
     assert outcome["wires_clean"] and not outcome["leaked_features"], (

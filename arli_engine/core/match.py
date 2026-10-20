@@ -291,8 +291,13 @@ def closed_match_holder(
     records what it learned: the matches, the number of submitted features and the
     floor the parties agreed on.
     """
-    names = set(matched)
-    found = sorted(f for f in own if f in names)
+    # The same rule the intersection used, applied to the holder's own bookkeeping. Comparing raw
+    # strings here made the two sides disagree the moment the vocabulary existed: the applicant would
+    # report a match on "need:infra" while the holder held "offer:infra" and counted nothing.
+    from arli_engine.core.vocabulary import canonical_token
+
+    names = {canonical_token(name) for name in matched}
+    found = sorted(f for f in own if canonical_token(f) in names)
     overlap_basis_points = round(10000 * len(found) / len(own))
 
     completeness = Completeness()

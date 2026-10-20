@@ -93,7 +93,6 @@ def test_the_engine_matches_the_version_of_the_text_it_depends_on():
 
     require_spec_house()
     english = spec_file("SPEC.en.md")
-    assert arli_engine.EXTENSION_VERSION == "1.3.0"
     assert f"# ARLI Discovery Extension v{arli_engine.EXTENSION_VERSION}" in english
     assert arli_engine.EXTENSION_URI in english
 

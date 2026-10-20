@@ -24,6 +24,7 @@ import argparse
 import base64
 import hashlib
 import json
+import re
 import secrets
 import sys
 import threading
@@ -337,8 +338,24 @@ class Agent:
         return {"scheme": "closed_blind_rsa", "feature_cap": FEATURE_CAP,
                 "n": format(numbers.n, "x"), "e": format(numbers.e, "x")}
 
+    def _canonical(self, feature: str) -> str:
+        """The published vocabulary, reimplemented here rather than imported.
+
+        A need and an offer of the same commodity have to meet, so the token is the value alone for
+        goods and namespace:value for attributes. Both sides apply this and only this.
+        """
+        text = str(feature or "")
+        if ":" not in text:
+            return text.strip().lower()
+        namespace, value = text.split(":", 1)
+        namespace = namespace.strip().lower()
+        value = re.sub(r"[\s_-]+", "-", value.strip().lower()).strip("-")
+        if namespace in ("need", "want", "offer", "supply", "skill", "service", "commodity", "product"):
+            return value
+        return f"{namespace}:{value}"
+
     def _token(self, feature: str, key: rsa.RSAPrivateKey) -> int:
-        digest = hashlib.sha256(feature.lower().strip().encode("utf-8")).digest()
+        digest = hashlib.sha256(self._canonical(feature).encode("utf-8")).digest()
         return pow(int.from_bytes(digest, "big") % key.public_key().public_numbers().n,
                    key.private_numbers().d, key.public_key().public_numbers().n)
 

@@ -378,12 +378,21 @@ def run_conformance(target: Target, holder: Target | None = None) -> Report:
 
     _check(report, "match.closed_flow_runs", closed_flow)
 
-    _check(report, "match.symmetric", lambda: (
-        closed.get("match_a", {}).get("matched_features")
-        == closed.get("match_b", {}).get("matched_features"),
-        f"A={closed.get('match_a', {}).get('matched_features')} "
-        f"B={closed.get('match_b', {}).get('matched_features')}",
-    ))
+    def symmetric():
+        """Both sides learn the same intersection, each in its own spelling of the shared item.
+
+        With the vocabulary, a need and an offer of the same commodity are one token but two strings, so
+        comparing the strings for equality would fail a correct implementation. The intersection is
+        compared as tokens; the strings are printed for a reader.
+        """
+        from arli_engine.core.vocabulary import canonical_token
+
+        a = closed.get("match_a", {}).get("matched_features") or []
+        b = closed.get("match_b", {}).get("matched_features") or []
+        same = sorted(canonical_token(item) for item in a) == sorted(canonical_token(item) for item in b)
+        return same, f"A={a} B={b} as tokens: {'equal' if same else 'different'}"
+
+    _check(report, "match.symmetric", symmetric)
 
     def blinded_only():
         blob = " ".join(closed.get("commit", {}).get("blinded", []))

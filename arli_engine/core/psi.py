@@ -35,8 +35,15 @@ MAX_FEATURES_PER_EXCHANGE = 64  # cap from the measurement: beyond it the cost g
 
 
 def feature_hash(feature: str) -> int:
-    """A feature as a number modulo: the same on both sides."""
-    return int.from_bytes(hashlib.sha256(feature.encode("utf-8")).digest(), "big")
+    """A feature as a number modulo: the same on both sides.
+
+    The hash is taken over the canonical token, not the string as typed, so a need and an offer of the
+    same commodity meet. The rule is published (see core/vocabulary.py) and identical in every
+    implementation, which is what lets both sides agree without swapping lists.
+    """
+    from arli_engine.core.vocabulary import canonical_token
+
+    return int.from_bytes(hashlib.sha256(canonical_token(feature).encode("utf-8")).digest(), "big")
 
 
 def blind_set(features: list[str], n: int, e: int) -> tuple[list[int], list[int]]:

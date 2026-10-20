@@ -16,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import arli_engine
 from arli_engine.adapters.a2a.server import health_document, start_agent  # noqa: E402
 from arli_engine.agent import build_agent, load_or_create_key  # noqa: E402
 from arli_engine.core.signing import verify_card_self  # noqa: E402
@@ -42,7 +43,7 @@ def test_the_card_carries_the_extension_version() -> None:
     agent = build_agent("card-check", FEATURES, "http://127.0.0.1:8811")
     entry = agent.card["extensions"][0]
     assert entry["uri"].endswith("arli.discovery.v1")
-    assert entry["version"] == "1.3.0"
+    assert entry["version"] == arli_engine.EXTENSION_VERSION
 
 
 def test_the_card_publishes_the_count_and_never_the_values() -> None:
@@ -65,7 +66,7 @@ def test_the_health_document_answers_without_a_card_fetch() -> None:
     document = health_document(agent)
     assert document["ok"] is True
     assert document["agent"] == "health-check"
-    assert document["extension_version"] == "1.3.0"
+    assert document["extension_version"] == arli_engine.EXTENSION_VERSION
     assert document["features_held_at_home"] == len(FEATURES)
     assert document["kid"] == "health-check-key-1"
     assert not any(value in json.dumps(document) for value in FEATURES)

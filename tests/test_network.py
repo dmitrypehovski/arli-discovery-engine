@@ -151,8 +151,9 @@ def test_two_separate_processes_settle_a_pair(second_process) -> None:
     )
     assert result["opened"] is True, result.get("rejection")
     assert result["agreed"] is True, "the counterparty must accept through its own journal"
-    assert result["overlap_basis_points"] == 5000, result
-    assert result["matched_features"] == ["city:sf", "skill:design"]
+    # 7500, not 5000: "need:infra" now meets "offer:infra" under the published vocabulary.
+    assert result["overlap_basis_points"] == 7500, result
+    assert result["matched_features"] == ["city:sf", "need:infra", "skill:design"]
     assert result["passed_floor"] is True
     assert result["wires_clean"] is True, result["leaked_features"]
 
@@ -167,7 +168,7 @@ def test_a_connected_agent_is_matched_through_the_service(second_process) -> Non
     assert remote_rows, "the connected agent must appear in the scan"
     found = [row for row in remote_rows if row.get("passed_floor")]
     assert found, "the connected agent shares two features and must clear the floor of 3000"
-    assert found[0]["matched_features"] == ["city:sf", "skill:design"]
+    assert found[0]["matched_features"] == ["city:sf", "need:infra", "skill:design"]
     assert scan["wires_clean"] is True, [row.get("leaked_features") for row in scan["rows"]]
 
 
