@@ -76,6 +76,15 @@ def connect() -> sqlite3.Connection:
                active INTEGER NOT NULL DEFAULT 1
            )"""
     )
+    # Added after the first rows existed: a remote agent that stops answering has to leave the room,
+    # and the reason has to be visible rather than silent.
+    for column, definition in (("failures", "INTEGER NOT NULL DEFAULT 0"),
+                               ("last_checked", "TEXT NOT NULL DEFAULT ''"),
+                               ("unreachable_reason", "TEXT NOT NULL DEFAULT ''")):
+        try:
+            connection.execute(f"ALTER TABLE remotes ADD COLUMN {column} {definition}")
+        except sqlite3.OperationalError:
+            pass
     return connection
 
 
@@ -137,6 +146,9 @@ def connect_agent(payload: dict) -> dict:
              str(payload.get("headline") or "").strip(), endpoint, verified["kid"],
              json.dumps(verified["jwk"]), datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
         )
+        # Connecting again is the way back: the count resets and the agent is in the room once more.
+        connection.execute("UPDATE remotes SET failures = 0, unreachable_reason = '', active = 1 WHERE id = ?",
+                           (agent_id,))
     return {
         "connected": True,
         "id": agent_id,
@@ -165,6 +177,19 @@ def remote_agents(include_endpoint: bool = False) -> list[dict]:
             agent["kid"] = row["kid"]
         agents.append(agent)
     return agents
+
+
+def remotes_to_check() -> list[dict]:
+    """Every connected agent, including the ones that left the room.
+
+    A search retries a withdrawn agent quietly. Without that, a moment of network trouble would be
+    permanent: the agent would have to be connected again by hand to come back.
+    """
+    with connect() as connection:
+        rows = connection.execute("SELECT * FROM remotes ORDER BY connected_at").fetchall()
+    return [{"id": row["id"], "name": row["name"], "kind": row["kind"], "city": row["city"],
+             "headline": row["headline"], "endpoint": row["endpoint"], "active": row["active"],
+             "failures": row["failures"]} for row in rows]
 
 
 def stored_agents(include_features: bool = False) -> list[dict]:
@@ -240,6 +265,40 @@ def owned_agent(agent_id: str, token: str) -> dict | None:
             "created_at": row["created_at"]}
 
 
+# A connected agent that stops answering must not sit in the room for ever looking available. It
+# leaves after two failed attempts and comes back the moment a scan reaches it or someone connects it
+# again. Two, not one: a tunnel hiccup is not an agent that has gone away.
+REMOTE_FAILURES_BEFORE_WITHDRAWAL = 2
+
+
+def note_remote_failure(agent_id: str, reason: str) -> bool:
+    """Count a failed attempt. Returns True when this one takes the agent out of the room."""
+    with connect() as connection:
+        connection.execute(
+            """UPDATE remotes
+               SET failures = failures + 1,
+                   last_checked = ?,
+                   unreachable_reason = ?,
+                   active = CASE WHEN failures + 1 >= ? THEN 0 ELSE active END
+               WHERE id = ?""",
+            (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), reason,
+             REMOTE_FAILURES_BEFORE_WITHDRAWAL, agent_id),
+        )
+        row = connection.execute("SELECT failures, active FROM remotes WHERE id = ?",
+                                 (agent_id,)).fetchone()
+    return bool(row) and row["failures"] >= REMOTE_FAILURES_BEFORE_WITHDRAWAL and row["active"] == 0
+
+
+def note_remote_success(agent_id: str) -> None:
+    """An answer clears the count: the agent is here, and the room should say so."""
+    with connect() as connection:
+        connection.execute(
+            """UPDATE remotes SET failures = 0, unreachable_reason = '', active = 1,
+               last_checked = ? WHERE id = ?""",
+            (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), agent_id),
+        )
+
+
 def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
     """One exchange per agent in the room, samples and registered agents alike."""
     entries = []
@@ -276,13 +335,14 @@ def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
             "evidence_ids": {name: envelope["evidence_id"]
                              for name, envelope in result["evidence"].items()},
         })
-    for remote in remote_agents(include_endpoint=True):
+    for remote in remotes_to_check():
         try:
             result = run_remote_exchange(
                 my_features, remote["endpoint"], floor, remote_id=remote["name"],
                 remote_kind=remote["kind"], my_kind=my_kind,
             )
         except Exception as error:  # noqa: BLE001
+            withdrawn = note_remote_failure(remote["id"], f"{type(error).__name__}: {error}")
             result = {"id": remote["id"], "name": remote["name"], "kind": remote["kind"],
                       "city": remote["city"], "headline": remote["headline"],
                       "claim_level": "declared", "will_not_publish": "",
@@ -290,10 +350,23 @@ def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
                       "opened": False, "rejection": f"remote_unreachable: {type(error).__name__}",
                       "overlap_basis_points": None, "overlap_ratio": None,
                       "matched_features": [], "passed_floor": False, "agreed": False,
-                      "wires_clean": True, "leaked_features": [], "evidence_ids": {}}
+                      "wires_clean": True, "leaked_features": [], "evidence_ids": {},
+                      "withdrawn": withdrawn}
+        # The row is identified by the id in the store, not by the name the other side publishes:
+        # a caller acts on this row, and the name belongs to the remote agent, not to us.
+        result["id"] = remote["id"]
+        if result.get("answered", True):
+            note_remote_success(remote["id"])
+        else:
+            # Nothing came back. Say that plainly in the row: a reader must be able to tell an absent
+            # agent from one that answered and refused, because only the first one leaves the room.
+            reason = str(result.get("rejection") or "no answer").replace("remote_refused: ", "")
+            result["rejection"] = f"remote_unreachable: {reason}"
+            result["withdrawn"] = note_remote_failure(remote["id"], result["rejection"])
         result["city"] = remote["city"] or result.get("city", "")
         result["headline"] = remote["headline"] or result.get("headline", "")
-        rows.append(result)
+        if remote["active"]:
+            rows.append(result)
 
     rows.sort(key=lambda row: (row.get("overlap_basis_points") or -1), reverse=True)
     return {

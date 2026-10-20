@@ -249,8 +249,11 @@ def run_remote_exchange(my_features: list[str], remote_endpoint: str, floor: int
                      {"session_id": session, "matched": finish.get("matched_features", []),
                       "floor_basis_points": floor})
             except Exception as error:  # noqa: BLE001
-                code = getattr(error, "code", None) or f"{type(error).__name__}"
-                return _refused(f"remote_refused: {code}", remote_id, floor)
+                refusal_code = getattr(error, "code", None)
+                code = refusal_code or f"{type(error).__name__}"
+                # A protocol refusal carries a code; a transport failure does not.
+                return _refused(f"remote_refused: {code}", remote_id, floor,
+                                answered=bool(refusal_code))
 
             # Two different questions, kept apart. Before the intersection is revealed, no
             # feature of ours may travel: that is the promise. The record call comes after by
@@ -270,7 +273,7 @@ def run_remote_exchange(my_features: list[str], remote_endpoint: str, floor: int
                 "headline": f"connected agent at {remote_endpoint}", "claim_level": "declared",
                 "will_not_publish": "whatever its owner keeps at home",
                 "feature_count": None, "sample": False, "remote": True,
-                "endpoint": remote_endpoint,
+                "endpoint": remote_endpoint, "answered": True,
                 "opened": True, "rejection": None,
                 "agreed": accept.get("outcome") == "agreed",
                 "overlap_basis_points": basis,
@@ -287,8 +290,12 @@ def run_remote_exchange(my_features: list[str], remote_endpoint: str, floor: int
             server.server_close()
 
 
-def _refused(code: str, remote_id: str, floor: int) -> dict:
+def _refused(code: str, remote_id: str, floor: int, *, answered: bool = True) -> dict:
+    """A refused exchange. `answered` separates the two cases a caller must not confuse: the agent
+    spoke and said no, or nothing came back at all. A dead address and a strict agent are different
+    problems, and only one of them means the agent has left the room."""
     return {
+        "answered": answered,
         "id": remote_id, "name": remote_id, "kind": "?", "city": "",
         "headline": "connected agent", "claim_level": "declared", "will_not_publish": "",
         "feature_count": None, "sample": False, "remote": True,

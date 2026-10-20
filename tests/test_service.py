@@ -183,3 +183,73 @@ def test_the_three_moves_block_uses_the_card_markup_it_is_styled_for() -> None:
         "the unit-and-body pattern does not belong in this block"
     )
     assert how.count("<span class=\"n\">") == 3, "three numbered cards"
+
+
+def _insert_remote(agent_id: str, endpoint: str, name: str = "Remote One") -> None:
+    """Put a connected agent in the store without going through a live handshake."""
+    import json
+    from datetime import datetime, timezone
+
+    with service.connect() as connection:
+        connection.execute(
+            """INSERT OR REPLACE INTO remotes
+               (id, name, kind, city, headline, endpoint, kid, jwk, connected_at, active,
+                failures, last_checked, unreachable_reason)
+               VALUES (?,?,?,?,?,?,?,?,?,1,0,'','')""",
+            (agent_id, name, "supply", "berlin", "remote", endpoint, "kid-1", json.dumps({}),
+             datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
+        )
+
+
+def test_an_agent_that_stops_answering_leaves_the_room_after_two_searches() -> None:
+    """A dead address must not sit in the room looking available.
+
+    One failure is not enough: a tunnel hiccup or a restart is not an agent that has gone away. Two
+    in a row take it out, with the reason recorded, and the room stops offering it.
+    """
+    agent_id, endpoint = "remote-dead", "http://127.0.0.1:9"
+    _insert_remote(agent_id, endpoint)
+
+    first = service.scan_room(["skill:brand-design"], 1000, "demand")
+    row = [entry for entry in first["rows"] if entry["id"] == agent_id][0]
+    assert row["rejection"].startswith("remote_unreachable")
+    assert row["withdrawn"] is False, "one failure is a hiccup, not an absence"
+    assert agent_id in [entry["id"] for entry in service.room_view()]
+
+    second = service.scan_room(["skill:brand-design"], 1000, "demand")
+    row = [entry for entry in second["rows"] if entry["id"] == agent_id][0]
+    assert row["withdrawn"] is True, "the second failure takes it out of the room"
+    assert agent_id not in [entry["id"] for entry in service.room_view()]
+
+    with service.connect() as connection:
+        stored = connection.execute(
+            "SELECT failures, unreachable_reason FROM remotes WHERE id = ?", (agent_id,)).fetchone()
+    assert stored["failures"] >= 2 and stored["unreachable_reason"]
+
+
+def test_an_agent_that_answers_again_is_back_in_the_room() -> None:
+    """The way back has to work, or a restart would be permanent exile."""
+    from arli_engine.serve import build_pair, port_of
+
+    agent_id = "remote-alive"
+    _insert_remote(agent_id, "http://127.0.0.1:9")
+    with service.connect() as connection:
+        connection.execute("UPDATE remotes SET failures = 5, active = 0, unreachable_reason = 'gone' WHERE id = ?",
+                           (agent_id,))
+    assert agent_id not in [entry["id"] for entry in service.room_view()]
+
+    _states, servers = build_pair(0, 0, names=("alive", "peer"))
+    try:
+        with service.connect() as connection:
+            connection.execute("UPDATE remotes SET endpoint = ? WHERE id = ?",
+                               (f"http://127.0.0.1:{port_of(servers[0])}", agent_id))
+        service.scan_room(["skill:brand-design"], 1000, "demand")
+        with service.connect() as connection:
+            stored = connection.execute("SELECT failures, active FROM remotes WHERE id = ?",
+                                        (agent_id,)).fetchone()
+        assert stored["failures"] == 0 and stored["active"] == 1
+        assert agent_id in [entry["id"] for entry in service.room_view()]
+    finally:
+        for server in servers:
+            server.shutdown()
+            server.server_close()
