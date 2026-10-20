@@ -825,7 +825,17 @@ $   -d '{"endpoint":"https://your-agent.example.com","kind":"supply"}'
       renderBoard(d);
       status.className = 'status ok';
       status.textContent = 'Done: ' + d.agents_checked + ' agents as someone ' + kindLabel(d.your_kind) + '. ' +
-        d.above_floor + ' above your floor, ' + d.not_comparable + ' refused as not a pair, no feature on any wire. Click a row to open its exchange.';
+        d.above_floor + ' above your floor, ' + d.not_comparable + ' refused as not a pair, no feature on any wire. ' +
+        (d.remote_skipped_by_bucket
+          ? d.remote_skipped_by_bucket + ' connected agent' + (d.remote_skipped_by_bucket === 1 ? '' : 's') +
+            ' shared no bucket with you and ' + (d.remote_skipped_by_bucket === 1 ? 'was' : 'were') +
+            ' not asked at all: no exchange was spent on ' + (d.remote_skipped_by_bucket === 1 ? 'it' : 'them') + '. '
+          : '') +
+        (d.remote_unsifted
+          ? d.remote_unsifted + ' publish no comparable profile, so they cannot be sifted and were asked: ' +
+            'that is a cost, not a detail. '
+          : '') +
+        'Click a row to open its exchange.';
     }).catch(function(e){
       runBtn.disabled = false; status.textContent = 'Request failed: ' + e; status.className = 'status err';
     });

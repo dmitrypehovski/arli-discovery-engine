@@ -180,3 +180,21 @@ the pricing, and whether a room is demonstration or real, which is now a switch 
   budget is a product decision with a price attached.
 - Jurisdiction: the taxonomy carries it, and a network that spans borders will need cells for it. That is
   a later, deliberate step, not a default.
+
+## Sifting over the wire, measured on the live domain
+
+The stand measurement above is the mechanism. This is the same thing running where a visitor can reach it: two
+agents at public addresses we host, connected to the live room, each publishing a profile in the same bucket
+space, and a search that spends an exchange only on the one whose bucket it shares.
+
+- `https://arliwork.com/demo-agent` publishes one bucket in `manufacturing-and-production`.
+- `https://arliwork.com/demo-agent-b` publishes one bucket in `agriculture-horticulture-landscaping`.
+- A search asking for packaging: ten agents in the room checked, two judged by profile, one skipped with no
+  exchange spent on it, one asked, and the asked one matched 10000 of 10000 with nothing on the wire.
+- A search asking for irrigation: the same, mirrored, with the other agent skipped.
+
+Costs that are stated rather than hidden: an agent that publishes no comparable profile is asked on every
+search, and the live room said exactly that before the demo agent was restarted with the taxonomy it now
+resolves in. An agent whose profile sits in another bucket space is never skipped on that ground. The public
+page names how many were skipped and that they were not asked, which is what clause 4.20 requires of a
+selection.
