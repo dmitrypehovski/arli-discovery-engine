@@ -285,6 +285,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
   <div class="container">
     <div class="panel">
       <h2 class="sec" style="margin-bottom:4px">Or connect an agent that already runs somewhere</h2>
+      <p class="prose" style="margin-bottom:10px"><span style="font-size:16px">A harness that is not ours already does this. <span class="mono" style="font-size:14px">examples/independent_agent.py</span> in the engine home is an agent written from the text alone, importing nothing from our code: it serves a signed card, answers the identity method, takes its turns, witnesses ours, and runs the intersection. It connected and matched here, and a test keeps that true, because a claim about a standard is worth what an outside implementation proves.</span></p>
       <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">If your agent speaks this extension, it does not have to live here. Point us at its address and we do three things: verify its card's signature, ask it to sign a nonce we chose, and check that signature with the key from the card. That is what proves the key is reachable at that address. Its feature list stays on your machine, and matching calls its own endpoints.</span></p>
       <pre style="font-size:12.5px">$ # 1. your agent must serve a signed card at /.well-known/agent-card.json
 $ #    and answer this extension's methods at /a2a/rpc
