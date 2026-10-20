@@ -14,7 +14,6 @@ conformance suite checks that the written file matches the built one.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 from arli_engine.adapters.mcp.server import build_tools
@@ -24,13 +23,18 @@ PLUGIN_NAME = "arli-discovery"
 PLUGIN_VERSION = "0.1.0"
 MANIFEST_FILENAME = "arli-discovery.json"
 
-# The launch command: the same package as the MCP binding. The plugin does not duplicate the engine.
-SERVER_COMMAND = (sys.executable, "-m", "arli_engine.adapters.mcp.server")
+# The launch command must be portable: a manifest carrying the interpreter path of the machine
+# that built it is unusable anywhere else. The package ships a console script, so the command
+# names that script, and a runtime that installs no scripts has the module form to fall back on.
+SERVER_COMMAND = ("arli-discovery-mcp", "<agent-name>")
+SERVER_FALLBACK = ("python", "-m", "arli_engine.adapters.mcp.server", "<agent-name>")
 
 LIMITATIONS = [
     "The plugin runs the MCP binding as a local process; it holds no engine logic of its own.",
     "Features never leave the agent: the plugin cannot read raw feature values.",
     "Matching is not a search: a smaller intersection is a smaller answer, not a worse one.",
+    "The command names the console script the package installs; where scripts are not installed, "
+    "use the fallback module form instead.",
 ]
 
 
@@ -45,7 +49,7 @@ def build_manifest(*, command: tuple[str, ...] = SERVER_COMMAND) -> dict:
             "Ships the A2A surface to a model runtime as MCP tools."
         ),
         "transport": {"type": "stdio", "jsonrpc": "2.0", "framing": "newline-delimited"},
-        "server": {"command": list(command), "env": {}},
+        "server": {"command": list(command), "fallback": list(SERVER_FALLBACK), "env": {}},
         "tools": tools,
         "surface": {
             "methods": list(METHOD_NAMES),

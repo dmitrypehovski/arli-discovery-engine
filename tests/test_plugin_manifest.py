@@ -38,10 +38,20 @@ def test_manifest_summarises_itself_honestly():
     assert manifest["transport"]["type"] == "stdio"
     assert manifest["transport"]["framing"] == "newline-delimited"
     assert manifest["server"]["command"] == list(SERVER_COMMAND)
-    # the MCP engine must be part of the launch command: the plugin does not duplicate logic
-    assert "arli_engine.adapters.mcp.server" in manifest["server"]["command"]
+    # the command is portable: a console script, not a path from the building machine
+    assert not any(part.startswith("/") for part in manifest["server"]["command"])
+    assert "arli_engine.adapters.mcp.server" in manifest["server"]["fallback"]
     assert manifest["limitations"] == list(LIMITATIONS)
     assert any("no engine logic of its own" in note for note in manifest["limitations"])
+    # the portability note must be there, since the command no longer carries a local path
+    assert any("console script" in note for note in manifest["limitations"])
+
+
+def test_the_manifest_carries_no_path_from_the_building_machine():
+    """A manifest that only works on the machine that built it is not a manifest."""
+    text = manifest_json()
+    assert "/root/" not in text and "/home/" not in text
+    assert ".venv" not in text
 
 
 def test_command_points_at_the_mcp_binding_that_actually_exists():

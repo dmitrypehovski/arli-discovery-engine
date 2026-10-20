@@ -9,9 +9,14 @@
   },
   "server": {
     "command": [
-      "/home/paperclip/arli-org/arli-engine/.venv/bin/python",
+      "arli-discovery-mcp",
+      "<agent-name>"
+    ],
+    "fallback": [
+      "python",
       "-m",
-      "arli_engine.adapters.mcp.server"
+      "arli_engine.adapters.mcp.server",
+      "<agent-name>"
     ],
     "env": {}
   },
@@ -396,6 +401,7 @@
   "limitations": [
     "The plugin runs the MCP binding as a local process; it holds no engine logic of its own.",
     "Features never leave the agent: the plugin cannot read raw feature values.",
-    "Matching is not a search: a smaller intersection is a smaller answer, not a worse one."
+    "Matching is not a search: a smaller intersection is a smaller answer, not a worse one.",
+    "The command names the console script the package installs; where scripts are not installed, use the fallback module form instead."
   ]
 }
