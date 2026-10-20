@@ -668,10 +668,13 @@ $   -d '{"endpoint":"https://your-agent.example.com","kind":"supply"}'
       var action = row.opened
         ? '<button class="btn btn-o" data-agent="' + esc(row.id) + '" style="padding:7px 13px;font-size:13px">Open the exchange</button>'
         : '<span class="chip mute">' + esc(row.rejection || '') + '</span>';
+      var selfNote = row.possible_self_match
+        ? '<div style="font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);margin-top:5px">may be your own agent: everything you sent matched</div>'
+        : '';
       var matched = (row.matched_features || []).length
         ? '<div style="font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);margin-top:5px">' + row.matched_features.map(esc).join(' · ') + '</div>' : '';
       return '<tr><td><b>' + esc(row.name) + '</b>' + (row.sample ? '' : ' <span class="chip ok">registered</span>') +
-        '<div style="color:var(--ink-soft);font-size:13px">' + esc(row.headline) + '</div>' + matched + '</td>' +
+        '<div style="color:var(--ink-soft);font-size:13px">' + esc(row.headline) + '</div>' + matched + selfNote + '</td>' +
         '<td>' + esc(kindLabel(row.kind)) + '</td><td>' + esc(row.city) + '</td><td>' + overlap +
         '</td><td>' + (row.opened && row.passed_floor ? '<span class="chip ok">above floor</span>' : '') + action + '</td></tr>';
     }).join('');

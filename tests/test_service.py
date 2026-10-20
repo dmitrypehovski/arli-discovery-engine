@@ -328,3 +328,17 @@ def test_an_empty_list_is_not_the_example_list() -> None:
     assert service.features_from_payload({"my_features": None}) == list(service.DEFAULT_MINE)
     assert service.features_from_payload({"my_features": []}) == [], "empty stays empty"
     assert service.features_from_payload({"my_features": ["  need:warehouse ", ""]}) == ["need:warehouse"]
+
+
+def test_an_agent_that_matches_everything_says_it_might_be_your_own() -> None:
+    """The audit's last find: a search returned the caller's own agent as a perfect match.
+
+    The service is given a list, not an identity, so it cannot exclude anything. It says what it sees:
+    a network agent matching every submitted feature is either yours or shares your whole list.
+    """
+    assert service.looks_like_own_agent({"overlap_basis_points": 10000}, ["need:warehouse"]) is True
+    assert service.looks_like_own_agent({"overlap_basis_points": 10000}, []) is False, (
+        "with nothing submitted there is no such thing as everything"
+    )
+    assert service.looks_like_own_agent({"overlap_basis_points": 3333}, ["need:warehouse"]) is False
+    assert service.looks_like_own_agent({}, ["need:warehouse"]) is False

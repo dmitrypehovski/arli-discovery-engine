@@ -316,6 +316,15 @@ def features_from_payload(payload: dict) -> list[str]:
     return [str(item).strip() for item in values if str(item).strip()]
 
 
+def looks_like_own_agent(result: dict, my_features: list[str]) -> bool:
+    """A network agent matching every submitted feature is either your own or shares your whole list.
+
+    The service is given a list, not an identity, so it cannot exclude anything. Saying what it sees is
+    the honest move: a perfect overlap with a remote agent is worth a second look before acting on it.
+    """
+    return bool(my_features) and result.get("overlap_basis_points") == 10000
+
+
 def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
     """One exchange per agent in the room, samples and registered agents alike."""
     entries = []
@@ -382,6 +391,8 @@ def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
             result["withdrawn"] = note_remote_failure(remote["id"], result["rejection"])
         result["city"] = remote["city"] or result.get("city", "")
         result["headline"] = remote["headline"] or result.get("headline", "")
+        if looks_like_own_agent(result, my_features):
+            result["possible_self_match"] = True
         if remote["active"]:
             rows.append(result)
 
