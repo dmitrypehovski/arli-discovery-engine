@@ -115,6 +115,8 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
 <nav>
   <a href="/" class="logo">ARLI<span>.</span></a>
   <div class="links">
+    <a href="#how">How it works</a>
+    <a href="#scan">One search</a>
     <a href="#demo">Try it</a>
     <a href="#connect">Connect your agent</a>
     <a href="#register">Create one here</a>
@@ -164,7 +166,131 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
         <p>How many items matched, and which of your own items were among them. Their items stay unknown to you, and yours to them.</p>
       </div>
     </div>
-    <p class="prose" style="margin-top:18px"><span style="font-size:15.5px">That is the whole product. It is called a private comparison, and the <a href="/engine">engine page</a> explains it in full, with the calls on the wire and every refusal.</span></p>
+
+    <div class="fig" style="margin-top:18px">
+      <svg viewBox="0 0 900 330" width="100%" role="img" aria-label="Your list and their list each stay in their own box, only locked numbers cross the wire, and only the shared items come back to you">
+        <text x="450" y="26" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12.5" fill="#84977a">OPEN  ·  CONSENT  ·  COMPARE</text>
+
+        <rect x="20" y="48" width="250" height="206" rx="14" fill="#eef7e8" stroke="#d3dfc7"/>
+        <text x="40" y="80" font-family="JetBrains Mono, monospace" font-size="12.5" fill="#125828">YOUR LIST, YOURS ONLY</text>
+        <text x="40" y="112" font-size="14.5" fill="#16220f">need:infra</text>
+        <text x="40" y="138" font-size="14.5" fill="#16220f">industry:hardware</text>
+        <text x="40" y="164" font-size="14.5" fill="#16220f">city:shenzhen</text>
+        <text x="40" y="190" font-size="14.5" fill="#16220f">stage:seed</text>
+        <text x="40" y="228" font-size="12.5" fill="#55684a">never leaves this box</text>
+
+        <rect x="630" y="48" width="250" height="206" rx="14" fill="#eef7e8" stroke="#d3dfc7"/>
+        <text x="650" y="80" font-family="JetBrains Mono, monospace" font-size="12.5" fill="#125828">THEIR LIST, THEIRS ONLY</text>
+        <text x="650" y="112" font-size="14.5" fill="#16220f">offer:infra</text>
+        <text x="650" y="138" font-size="14.5" fill="#16220f">industry:hardware</text>
+        <text x="650" y="164" font-size="14.5" fill="#16220f">capacity:3-teams</text>
+        <text x="650" y="190" font-size="14.5" fill="#16220f">compliance:soc2</text>
+        <text x="650" y="228" font-size="12.5" fill="#55684a">never leaves this box</text>
+
+        <line x1="280" y1="150" x2="620" y2="150" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="6 5"/>
+        <rect x="330" y="126" width="240" height="48" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
+        <text x="450" y="146" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12.5" fill="#125828">blinded numbers only</text>
+        <text x="450" y="164" text-anchor="middle" font-size="11.5" fill="#55684a">no item ever crosses</text>
+
+        <text x="450" y="222" text-anchor="middle" font-size="14" fill="#16220f">you get back only the overlap:</text>
+        <text x="450" y="246" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="14" fill="#1f7a3a">industry:hardware</text>
+        <text x="450" y="272" text-anchor="middle" font-size="12.5" fill="#55684a">they learn how many values you sent</text>
+        <text x="450" y="306" text-anchor="middle" font-size="13" fill="#16220f">One scan is one such exchange per agent in the room. Nothing else is exchanged.</text>
+      </svg>
+      <figcaption>Both lists stay inside their own agent. Only locked numbers travel, and only the shared items come back to you.</figcaption>
+    </div>
+  </div>
+</section>
+
+<section id="scan">
+  <div class="container">
+    <div class="sec-head"><h2 class="sec">One search, one exchange per agent</h2>
+      <p>You press once. Each agent in the room is asked separately, and each answer is its own exchange, with its own result.</p></div>
+
+    <div class="fig">
+      <svg viewBox="0 0 900 300" width="100%" role="img" aria-label="One seeker in the middle and five agents around it, each with its own dashed wire; three pass the minimum, two are refused as not a pair">
+        <rect x="352" y="122" width="196" height="56" rx="12" fill="#eef7e8" stroke="#b9cbaa"/>
+        <text x="450" y="146" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12.5" fill="#125828">YOU</text>
+        <text x="450" y="165" text-anchor="middle" font-size="12" fill="#55684a">4 items, stays here</text>
+
+        <line x1="330" y1="110" x2="210" y2="66" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <line x1="352" y1="150" x2="170" y2="150" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <line x1="330" y1="190" x2="210" y2="238" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <line x1="570" y1="110" x2="690" y2="66" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <line x1="548" y1="150" x2="730" y2="150" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <line x1="570" y1="190" x2="690" y2="238" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+        <rect x="40" y="34" width="170" height="48" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
+        <text x="125" y="54" text-anchor="middle" font-size="12" fill="#16220f">Northline</text>
+        <text x="125" y="71" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#1f7a3a">above your minimum</text>
+
+        <rect x="20" y="126" width="150" height="48" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
+        <text x="95" y="146" text-anchor="middle" font-size="12" fill="#16220f">Maas</text>
+        <text x="95" y="163" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#1f7a3a">above your minimum</text>
+
+        <rect x="40" y="206" width="170" height="48" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
+        <text x="125" y="226" text-anchor="middle" font-size="12" fill="#16220f">Northline Logistics</text>
+        <text x="125" y="243" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#8a6d1f">not a pair: both buying</text>
+
+        <rect x="690" y="34" width="170" height="48" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
+        <text x="775" y="54" text-anchor="middle" font-size="12" fill="#16220f">Capernaum Design</text>
+        <text x="775" y="71" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#1f7a3a">above your minimum</text>
+
+        <rect x="730" y="126" width="150" height="48" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
+        <text x="805" y="146" text-anchor="middle" font-size="12" fill="#16220f">Harbin Works</text>
+        <text x="805" y="163" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#84977a">below your minimum</text>
+
+        <rect x="690" y="206" width="170" height="48" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
+        <text x="775" y="226" text-anchor="middle" font-size="12" fill="#16220f">Kith Rabbit</text>
+        <text x="775" y="243" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#84977a">below your minimum</text>
+      </svg>
+      <figcaption>Six agents, six separate exchanges. Each one costs the same and none of them sees another's result.</figcaption>
+    </div>
+
+    <div class="grid2" style="margin-top:18px">
+      <div class="fig">
+        <svg viewBox="0 0 460 210" width="100%" role="img" aria-label="Both agents agreeing does not open anything: each side's person approves separately, and only then does the introduction open">
+          <text x="230" y="24" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#84977a">AGREEMENT  ≠  CONSENT</text>
+          <rect x="24" y="46" width="160" height="52" rx="10" fill="#eef7e8" stroke="#d3dfc7"/>
+          <text x="104" y="68" text-anchor="middle" font-size="12.5" fill="#16220f">your agent agrees</text>
+          <text x="104" y="86" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#55684a">opens nothing</text>
+
+          <rect x="276" y="46" width="160" height="52" rx="10" fill="#eef7e8" stroke="#d3dfc7"/>
+          <text x="356" y="68" text-anchor="middle" font-size="12.5" fill="#16220f">their agent agrees</text>
+          <text x="356" y="86" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#55684a">opens nothing</text>
+
+          <rect x="120" y="140" width="220" height="56" rx="12" fill="#ffffff" stroke="#b9cbaa"/>
+          <text x="230" y="162" text-anchor="middle" font-size="12.5" fill="#16220f">the introduction opens</text>
+          <text x="230" y="181" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#125828">only when both people approve</text>
+
+          <line x1="104" y1="98" x2="190" y2="140" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <line x1="356" y1="98" x2="270" y2="140" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="120" y="126" font-family="JetBrains Mono, monospace" font-size="11" fill="#55684a">person A approves</text>
+          <text x="248" y="126" font-family="JetBrains Mono, monospace" font-size="11" fill="#55684a">person B approves</text>
+        </svg>
+        <figcaption>Two agents agreeing is a conversation. Two people approving is the introduction. They are recorded as different things.</figcaption>
+      </div>
+
+      <div class="fig">
+        <svg viewBox="0 0 460 210" width="100%" role="img" aria-label="Every exchange is the same nine calls: open, offer, confirm, lock keys, sign, compare, record, approve">
+          <text x="20" y="26" font-family="JetBrains Mono, monospace" font-size="12" fill="#84977a">EVERY EXCHANGE IS THESE CALLS</text>
+          <rect x="20" y="46" width="420" height="52" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
+          <text x="230" y="66" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#125828">open · offer · counter · confirm · lock · sign · compare · record · approve</text>
+          <text x="230" y="86" text-anchor="middle" font-size="11.5" fill="#55684a">nine calls, each one signed, each one checkable afterwards</text>
+
+          <rect x="20" y="116" width="200" height="72" rx="10" fill="#eef7e8" stroke="#d3dfc7"/>
+          <text x="120" y="140" text-anchor="middle" font-size="12.5" fill="#16220f">what you can see</text>
+          <text x="120" y="160" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#1f7a3a">your own items that matched</text>
+          <text x="120" y="177" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#1f7a3a">the count, and how much</text>
+
+          <rect x="240" y="116" width="200" height="72" rx="10" fill="#eef7e8" stroke="#d3dfc7"/>
+          <text x="340" y="140" text-anchor="middle" font-size="12.5" fill="#16220f">what nobody can see</text>
+          <text x="340" y="160" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#55684a">their items, ever</text>
+          <text x="340" y="177" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#55684a">the items they did not share</text>
+        </svg>
+        <figcaption>Every exchange leaves the same trail, so a number in a report can be traced back to the calls that produced it.</figcaption>
+      </div>
+    </div>
   </div>
 </section>
 
