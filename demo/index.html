@@ -107,9 +107,8 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
   <div class="container">
     <div class="kicker">$ arli discovery run --live</div>
     <h1>Watch a matching exchange happen, step by step.</h1>
-    <p class="sub">These are two real agents, raised by the engine on this machine. Nine calls, shown as
-    they were sent and answered. At the end, one question decides everything: did any feature leave
-    either side. The answer is measured, not promised.</p>
+    <p class="sub">Two agents, both running here, compared their lists. You see every call as it happened, and the one
+    question that matters: did any of the items leave either side? That answer is measured, not promised.</p>
   </div>
 </header>
 
@@ -117,21 +116,21 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
   <div class="container">
     <div class="panel">
       <h2><span class="n">01</span>Set the two sides</h2>
-      <p class="hint">Feature matching here is exact on declared strings. Two sides meet on the
-      strings they share, so the scenario below shares two of five on each side.</p>
+      <p class="hint">An item matches only when both sides wrote the same thing, so this example shares two of the five
+      items on each side.</p>
       <div class="grid2">
         <div>
-          <label class="f" for="seekerFeatures">SEEKER — a studio looking for an infrastructure partner</label>
+          <label class="f" for="seekerFeatures">BUYER — a studio looking for an infrastructure partner</label>
           <textarea id="seekerFeatures" rows="6"></textarea>
         </div>
         <div>
-          <label class="f" for="holderFeatures">HOLDER — an infrastructure provider looking for design work</label>
+          <label class="f" for="holderFeatures">SUPPLIER — an infrastructure provider looking for design work</label>
           <textarea id="holderFeatures" rows="6"></textarea>
         </div>
       </div>
       <div class="row">
         <div>
-          <label class="f" for="floor">FLOOR, BASIS POINTS (4000 = two of five)</label>
+          <label class="f" for="floor">MINIMUM OVERLAP (4000 = two of the five items)</label>
           <input type="number" id="floor" value="4000" min="0" max="10000" step="500">
         </div>
         <button class="btn-p" id="run">Run the exchange</button>
@@ -148,19 +147,19 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
       <h2><span class="n">02</span>Result</h2>
       <p class="hint">What came out of the exchange, and what each side now knows.</p>
       <div class="kvrow">
-        <div class="kv"><b id="kMatched">—</b><span>shared features returned</span></div>
-        <div class="kv"><b id="kBasis">—</b><span>overlap, basis points</span></div>
-        <div class="kv"><b id="kFloor">—</b><span>floor declared by the seeker</span></div>
-        <div class="kv"><b id="kLeak">—</b><span>plain features on the wire</span></div>
+        <div class="kv"><b id="kMatched">—</b><span>items both sides had</span></div>
+        <div class="kv"><b id="kBasis">—</b><span>overlap, out of 10000</span></div>
+        <div class="kv"><b id="kFloor">—</b><span>minimum the buyer set</span></div>
+        <div class="kv"><b id="kLeak">—</b><span>items readable by anyone on the wire</span></div>
       </div>
       <div class="chips" id="chips"></div>
       <div class="grid2" style="margin-top:18px">
         <div>
-          <label class="f">WHAT THE SEEKER LEARNS</label>
+          <label class="f">WHAT THE BUYER LEARNS</label>
           <pre id="learnsSeeker">—</pre>
         </div>
         <div>
-          <label class="f">WHAT THE HOLDER LEARNS</label>
+          <label class="f">WHAT THE SUPPLIER LEARNS</label>
           <pre id="learnsHolder">—</pre>
         </div>
       </div>
@@ -171,9 +170,9 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
 <section>
   <div class="container">
     <div class="panel">
-      <h2><span class="n">03</span>The exchange as it happened</h2>
-      <p class="hint">Every request goes to the side that owns the seat. An agent that answers for
-      the other side is refused, and that refusal is part of the protocol.</p>
+      <h2><span class="n">03</span>Every call, as it happened</h2>
+      <p class="hint">Each call goes to the side that owns it. If a side tries to answer for the other,
+      it is refused, and that refusal is part of the protocol.</p>
       <div id="steps"><p class="hint">Run the exchange to fill this in.</p></div>
     </div>
   </div>
@@ -182,12 +181,12 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
 <section>
   <div class="container">
     <div class="panel">
-      <h2><span class="n">04</span>Evidence left behind</h2>
-      <p class="hint">Each step signs an envelope: what was done, by which key, and what it does not
-      cover. The limitations are printed here as the engine wrote them.</p>
+      <h2><span class="n">04</span>The receipt both sides keep</h2>
+      <p class="hint">Every step is signed: what was done, with which key, and what it does not cover.
+      The limits below are the engine's own words.</p>
       <div class="tablewrap">
         <table>
-          <thead><tr><th>Step</th><th>Operation</th><th>Envelope</th><th>Signed by</th></tr></thead>
+          <thead><tr><th>Step</th><th>What happened</th><th>Signed</th><th>With which key</th></tr></thead>
           <tbody id="evidenceRows"><tr><td colspan="4" class="hint">—</td></tr></tbody>
         </table>
       </div>
@@ -199,12 +198,12 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
 <section>
   <div class="container">
     <div class="panel">
-      <h2><span class="n">05</span>Cards and signatures</h2>
-      <p class="hint">Before any of this, each agent hands over a card signed with its own key. A card
-      that does not verify is worth nothing, so it is checked here the same way a stranger would.</p>
+      <h2><span class="n">05</span>Who is who: the signed cards</h2>
+      <p class="hint">Each agent publishes a card signed with its own key. A card whose signature does not
+      hold is worth nothing, so it is checked here the way a stranger would check it.</p>
       <div class="tablewrap">
         <table>
-          <thead><tr><th>Side</th><th>Agent</th><th>Card signature</th></tr></thead>
+          <thead><tr><th>Side</th><th>Agent</th><th>Signature checked</th></tr></thead>
           <tbody id="cardRows"><tr><td colspan="3" class="hint">—</td></tr></tbody>
         </table>
       </div>
@@ -247,7 +246,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
         <div class="who">AGENT TRAFFIC</div>
         <h3>Agents that must transact on their own</h3>
         <p>When agents act between tasks, a signed card says who each agent is, the turn grammar keeps
-        the talk bounded, and each step leaves evidence that can be checked afterwards.</p>
+        the talk bounded, and each step leaves a signature that can be checked afterwards.</p>
       </div>
       <div class="uc">
         <div class="who">COMPLIANCE</div>

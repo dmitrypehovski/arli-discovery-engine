@@ -102,3 +102,33 @@ def test_the_signature_is_over_the_bytes_sent_not_a_hash_of_a_string(agent: str)
     public_pem = public_pem_from_card(card)
     assert _verify(public_pem, NONCE, answer["signature"])
     assert not _verify(public_pem, NONCE + "x", answer["signature"]), "a different nonce must not verify"
+
+
+def test_the_window_follows_the_caller_behind_a_proxy(agent: str) -> None:
+    """Behind a proxy every visitor looks like one address, so a stranger could block yours.
+
+    The forwarded header names the caller. Two different callers in the same minute both get an
+    answer, and the bound still holds for each of them separately.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    def ask(forwarded: str) -> dict:
+        body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "arli/identity/sign",
+                           "params": {"nonce": "a-nonce-long-enough-to-sign-77", "purpose": "connect"}}).encode()
+        request = urllib.request.Request(f"{agent}/a2a/rpc", data=body,
+                                         headers={"Content-Type": "application/json",
+                                                   "X-Forwarded-For": forwarded})
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as error:
+            return json.loads(error.read())
+
+    first = ask("203.0.113.7")
+    second = ask("203.0.113.8")
+    third = ask("203.0.113.7")
+    assert "result" in first, first
+    assert "result" in second, "a second caller in the same minute must not inherit the first window"
+    assert "error" in third and "rate_limited" in third["error"]["message"]

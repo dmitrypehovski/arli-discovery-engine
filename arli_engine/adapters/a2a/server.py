@@ -781,7 +781,13 @@ def make_handler(state: AgentState):
             if handler is None:
                 self._send(404, _rpc_err(req_id, -32601, f"unknown method: {method}"))
                 return
-            state.peer = self.client_address[0] if self.client_address else ""
+            # The asking address bounds the identity method's rate window. Behind a proxy the
+            # socket address is the proxy, so every visitor would share one window and a stranger
+            # could block yours. The forwarded header names the caller. It is trustworthy only
+            # behind a proxy that sets it, which is why the socket address is the fallback rather
+            # than something we invent.
+            forwarded = (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+            state.peer = forwarded or (self.client_address[0] if self.client_address else "")
             try:
                 self._send(200, _rpc_ok(req_id, handler(request.get("params") or {})))
             except NegotiationError as exc:

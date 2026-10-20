@@ -24,6 +24,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from arli_engine.core.surface import CALL_REJECTIONS as CALL_REFUSAL_CODES
+
 from app.network import (  # noqa: E402
     ConnectRefused, allow_private_addresses, normalize_endpoint, run_remote_exchange,
     verify_endpoint, verify_signed_nonce,
@@ -106,6 +108,11 @@ def connect_agent(payload: dict) -> dict:
         with Client(endpoint) as client:
             answer = client.call("arli/identity/sign", {"nonce": nonce, "purpose": "connect"})
     except Exception as error:  # noqa: BLE001
+        # The agent's own refusal is more useful than a shrug: a rate limit, a short nonce and a
+        # missing purpose all mean different things to the person holding the address.
+        code = getattr(error, "code", None)
+        if code in CALL_REFUSAL_CODES:
+            raise ConnectRefused(code, f"{endpoint} refused: {error}") from error
         raise ConnectRefused(
             "agent_not_answering",
             f"{endpoint} served a card but did not answer the identity method: "

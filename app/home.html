@@ -115,173 +115,98 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
 <nav>
   <a href="/" class="logo">ARLI<span>.</span></a>
   <div class="links">
-    <a href="#how">How it works</a>
-    <a href="#who">Who it is for</a>
-    <a href="#register">Register</a>
+    <a href="#demo">Try it</a>
     <a href="#connect">Connect your agent</a>
+    <a href="#register">Create one here</a>
+    <a href="#who">Who it is for</a>
     <a href="/engine">Engine</a>
     <a href="/spec/">Specification</a>
-    <a href="#demo" class="cta">Run a match</a>
+    <a href="#demo" class="cta">Try it now</a>
   </div>
 </nav>
 
 <header class="top">
   <div class="container">
-    <div class="kicker">$ arli match scan --live</div>
-    <h1>Find who overlaps with you <span class="dim">without publishing your list.</span></h1>
-    <p class="sub">Put in what matters to you, scan the room, and get back who overlaps with you
-    above the floor you set. Your list stays in your agent. Theirs stays in theirs. Every row is a
-    real exchange, and every step leaves a signed receipt.</p>
+    <div class="kicker">Live service, open protocol</div>
+    <h1>Find who matches you <span class="dim">without showing your list.</span></h1>
+    <p class="sub">Write down what you are looking for. This tells you which agents overlap with you, and how much. Your list stays with you: nobody reads it, not us, not the other side.</p>
     <div class="actions">
-      <a href="#demo" class="btn btn-p">Run a live match</a>
-      <a href="#register" class="btn btn-o">Register your agent</a>
+      <a href="#demo" class="btn btn-p">Try it in one click</a>
+      <a href="#connect" class="btn btn-o">Connect my own agent</a>
     </div>
-    <div class="stats" style="margin-top:28px">
-      <div class="stat"><b id="sStarter">8</b><span>starter agents</span></div>
-      <div class="stat"><b id="sRegistered">—</b><span>registered agents</span></div>
-      <div class="stat"><b id="sFloor">—</b><span>above the floor on the last scan</span></div>
-      <div class="stat"><b id="sLeak">—</b><span>features seen on the wire</span></div>
+    <div class="stats">
+      <div class="stat"><b id="sStarter">8</b><span>agents in the room</span></div>
+      <div class="stat"><b id="sRegistered">—</b><span>created on this service</span></div>
+      <div class="stat"><b id="sFloor">—</b><span>above your minimum, last search</span></div>
+      <div class="stat"><b id="sLeak">—</b><span>of your items seen by anyone</span></div>
     </div>
   </div>
 </header>
 
-<section>
-  <div class="container">
-    <div class="fig">
-      <svg viewBox="0 0 900 250" width="100%" role="img" aria-label="Both lists stay in their own agents, only blinded values cross the wire, and only shared items come back">
-        <rect x="16" y="34" width="240" height="182" rx="14" fill="#eef7e8" stroke="#d3dfc7"/>
-        <text x="36" y="62" font-family="JetBrains Mono, monospace" font-size="12.5" fill="#125828">YOUR LIST, YOURS ONLY</text>
-        <text x="36" y="92" font-size="13.5" fill="#16220f">need:infra</text>
-        <text x="36" y="116" font-size="13.5" fill="#16220f">industry:hardware</text>
-        <text x="36" y="140" font-size="13.5" fill="#16220f">city:shenzhen</text>
-        <text x="36" y="164" font-size="13.5" fill="#16220f">stage:seed</text>
-        <text x="36" y="196" font-size="12" fill="#55684a">never leaves this box</text>
-
-        <rect x="644" y="34" width="240" height="182" rx="14" fill="#eef7e8" stroke="#d3dfc7"/>
-        <text x="664" y="62" font-family="JetBrains Mono, monospace" font-size="12.5" fill="#125828">THEIR LIST, THEIRS ONLY</text>
-        <text x="664" y="92" font-size="13.5" fill="#16220f">offer:infra</text>
-        <text x="664" y="116" font-size="13.5" fill="#16220f">industry:hardware</text>
-        <text x="664" y="140" font-size="13.5" fill="#16220f">capacity:3-teams</text>
-        <text x="664" y="164" font-size="13.5" fill="#16220f">compliance:soc2</text>
-        <text x="664" y="196" font-size="12" fill="#55684a">never leaves this box</text>
-
-        <line x1="256" y1="125" x2="644" y2="125" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="6 5"/>
-        <rect x="330" y="103" width="240" height="44" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
-        <text x="450" y="123" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#125828">blinded numbers only</text>
-        <text x="450" y="139" text-anchor="middle" font-size="11.5" fill="#55684a">no feature ever crosses</text>
-        <text x="450" y="52" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#84977a">open · consent · compare</text>
-        <text x="450" y="186" text-anchor="middle" font-size="13" fill="#16220f">you get back only the overlap:</text>
-        <text x="450" y="206" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#1f7a3a">industry:hardware</text>
-        <text x="450" y="226" text-anchor="middle" font-size="12" fill="#55684a">they learn how many values you sent</text>
-      </svg>
-      <figcaption>One scan is one such exchange per agent in the room. Nothing else is exchanged.</figcaption>
-    </div>
-  </div>
-</section>
-
 <section id="how">
   <div class="container">
     <div class="sec-head"><h2 class="sec">How it works, in three moves</h2>
-      <p>The rest of the protocol exists to make these three moves impossible to fake.</p></div>
-    <div class="three">
-      <div><span class="n">01</span><b>You declare, privately</b><span>Your features, and whether you are buying or offering. A pair of two buyers is refused by code, not scored.</span></div>
-      <div><span class="n">02</span><b>The exchange is blind</b><span>The other side signs values it cannot read. Both lists stay home; the wire carries numbers, not capabilities.</span></div>
-      <div><span class="n">03</span><b>Your floor decides, people consent</b><span>Below your floor nothing comes back. Agents agreeing opens nothing: each side's person answers separately, on the record.</span></div>
+      <p>No accounts to compare, no list to upload.</p></div>
+    <div class="steps">
+      <div class="step active"><span class="n">01</span><h3>You describe what you want</h3><p>Short lines, like <span class="mono">need:warehouse</span> or <span class="mono">city:shenzhen</span>. Your list never leaves your side.</p></div>
+      <div class="step"><span class="n">02</span><h3>Both sides lock their lists</h3><p>Each item is turned into a locked value before anything travels, and only locked values are compared.</p></div>
+      <div class="step"><span class="n">03</span><h3>You both learn the overlap</h3><p>How many items matched, and which of your own items were among them. The other side's items stay unknown to you, and yours to them.</p></div>
     </div>
+    <p class="prose" style="margin-top:18px"><span style="font-size:15.5px">That is the whole product. It is called a private comparison, and the <a href="/engine">engine page</a> explains it in full, with the wire trace and the refusals.</span></p>
   </div>
 </section>
 
 <section id="demo">
   <div class="container">
     <div class="panel">
-      <h2 class="sec" style="margin-bottom:4px">Run a live match</h2>
-      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">Prefilled and ready. One click runs a full exchange with every agent in the room, on this machine, right now.</span></p>
+      <h2 class="sec" style="margin-bottom:4px">Try it now</h2>
+      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">The room is already filled with example agents and your lines are already filled in. Press one button.</span></p>
       <div class="grid2">
         <div>
-          <label class="f" for="mine">WHAT YOU HOLD, PRIVATELY (ONE PER LINE)</label>
+          <label class="f" for="mine">WHAT YOU ARE LOOKING FOR, ONE PER LINE</label>
           <textarea id="mine" rows="6"></textarea>
         </div>
         <div>
           <label class="f" for="kind">YOU ARE</label>
           <select id="kind">
-            <option value="demand" selected>demand — you need, you buy</option>
-            <option value="supply">supply — you offer, you sell</option>
-            <option value="person">person — you are looking, as an individual</option>
+            <option value="demand" selected>buying, looking for someone</option>
+            <option value="supply">offering, looking for work</option>
+            <option value="person">a person, not a business</option>
           </select>
-          <div style="margin-top:14px">
-            <label class="f" for="floor">FLOOR: SHOW ME ONLY MATCHES ABOVE THIS SHARE OF MY LIST</label>
-            <input type="number" id="floor" value="3000" min="0" max="10000" step="500">
+          <div style="margin-top:12px"><label class="f" for="floor">HOW MUCH OVERLAP DO YOU WANT, AT LEAST</label>
+            <div style="display:flex;align-items:center;gap:10px">
+              <input type="number" id="floor" value="30" min="0" max="100" step="5" style="max-width:110px">
+              <span style="font-size:15px">percent</span>
+            </div>
+            <p style="font-size:13.5px;color:var(--ink-soft);margin-top:6px">Anything below this is not reported. Thirty percent of your lines has to be shared with an agent for it to count.</p>
           </div>
         </div>
       </div>
-      <div class="actions" style="margin-top:18px">
-        <button class="btn btn-p" id="runBtn">Run the match</button>
-        <button class="btn btn-o" id="reset">Reset to the example</button>
+      <div class="actions" style="margin-top:16px">
+        <button class="btn btn-p" id="runBtn">Find my matches</button>
+        <button class="btn btn-o" id="reset">Put the example back</button>
       </div>
-      <div class="status" id="status">Ready. The room is prefilled from the service.</div>
-
-      <div id="boardWrap" class="hidden" style="margin-top:20px">
+      <div class="status" id="status">Ready. The lines above are the example, and the agents are rerolled for every visitor.</div>
+      <div id="boardWrap" class="hidden" style="margin-top:22px">
         <table>
-          <thead><tr><th>Counterparty</th><th>Type</th><th>City</th><th>Overlap</th><th></th></tr></thead>
+          <thead><tr><th>Who</th><th>They are</th><th>City</th><th>Overlap with you</th><th>Result</th></tr></thead>
           <tbody id="board"></tbody>
         </table>
       </div>
-
       <div id="detail" class="hidden" style="margin-top:22px">
-        <label class="f" id="detailHint">—</label>
-        <div class="stats" style="margin:10px 0 14px">
-          <div class="stat"><b id="dMatched">—</b><span>shared features returned&#10;to you</span></div>
-          <div class="stat"><b id="dBasis">—</b><span>overlap, basis points</span></div>
-          <div class="stat"><b id="dAgreed">—</b><span>agents agreed</span></div>
-          <div class="stat"><b id="dLeak">—</b><span>features on the wire</span></div>
+        <div id="detailHint" class="status"></div>
+        <div class="three" style="margin-top:14px">
+          <div class="card"><h3>What we found</h3><div class="fig" id="dMatched">—</div><p>items of yours that matched</p></div>
+          <div class="card"><h3>How much</h3><div class="fig" id="dBasis">—</div><p>overlap, where 10000 is everything you asked for</p></div>
+          <div class="card"><h3>Both agreed</h3><div class="fig" id="dAgreed">—</div><p>and the other side's list stayed theirs</p></div>
         </div>
-        <div class="grid2">
-          <div><label class="f">WHAT YOU LEARN</label><pre id="dMine">—</pre></div>
-          <div><label class="f">WHAT THEY LEARN</label><pre id="dTheirs">—</pre></div>
+        <div class="grid2" style="margin-top:18px">
+          <div><label class="f">YOUR SIDE</label><pre id="dMine">—</pre></div>
+          <div><label class="f">THEIR SIDE</label><pre id="dTheirs">—</pre></div>
         </div>
-        <div style="margin-top:16px">
-          <label class="f">THE EXCHANGE, CALL BY CALL</label>
-          <div id="dSteps">—</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="register">
-  <div class="container">
-    <div class="panel">
-      <h2 class="sec" style="margin-bottom:4px">Put your own agent in the room</h2>
-      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">Five fields. Your feature list is stored privately and never returned by any public endpoint; the room shows only that you exist, how many features you hold and the level you claim.</span></p>
-      <div class="grid2">
-        <div>
-          <label class="f" for="rName">NAME</label>
-          <input type="text" id="rName" placeholder="Acme Studio">
-          <div style="margin-top:12px"><label class="f" for="rKind">YOU ARE</label>
-            <select id="rKind">
-              <option value="supply">supply — you offer</option>
-              <option value="demand" selected>demand — you need</option>
-              <option value="person">person</option>
-            </select></div>
-          <div style="margin-top:12px"><label class="f" for="rCity">CITY</label>
-            <input type="text" id="rCity" placeholder="shenzhen"></div>
-        </div>
-        <div>
-          <label class="f" for="rHeadline">ONE LINE OTHERS SEE</label>
-          <input type="text" id="rHeadline" placeholder="brand studio, hardware and retail">
-          <div style="margin-top:12px"><label class="f" for="rPrivate">WHAT YOU WILL NOT PUBLISH</label>
-            <input type="text" id="rPrivate" placeholder="client list, rates"></div>
-          <div style="margin-top:12px"><label class="f" for="rFeatures">YOUR FEATURES, ONE PER LINE</label>
-            <textarea id="rFeatures" rows="4" placeholder="skill:brand-design&#10;city:shenzhen&#10;need:infra"></textarea></div>
-        </div>
-      </div>
-      <div class="actions" style="margin-top:16px">
-        <button class="btn btn-p" id="regBtn">Create my agent</button>
-      </div>
-      <div class="status" id="regStatus">Your list is stored on this service and only ever used inside an exchange.</div>
-      <div id="regResult" class="hidden" style="margin-top:14px">
-        <label class="f">KEEP THIS LINK: IT IS THE ONLY KEY TO YOUR AGENT</label>
-        <pre id="regToken">—</pre>
+        <div class="status" style="margin-top:14px">Of your items, seen by anyone: <b id="dLeak">—</b></div>
+        <label class="f" style="margin-top:16px;display:block">WHAT ACTUALLY HAPPENED, CALL BY CALL</label>
+        <div id="dSteps"></div>
       </div>
     </div>
   </div>
@@ -290,18 +215,18 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
 <section id="connect">
   <div class="container">
     <div class="panel">
-      <h2 class="sec" style="margin-bottom:4px">Or connect an agent that already runs somewhere</h2>
-      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">If your agent speaks this extension, it does not have to live here. Point us at its address and we do three things: verify its card's signature, ask it to sign a nonce we chose, and check that signature with the key from the card. That is what proves the key is reachable at that address. Its feature list stays on your machine, and matching calls its own endpoints.</span></p>
+      <h2 class="sec" style="margin-bottom:4px">Connect your own agent</h2>
+      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">If your agent already runs somewhere and speaks this protocol, give us its address. Your list stays on your machine: we only call the agent at its own address.</span></p>
 
       <div class="steps" style="margin-bottom:18px">
-        <div class="step"><span class="num">1</span><div><b>Run an agent at an address</b><p>Either the reference engine or your own harness. One command, and it prints its card, its capabilities and its health address.</p><pre>$ git clone https://arliwork.com/plugin/arli-discovery-engine.git
+        <div class="step"><span class="num">1</span><div><b>Start an agent and give it your list</b><p>One command. It prints the three addresses it serves.</p><pre>$ git clone https://arliwork.com/plugin/arli-discovery-engine.git
 $ cd arli-discovery-engine
 $ python3 -m venv .venv &amp;&amp; . .venv/bin/activate &amp;&amp; pip install -e .
 $ arli-discovery-agent --port 8811 --name my-agent \
-    --features "skill:brand-design,city:shanghai"</pre></div></div>
-        <div class="step"><span class="num">2</span><div><b>Give it a public address</b><p>The room reaches agents over the network and refuses loopback and private addresses on purpose, because an address is something a stranger sends us. A tunnel is fine for a test; a small server with TLS is what a real participant wants.</p><pre>$ cloudflared tunnel --url http://127.0.0.1:8811
-# it prints something like https://random-words.trycloudflare.com</pre></div></div>
-        <div class="step"><span class="num">3</span><div><b>Paste that address below</b><p>Three checks run in one call. If one fails you get the code and what it means, not a shrug.</p></div></div>
+    --features "need:warehouse,city:shenzhen"</pre></div></div>
+        <div class="step"><span class="num">2</span><div><b>Put it behind a public address</b><p>We refuse localhost and private addresses, on purpose, because an address is something a stranger sends us. A tunnel is fine for a test.</p><pre>$ cloudflared tunnel --url http://127.0.0.1:8811
+# it prints a public address, something like random-words.trycloudflare.com</pre></div></div>
+        <div class="step"><span class="num">3</span><div><b>Paste that address below</b><p>We check three things, and tell you which one failed if one does.</p></div></div>
       </div>
 
       <div class="grid2">
@@ -310,50 +235,85 @@ $ arli-discovery-agent --port 8811 --name my-agent \
           <input type="text" id="cEndpoint" placeholder="https://your-agent.example.com">
           <div style="margin-top:12px"><label class="f" for="cKind">IT IS</label>
             <select id="cKind">
-              <option value="supply">supply — it offers</option>
-              <option value="demand" selected>demand — it needs</option>
-              <option value="person">person</option>
+              <option value="supply">offering, looking for work</option>
+              <option value="demand" selected>buying, looking for someone</option>
+              <option value="person">a person, not a business</option>
             </select></div>
         </div>
         <div>
           <label class="f" for="cCity">CITY</label>
-          <input type="text" id="cCity" placeholder="shanghai">
-          <div style="margin-top:12px"><label class="f" for="cHeadline">ONE LINE OTHERS SEE</label>
-            <input type="text" id="cHeadline" placeholder="the agent's own one line"></div>
+          <input type="text" id="cCity" placeholder="shenzhen">
+          <div style="margin-top:12px"><label class="f" for="cHeadline">WHAT OTHERS SEE, ONE LINE</label>
+            <input type="text" id="cHeadline" placeholder="what it does, in a few words"></div>
         </div>
       </div>
       <div class="actions" style="margin-top:16px">
-        <button class="btn btn-p" id="connBtn">Connect it to the room</button>
+        <button class="btn btn-p" id="connBtn">Connect it</button>
       </div>
-      <div class="status" id="connStatus">Nothing is sent to your agent except the calls the extension defines.</div>
+      <div class="status" id="connStatus">
+        Nothing is ever sent to your agent except the three calls this protocol defines.
+        No agent of your own yet? Paste <b>https://arliwork.com/demo-agent</b> and press the button: that is an agent we host, so you can watch all three checks pass.
+      </div>
       <div id="connResult" class="hidden" style="margin-top:14px">
         <label class="f">WHAT WAS CHECKED</label>
         <pre id="connChecks">—</pre>
         <div class="status" id="connNote"></div>
       </div>
 
-      <p class="prose" style="margin-top:18px"><span style="font-size:16px">A harness that is not ours already does this. <span class="mono" style="font-size:14px">examples/independent_agent.py</span> in the engine home is an agent written from the text alone, importing nothing from our code: it serves a signed card, answers the identity method, takes its turns, witnesses ours, and runs the intersection. It connected and matched here, and a test keeps that true, because a claim about a standard is worth what an outside implementation proves.</span></p>
-      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">The same thing over the command line, if you would rather script it.</span></p>
-      <pre style="font-size:12.5px">$ # 1. your agent must serve a signed card at /.well-known/agent-card.json
-$ #    and answer this extension's methods at /a2a/rpc
-$
-$ curl -X POST https://match.arliwork.com/api/connect \
+      <details style="margin-top:18px">
+        <summary class="f" style="cursor:pointer">THE SAME THING AS A COMMAND, IF YOU PREFER</summary>
+        <pre style="margin-top:10px;font-size:12.5px">$ curl -X POST https://match.arliwork.com/api/connect \
 $   -H 'Content-Type: application/json' \
-$   -d '{"endpoint":"https://your-agent.example.com","kind":"supply","city":"berlin"}'
+$   -d '{"endpoint":"https://your-agent.example.com","kind":"supply"}'
 {
   "connected": true,
-  "id": "your-agent",
-  "checks": {"card_verified": true, "extension_answers": true, "address_signed_our_nonce": true},
-  "note": "The card verified, the identity method answered, and the address signed a nonce we chose."
-}
+  "checks": {"card_verified": true, "extension_answers": true, "address_signed_our_nonce": true}
+}</pre>
+        <ul class="plain" style="margin-top:12px">
+          <li>Your agent has to serve its card at <span class="mono">/.well-known/agent-card.json</span> and answer at <span class="mono">/a2a/rpc</span>. The specification has the exact shapes.</li>
+          <li>An agent written by someone else already does this: <span class="mono">examples/independent_agent.py</span> in the engine home, one file, no code of ours, and it connected and matched here.</li>
+          <li>What connecting proves: the card is signed, the address answers, and it signs with the key on its card. It does not prove who runs the address: a middleman forwarding that signature passes too.</li>
+        </ul>
+      </details>
+    </div>
+  </div>
+</section>
 
-$ # then it appears in the room and in every scan, matched over the network
-$ curl -X POST https://match.arliwork.com/api/room</pre>
-      <ul class="plain" style="margin-top:14px">
-        <li>Raise an agent from the reference engine or from the second implementation in Rust, both open: <code>git clone https://arliwork.com/plugin/arli-discovery-engine.git &amp;&amp; pip install -e .</code>, then <code>arli-discovery-agent</code>. Nothing is published to a package index yet, so the repository is where it comes from.</li>
-        <li>The service refuses loopback and private addresses unless a local-test switch is set, and it does not publish your address in the room.</li>
-        <li>What connecting proves: the card is signed, the address answers, and it signs with the key the card names. A proxy that forwards that signing passes too, and then it holds a live path to the agent: that is the trust a relay has, and we say so rather than implying more.</li>
-      </ul>
+<section id="register">
+  <div class="container">
+    <div class="panel">
+      <h2 class="sec" style="margin-bottom:4px">Or create one here</h2>
+      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">No agent of your own? Fill this in and you get one, kept on this service, with a private link that manages it. Your list is stored privately and never returned by any public address. The room shows only that you exist, how many items you hold, and how much you claim.</span></p>
+      <div class="grid2">
+        <div>
+          <label class="f" for="rName">YOUR NAME</label>
+          <input type="text" id="rName" placeholder="Acme Studio">
+          <div style="margin-top:12px"><label class="f" for="rKind">YOU ARE</label>
+            <select id="rKind">
+              <option value="supply">offering, looking for work</option>
+              <option value="demand" selected>buying, looking for someone</option>
+              <option value="person">a person, not a business</option>
+            </select></div>
+          <div style="margin-top:12px"><label class="f" for="rCity">CITY</label>
+            <input type="text" id="rCity" placeholder="shenzhen"></div>
+        </div>
+        <div>
+          <label class="f" for="rHeadline">WHAT OTHERS SEE, ONE LINE</label>
+          <input type="text" id="rHeadline" placeholder="brand studio, hardware and retail">
+          <div style="margin-top:12px"><label class="f" for="rPrivate">WHAT YOU WILL NOT PUBLISH</label>
+            <input type="text" id="rPrivate" placeholder="client list, rates"></div>
+          <div style="margin-top:12px"><label class="f" for="rFeatures">WHAT YOU ARE LOOKING FOR, ONE PER LINE</label>
+            <textarea id="rFeatures" rows="4" placeholder="need:warehouse&#10;city:shenzhen&#10;skill:brand-design"></textarea></div>
+        </div>
+      </div>
+      <div class="actions" style="margin-top:16px">
+        <button class="btn btn-p" id="regBtn">Create my agent</button>
+      </div>
+      <div class="status" id="regStatus">Your list is stored here and used only inside a comparison.</div>
+      <div id="regResult" class="hidden" style="margin-top:14px">
+        <label class="f">KEEP THIS LINK: IT IS THE ONLY KEY TO YOUR AGENT</label>
+        <pre id="regToken">—</pre>
+      </div>
     </div>
   </div>
 </section>
@@ -361,65 +321,33 @@ $ curl -X POST https://match.arliwork.com/api/room</pre>
 <section id="who">
   <div class="container">
     <div class="sec-head"><h2 class="sec">Who it is for</h2>
-      <p>Anywhere the list is the asset and the introduction is the product.</p></div>
+      <p>Anywhere the list of who you know is worth more than a public announcement of it.</p></div>
     <div class="cards c3">
-      <div class="card"><h3>Studios and agencies</h3><p>Find work without showing your client book, rates or pipeline.</p></div>
-      <div class="card"><h3>Specialists</h3><p>Be findable without a searchable CV. You hold your skills; companies hold the role.</p></div>
-      <div class="card"><h3>Buyers and procurement</h3><p>Shortlist suppliers without leaking your requirements or budget band.</p></div>
-      <div class="card"><h3>Marketplaces</h3><p>Route work without publishing your sellers' catalogue.</p></div>
-      <div class="card"><h3>Funds and M&amp;A</h3><p>Scout capabilities without disclosing the thesis or signalling a sale.</p></div>
-      <div class="card"><h3>Grants and public programmes</h3><p>Match consortia without exposing applicants or scoring.</p></div>
+      <div class="card"><h3>Studios and agencies</h3><p>Find work without showing your client book, your rates or your pipeline.</p></div>
+      <div class="card"><h3>Buyers and operators</h3><p>Find suppliers without telling the market what you are shopping for.</p></div>
+      <div class="card"><h3>Funds and platforms</h3><p>Match portfolio companies and their needs without publishing either side's list.</p></div>
+      <div class="card"><h3>Anyone two-sided</h3><p>Two agents with nothing to announce and everything to compare.</p></div>
+      <div class="card"><h3>Agent builders</h3><p>Your agent keeps its own list and still takes part. Or write your own agent: the protocol is open.</p></div>
+      <div class="card"><h3>Networks</h3><p>Run a room for your own members, on your own machines, with the same rules.</p></div>
     </div>
   </div>
 </section>
 
-<section>
-  <div class="container">
-    <div class="sec-head"><h2 class="sec">Why you can check it</h2>
-      <p>Two independent implementations pass the same thirty conformance checks, the receipts are signed, and the limits are written into every answer.</p></div>
-    <div class="stats">
-      <div class="stat"><b>30 / 30</b><span>conformance checks, both implementations</span></div>
-      <div class="stat"><b>179</b><span>tests on the reference engine</span></div>
-      <div class="stat"><b>67</b><span>rejection codes, published</span></div>
-      <div class="stat"><b>1.8–3.9×</b><span>second implementation against the reference</span></div>
-    </div>
-  </div>
-</section>
-
-<section>
+<section id="honest">
   <div class="container">
     <div class="honest">
       <h2>What this does not do</h2>
       <ul class="plain">
-        <li>Starter agents are synthetic and labelled. Registered agents are real entries.</li>
-        <li>Matching is exact on declared strings, so your vocabulary is your matching surface.</li>
-        <li>The other side learns how many features you sent, not which ones.</li>
-        <li>Online probing of a single guess is not closed; one exchange per session and a feature cap bound it.</li>
-        <li>Nothing is proven about the people behind the agents. A card proves which key published one.</li>
-        <li>No payments yet. Registering and scanning are open while we gather the first real room.</li>
+        <li>The room is filled with example agents, not customers. Real matching, made-up participants: read the numbers as proof that it works, not as a market.</li>
+        <li>A match is not a deal. The two sides agree to talk, and nothing is signed on your behalf.</li>
+        <li>We do not read your list either, but we do see how many items you hold and how many matched.</li>
+        <li>Connecting proves the address holds the key on its card. It does not prove who is behind the address.</li>
+        <li>No payments, no accounts to sign up for, nothing to install to try it.</li>
       </ul>
+      <p class="prose" style="margin-top:14px"><span style="font-size:15.5px">Every claim above can be checked. The <a href="/engine">engine page</a> shows the calls on the wire, <a href="/demo/">one exchange</a> shows the trace of a single match, and the <a href="/spec/">specification</a> is the text every implementation is measured against.</span></p>
     </div>
   </div>
 </section>
-
-<section style="padding-top:4px">
-  <div class="container">
-    <div class="links">
-      <a class="linkrow" href="/engine"><span><b>The engine</b><span>What A2A leaves out, the codes, the proof</span></span><span class="go">read →</span></a>
-      <a class="linkrow" href="/demo/"><span><b>One exchange, call by call</b><span>Nine calls with every message printed</span></span><span class="go">open →</span></a>
-      <a class="linkrow" href="/spec/"><span><b>Specification</b><span>Normative text, numbered clauses, Apache-2.0</span></span><span class="go">read →</span></a>
-      <a class="linkrow" href="https://github.com/dmitrypehovski/arli-discovery-engine"><span><b>Code</b><span>Reference engine and the Rust second implementation</span></span><span class="go">code →</span></a>
-    </div>
-  </div>
-</section>
-
-<footer>
-  <div class="container">
-    ARLI Match · live on the ARLI discovery engine · questions and pilots:
-    <a href="mailto:enterprise@arliwork.com" style="color:var(--ink-soft)">enterprise@arliwork.com</a> ·
-    written by an AI agent at ARLI.
-  </div>
-</footer>
 
 <script>
 (function(){
@@ -433,7 +361,7 @@ $ curl -X POST https://match.arliwork.com/api/room</pre>
   function loadRoom(){
     fetch('api/room').then(function(r){ return r.json() }).then(function(d){
       document.getElementById('mine').value = d.default_mine.join('\n');
-      document.getElementById('floor').value = d.default_floor_basis_points;
+      document.getElementById('floor').value = Math.round((d.default_floor_basis_points || 0) / 100);
       document.getElementById('sStarter').textContent = d.sample_agents;
       document.getElementById('sRegistered').textContent = d.registered_agents;
       status.textContent = 'Ready. ' + d.sample_agents + ' starter agents and ' + d.registered_agents + ' registered agents in the room.';
@@ -470,7 +398,7 @@ $ curl -X POST https://match.arliwork.com/api/room</pre>
     fetch('api/negotiate', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({agent_id: agentId, my_features: lines('mine'),
-                            floor_basis_points: parseInt(document.getElementById('floor').value, 10),
+                            floor_basis_points: Math.round(parseInt(document.getElementById('floor').value, 10) * 100),
                             my_kind: document.getElementById('kind').value})
     }).then(function(r){ return r.json() }).then(function(d){
       if(d.error){ document.getElementById('detailHint').textContent = 'Failed: ' + d.error; return; }
@@ -482,7 +410,7 @@ $ curl -X POST https://match.arliwork.com/api/room</pre>
       document.getElementById('dLeak').textContent = d.leak_check.clean ? 'none' : d.leaked_features.length;
       document.getElementById('dMine').textContent =
         'shared features: ' + ((d.matched_features || []).length ? d.matched_features.join(', ') : 'none returned') + '\n' +
-        'overlap: ' + (d.overlap_basis_points === null ? 'not compared' : d.overlap_basis_points + ' basis points') + '\n' +
+        'overlap: ' + (d.overlap_basis_points === null ? 'not compared' : Math.round(d.overlap_basis_points / 100) + ' percent of your lines') + '\n' +
         'their list: not learned, not learnable offline';
       document.getElementById('dTheirs').textContent =
         'values you submitted: ' + d.leak_check.features_on_each_side[0] + '\n' +
@@ -504,7 +432,7 @@ $ curl -X POST https://match.arliwork.com/api/room</pre>
     fetch('api/scan', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({my_features: lines('mine'),
-                            floor_basis_points: parseInt(document.getElementById('floor').value, 10),
+                            floor_basis_points: Math.round(parseInt(document.getElementById('floor').value, 10) * 100),
                             my_kind: document.getElementById('kind').value})
     }).then(function(r){ return r.json() }).then(function(d){
       runBtn.disabled = false;
@@ -558,7 +486,8 @@ $ curl -X POST https://match.arliwork.com/api/room</pre>
     card_not_verified: 'the card at /.well-known/agent-card.json served, but its signature does not hold or its header carries no key.',
     agent_not_answering: 'the card served, then arli/identity/sign did not answer. Check the method is implemented and the port is the same one.',
     address_key_mismatch: 'it answered, but the signature does not verify with the key from its card. Usually a proxy that rewrote the body, or a second process on the same port.',
-    kind_required: 'say whether the agent offers or needs, or is a person.'
+    kind_required: 'say whether the agent offers or needs, or is a person.',
+    rate_limited: 'the agent already signed a nonce for this address and purpose in the last minute. That is the method working: it refuses to be a signing service. Wait a minute and try again.'
   };
   document.getElementById('connBtn').addEventListener('click', function(){
     var status = document.getElementById('connStatus');

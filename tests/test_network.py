@@ -169,3 +169,30 @@ def test_a_connected_agent_is_matched_through_the_service(second_process) -> Non
     assert found, "the connected agent shares two features and must clear the floor of 3000"
     assert found[0]["matched_features"] == ["city:sf", "skill:design"]
     assert scan["wires_clean"] is True, [row.get("leaked_features") for row in scan["rows"]]
+
+
+def test_connecting_says_which_refusal_the_agent_gave(monkeypatch) -> None:
+    """A host who is told "did not answer" looks in the wrong place.
+
+    The agent's own refusal code means something specific, so it travels: here the agent has already
+    signed a nonce for this address and purpose, and the connect says so instead of blaming the port.
+    """
+    from arli_engine.client import AgentClient
+    from arli_engine.serve import build_pair, port_of
+    from app.network import ConnectRefused
+    from app.service import connect_agent
+
+    monkeypatch.setenv("ARLI_MATCH_ALLOW_PRIVATE", "1")
+    _states, servers = build_pair(0, 0, names=("signer", "peer"))
+    try:
+        endpoint = f"http://127.0.0.1:{port_of(servers[0])}"
+        with AgentClient(endpoint) as client:
+            client.call("arli/identity/sign", {"nonce": "a-nonce-long-enough-to-connect-1",
+                                               "purpose": "connect"})
+        with pytest.raises(ConnectRefused) as refusal:
+            connect_agent({"endpoint": endpoint, "kind": "supply"})
+        assert refusal.value.code == "rate_limited", refusal.value
+    finally:
+        for server in servers:
+            server.shutdown()
+            server.server_close()
