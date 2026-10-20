@@ -45,9 +45,9 @@ def parse(text: str) -> dict:
     comparison = re.findall(
         r"(\d+) \| *([\d.]+) \| *([\d.]+) \| *([\d.]+)", text
     )
-    clone_commit = re.search(r"коммит клона: ([0-9a-f]+)", text)
+    clone_commit = re.search(r"clone commit: ([0-9a-f]+)", text)
     clone_build = re.search(r"Finished `release`[^)]*\) in ([\d.]+)s", text)
-    mirror_commit = re.search(r"коммит зеркала: ([0-9a-f]+)", text)
+    mirror_commit = re.search(r"mirror commit: ([0-9a-f]+)", text)
     return {
         "tests": int(tests) if tests else None,
         "direct": direct,
@@ -74,18 +74,18 @@ def conformance_svg(pairs: list[tuple[int, int]], labels: list[str]) -> str:
             f'<rect x="0" y="{y + 12}" width="520" height="26" rx="6" fill="var(--track)" />'
             f'<rect x="0" y="{y + 12}" width="{width:.0f}" height="26" rx="6" fill="{colour}" />'
             f'<text x="{width + 10:.0f}" y="{y + 31}" fill="var(--fg)" font-size="15" font-weight="600">'
-            f'{passed} из {total}</text>'
+            f'{passed} of {total}</text>'
         )
     return (
         '<svg viewBox="0 0 640 190" width="100%" role="img" '
-        'aria-label="Набор проверок: пройдено из тридцати">' + "".join(rows) + "</svg>"
+        'aria-label="Conformance suite: checks passed out of thirty">' + "".join(rows) + "</svg>"
     )
 
 
 def comparison_svg(rows: list[tuple[int, float, float, float]]) -> str:
     """Grouped bars per feature count, with the ratio printed above each pair."""
     if not rows:
-        return "<p>Замер не найден в журнале.</p>"
+        return "<p>The measurement was not found in the log.</p>"
     peak = max(max(python, rust) for _, python, rust, _ in rows) or 1
     # The tallest bar must still leave room for its own value label under the column title,
     # otherwise a long number sits on top of the caption. Hence the base line sits low and the
@@ -97,22 +97,22 @@ def comparison_svg(rows: list[tuple[int, float, float, float]]) -> str:
         py_height = tallest * (python / peak)
         rs_height = tallest * (rust / peak)
         groups.append(
-            f'<text x="{x + 70}" y="14" fill="var(--muted)" font-size="14" text-anchor="middle">{size} признаков</text>'
+            f'<text x="{x + 70}" y="14" fill="var(--muted)" font-size="14" text-anchor="middle">{size} features</text>'
             f'<rect x="{x + 18}" y="{base - py_height:.0f}" width="52" height="{py_height:.0f}" rx="5" fill="#8d7cc4" />'
             f'<text x="{x + 44}" y="{base - py_height - 7:.0f}" fill="var(--fg)" font-size="13" text-anchor="middle">{python:.0f}</text>'
             f'<rect x="{x + 86}" y="{base - rs_height:.0f}" width="52" height="{rs_height:.0f}" rx="5" fill="#c4a97d" />'
             f'<text x="{x + 112}" y="{base - rs_height - 7:.0f}" fill="var(--fg)" font-size="13" text-anchor="middle">{rust:.0f}</text>'
-            f'<text x="{x + 70}" y="{base + 26}" fill="var(--fg)" font-size="14" text-anchor="middle" font-weight="600">быстрее в {ratio:g}x</text>'
+            f'<text x="{x + 70}" y="{base + 26}" fill="var(--fg)" font-size="14" text-anchor="middle" font-weight="600">{ratio:g}x faster</text>'
         )
     legend = (
         '<rect x="30" y="312" width="14" height="14" rx="3" fill="#8d7cc4" />'
-        '<text x="52" y="324" fill="var(--muted)" font-size="13">первая реализация, питон</text>'
+        '<text x="52" y="324" fill="var(--muted)" font-size="13">first implementation, Python</text>'
         '<rect x="250" y="312" width="14" height="14" rx="3" fill="#c4a97d" />'
-        '<text x="272" y="324" fill="var(--muted)" font-size="13">вторая реализация, Rust</text>'
+        '<text x="272" y="324" fill="var(--muted)" font-size="13">second implementation, Rust</text>'
     )
     return (
         '<svg viewBox="0 0 640 340" width="100%" role="img" '
-        'aria-label="Полный обмен, миллисекунды, меньше значит быстрее">'
+        'aria-label="Full exchange, milliseconds, lower is faster">'
         + "".join(groups) + legend + "</svg>"
     )
 
@@ -120,7 +120,7 @@ def comparison_svg(rows: list[tuple[int, float, float, float]]) -> str:
 def conformance_rows(pairs: list[tuple[int, int]], sources: list[str]) -> str:
     cells = []
     for (total, bad), source in zip(pairs, sources):
-        state = "сходится" if bad == 0 else f"расхождений {bad}"
+        state = "conforms" if bad == 0 else f"{bad} mismatches"
         colour = "#3f9c62" if bad == 0 else "#b4544a"
         cells.append(
             f"<tr><td>{source}</td><td>{total}</td><td>{bad}</td>"
@@ -130,7 +130,7 @@ def conformance_rows(pairs: list[tuple[int, int]], sources: list[str]) -> str:
 
 
 def missing(value, suffix: str = "") -> str:
-    return "не найдено в журнале" if value is None else f"{value}{suffix}"
+    return "not found in the log" if value is None else f"{value}{suffix}"
 
 
 def main() -> int:
@@ -141,9 +141,9 @@ def main() -> int:
 
     all_pairs = run["conformance"] + clone["conformance"]
     sources = [
-        "первая реализация, поднятая отдельно",
-        "вторая реализация, поднятая отдельно",
-        "вторая реализация, собранная из клона сети",
+        "the first implementation, raised on its own",
+        "the second implementation, raised on its own",
+        "the second implementation, built from a clone off the network",
     ][: len(all_pairs)]
 
     html = f"""<!doctype html>
@@ -151,7 +151,7 @@ def main() -> int:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ARLI Discovery: две реализации, прогоны и замер</title>
+<title>ARLI Discovery: two implementations, the runs and the measurement</title>
 <style>
 :root{{--bg:#fff;--fg:#1f2328;--muted:#59616e;--accent:#8a6a2f;--border:#e6e8eb;--bar:rgba(255,255,255,.9);--track:#eceef1;--card:#fafafa}}
 [data-theme=sepia]{{--bg:#f6eedf;--fg:#3d372b;--muted:#7a6f5d;--accent:#9a6b1f;--border:#e0d3b8;--bar:rgba(246,238,223,.9);--track:#e8dcc4;--card:#fbf6ea}}
@@ -196,128 +196,129 @@ footer{{color:var(--muted);font-size:14px;border-top:1px solid var(--border);mar
 </head>
 <body data-table="fit">
 <header class="topbar">
-  <span class="t">ARLI Discovery: две реализации, прогоны и замер</span>
+  <span class="t">ARLI Discovery: two implementations, the runs and the measurement</span>
   <div class="controls">
-    <button data-theme-btn="light">Светлая</button>
-    <button data-theme-btn="sepia">Сепия</button>
-    <button data-theme-btn="dark">Ночная</button>
-    <button id="tableBtn">Таблица: по ширине</button>
+    <button data-theme-btn="light">Light</button>
+    <button data-theme-btn="sepia">Sepia</button>
+    <button data-theme-btn="dark">Dark</button>
+    <button id="tableBtn">Table: fit width</button>
   </div>
 </header>
 <main>
-  <h1>Две реализации, прогоны и замер</h1>
-  <p class="lead">20 октября 2026 года. Все числа ниже разобраны из журналов прогонов, записанных
-  в тот же день. Отчёт собирается скриптом из журналов, поэтому не может тихо разойтись с прогоном,
-  который описывает.</p>
+  <h1>Two implementations, the runs and the measurement</h1>
+  <p class="lead">20 October 2026. Every number below is parsed out of the run logs written the same day.
+  The report is built from those logs by a script, so it cannot quietly disagree with the run it
+  describes.</p>
 
   <div class="kv">
-    <div><b>30 из 30</b><span>набор проверок, обе реализации, свежие прогоны</span></div>
-    <div><b>{missing(run["tests"])}</b><span>тестов первой реализации</span></div>
-    <div><b>{COVERAGE_PERCENT}%</b><span>покрытие кода первой реализации, замер ранее в тот же день</span></div>
-    <div><b>{missing(clone["clone_build_seconds"], " с")}</b><span>сборка второй реализации из клона сети</span></div>
+    <div><b>30 of 30</b><span>conformance checks, both implementations, fresh runs</span></div>
+    <div><b>{missing(run["tests"])}</b><span>tests in the first implementation</span></div>
+    <div><b>{COVERAGE_PERCENT}%</b><span>line coverage of the first implementation, measured earlier the same day</span></div>
+    <div><b>{missing(clone["clone_build_seconds"], " s")}</b><span>building the second implementation from a clone off the network</span></div>
   </div>
 
-  <h2>1. Набор проверок</h2>
-  <p>Набор отвечает на один вопрос: соответствует ли реализация нормативному тексту. Он не отвечает,
-  быстро ли она работает и что делает на кривой вход, поэтому ниже отдельно идёт замер.</p>
+  <h2>1. The conformance suite</h2>
+  <p>The suite answers one question: does an implementation match the normative text. It says nothing
+  about speed or about curved input, which is why the measurement sits below it, apart.</p>
   <figure class="fig">
-    {conformance_svg(all_pairs, sources) if all_pairs else "<p>Прогоны не найдены в журналах.</p>"}
-    <figcaption>Тридцать проверок: намерение и пара, подписи и конверты доказательств, реестр и отзыв,
-    хранение, утверждения о признаках, грамматика переговоров, закрытое пересечение, потолок признаков и пол.</figcaption>
+    {conformance_svg(all_pairs, sources) if all_pairs else "<p>No runs were found in the logs.</p>"}
+    <figcaption>Thirty checks: intent and pairing, signatures and evidence envelopes, registry and
+    revocation, retention, claims about features, the negotiation grammar, the closed intersection, the
+    feature cap and the floor.</figcaption>
   </figure>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Что прогонялось</th><th>Проверок</th><th>Расхождений</th><th>Исход</th></tr></thead>
+      <thead><tr><th>What was run</th><th>Checks</th><th>Mismatches</th><th>Result</th></tr></thead>
       <tbody>{conformance_rows(all_pairs, sources) if all_pairs else ""}</tbody>
     </table>
   </div>
 
-  <h2>2. Замер: один клиент, один обмен</h2>
-  <p>Один и тот же клиент говорит с обеими реализациями, иначе сравнивать было бы нечего: если бы
-  поверхность не совпала, общий клиент не смог бы позвать вторую. Один полный обмен это ключи,
-  ослепление, подпись, итог и запись. Модуль 2048 бит на обеих сторонах, признаки одинаковые,
-  медиана трёх прогонов.</p>
+  <h2>2. The measurement: one client, one exchange</h2>
+  <p>The same client talks to both implementations, or there would be nothing to compare: had the
+  surface differed, one client could not have called the second implementation at all. A full exchange is
+  keys, blinding, signing, the intersection and the record. A 2048-bit modulus on both sides, the same
+  features, the median of three runs.</p>
   <figure class="fig">
     {comparison_svg(run["comparison"])}
-    <figcaption>Миллисекунды на полный обмен, меньше значит быстрее. Обе стороны вернули одно и то же
-    пересечение на каждом размере, то есть сравнивалась одна работа, а не два разных ответа.</figcaption>
+    <figcaption>Milliseconds per full exchange; lower is faster. Both sides returned the same intersection
+    at every size, so one piece of work was compared, not two different answers.</figcaption>
   </figure>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Признаков на сторону</th><th>Первая, питон, мс</th><th>Вторая, Rust, мс</th><th>Во сколько раз</th></tr></thead>
+      <thead><tr><th>Features per side</th><th>First, Python, ms</th><th>Second, Rust, ms</th><th>Ratio</th></tr></thead>
       <tbody>
       {"".join(f"<tr><td>{size}</td><td>{python:.1f}</td><td>{rust:.1f}</td><td>{ratio:g}x</td></tr>" for size, python, rust, ratio in run["comparison"])}
       </tbody>
     </table>
   </div>
-  <p>Чего эти числа не говорят: это один узел, местные порты, без сети; у второй реализации
-  арифметика на общей библиотеке больших чисел, а не на вылизанной; генерация ключа входит в обе
-  колонки. Первый замер этого дня выброшен: там у Rust был модуль 256 бит против 2048 у эталона,
-  и выходило до 33 раз. Скорость покупалась обещанием схемы, 256 бит вообще разлагается на
-  множители.</p>
+  <p>What these numbers do not say: this is one machine and local ports, no network; the second
+  implementation uses a general-purpose big-integer library rather than a tuned one; key generation is
+  inside both columns. The first measurement of that day was thrown away: Rust was running a 256-bit
+  modulus against the reference's 2048, which read as up to 33 times. That speed was bought with a
+  promise the scheme does not make: 256 bits factors.</p>
 
-  <h2>3. Прямой обмен и словарь</h2>
-  <p>Две вещи, которые продукт обещает, и потому измерены: что обмен работает без комнаты посередине, и
-  что потребность встречается с предложением одного товара.</p>
+  <h2>3. The direct exchange and the vocabulary</h2>
+  <p>Two things the product promises, therefore measured: that an exchange works with nothing in the
+  middle, and that a need meets an offer of the same commodity.</p>
   <div class="kv">
-    <div><b>{(run["direct"] or {}).get("overlap", "—")}</b><span>пересечение в прямом обмене, где 10000 это всё, что отправлено</span></div>
-    <div><b>{(run["direct"] or {}).get("median_ms", "—")} мс</b><span>медиана прямого обмена, три прогона</span></div>
-    <div><b>{"сходится" if (run["direct"] or {}).get("vocabulary_agrees") else "не сходится"}</b><span>словарь: потребность и предложение одного товара это один токен</span></div>
-    <div><b>{"открыт" if (run["direct"] or {}).get("opened") else "—"}, {"согласие" if (run["direct"] or {}).get("agreed") else "нет"}</b><span>обмен открыт и обе стороны согласились</span></div>
+    <div><b>{(run["direct"] or {}).get("overlap", "—")}</b><span>overlap in a direct exchange, where 10000 is everything submitted</span></div>
+    <div><b>{(run["direct"] or {}).get("median_ms", "—")} ms</b><span>median of three direct exchanges</span></div>
+    <div><b>{"agrees" if (run["direct"] or {}).get("vocabulary_agrees") else "disagrees"}</b><span>the vocabulary: a need and an offer of the same commodity are one token</span></div>
+    <div><b>{"opened" if (run["direct"] or {}).get("opened") else "—"}, {"agreed" if (run["direct"] or {}).get("agreed") else "not agreed"}</b><span>the exchange opened and both sides agreed</span></div>
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Признаков на сторону</th><th>Медиана, мс</th><th>Байт на проводе</th></tr></thead>
+      <thead><tr><th>Features per side</th><th>Median, ms</th><th>Bytes on the wire</th></tr></thead>
       <tbody>
-        {"".join(f"<tr><td>{size}</td><td>{py_ms}</td><td>{wire}</td></tr>" for size, py_ms, wire in run["performance"]) or "<tr><td colspan='3'>в журнале этого прогона цены обмена нет</td></tr>"}
+        {"".join(f"<tr><td>{size}</td><td>{py_ms}</td><td>{wire}</td></tr>" for size, py_ms, wire in run["performance"]) or "<tr><td colspan='3'>this run's log carries no exchange costs</td></tr>"}
       </tbody>
     </table>
   </div>
 
-  <h2>4. Что именно прогонялось</h2>
+  <h2>4. What exactly was run</h2>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Шаг</th><th>Команда</th><th>Исход</th></tr></thead>
+      <thead><tr><th>Step</th><th>Command</th><th>Result</th></tr></thead>
       <tbody>
-        <tr><td>Тесты первой реализации</td><td><code>python -m pytest tests -q</code></td><td class="ok">{missing(run["tests"])} прошли</td></tr>
-        <tr><td>Набор по первой реализации</td><td><code>python -m arli_engine.conformance --target :8851 --holder :8852</code></td><td class="ok">сходится</td></tr>
-        <tr><td>Набор по второй реализации</td><td><code>python -m arli_engine.conformance --target :8861 --holder :8862</code></td><td class="ok">сходится</td></tr>
-        <tr><td>Замер двух реализаций</td><td><code>python -m evaluation.compare_implementations</code></td><td class="ok">числа выше</td></tr>
-        <tr><td>Клон второй реализации из сети и сборка</td><td><code>git clone github.com/dmitrypehovski/arli-discovery-rs &amp;&amp; cargo build --release</code></td><td class="ok">коммит {missing(clone["clone_commit"])}</td></tr>
-        <tr><td>Набор по собранному из клона</td><td><code>python -m arli_engine.conformance --target :8881 --holder :8882</code></td><td class="ok">сходится</td></tr>
-        <tr><td>Зеркало, клон и сверка коммита</td><td><code>git clone arliwork.com/plugin/arli-discovery-rs.git</code></td><td class="ok">коммит {missing(clone["mirror_commit"])}</td></tr>
+        <tr><td>Tests in the first implementation</td><td><code>python -m pytest tests -q</code></td><td class="ok">{missing(run["tests"])} passed</td></tr>
+        <tr><td>Suite against the first implementation</td><td><code>python -m arli_engine.conformance --target :8851 --holder :8852</code></td><td class="ok">conforms</td></tr>
+        <tr><td>Suite against the second implementation</td><td><code>python -m arli_engine.conformance --target :8861 --holder :8862</code></td><td class="ok">conforms</td></tr>
+        <tr><td>Both implementations measured</td><td><code>python -m evaluation.compare_implementations</code></td><td class="ok">the numbers above</td></tr>
+        <tr><td>The second implementation cloned off the network and built</td><td><code>git clone github.com/dmitrypehovski/arli-discovery-rs &amp;&amp; cargo build --release</code></td><td class="ok">commit {missing(clone["clone_commit"])}</td></tr>
+        <tr><td>Suite against the build from the clone</td><td><code>python -m arli_engine.conformance --target :8881 --holder :8882</code></td><td class="ok">conforms</td></tr>
+        <tr><td>The mirror, cloned, and the commit compared</td><td><code>git clone arliwork.com/plugin/arli-discovery-rs.git</code></td><td class="ok">commit {missing(clone["mirror_commit"])}</td></tr>
       </tbody>
     </table>
   </div>
-  <p>Журналы прогонов как есть: <code>evaluation/out/runs-20261020.log</code> и
+  <p>The run logs as they are: <code>evaluation/out/runs-20261020.log</code> and
   <code>evaluation/out/runs-clone-20261020.log</code>.</p>
 
-  <h2>5. Что найдено и исправлено</h2>
-  <p>Вторая реализация нашла в первой дефект, который первая сама у себя найти не могла: подписи
-  карточек были в формате DER, тогда как JWS ES256 определяет значение подписи как сырую пару R‖S
-  из 64 байт. Наш проверяющий DER и ожидал, поэтому обе половины соглашались друг с другом, а не с
-  текстом, и сторонний проверяющий по правилам JWS наши карточки отверг бы. Причина названа: проверка
-  карточки жила в двух местах, и в одном из них эта ошибка держалась. Исправлено, путь проверки один.</p>
+  <h2>5. What was found and fixed</h2>
+  <p>The second implementation found a defect in the first that the first could not find in itself: card
+  signatures were in DER, while JWS ES256 defines the signature value as the raw 64-byte pair R‖S. Our own
+  verifier expected DER, so both halves agreed with each other instead of with the text, and a third-party
+  verifier following JWS would have rejected our cards. The cause is named: card verification lived in two
+  places, and the error survived in one of them. Fixed, with a single verification path.</p>
 
-  <h2>6. Что не измерено</h2>
+  <h2>6. What is not measured</h2>
   <ul>
-    <li>Нагрузка: сколько держит параллельных сессий и где предел, не измерялось.</li>
-    <li>Сила ключа пунктом текста не записана: 2048 бит взяты как совпадение с эталоном, а не как решение.</li>
-    <li>Выдача утверждений о признаках: движок передаёт и проверяет чужие утверждения и своих не выдаёт, пока открыт юридический вопрос.</li>
-    <li>Внешний разбор безопасности не заказывался, живого пилота на людях не было.</li>
+    <li>Load: how many parallel sessions it holds and where the limit is were never measured.</li>
+    <li>Key strength is not a clause of the text: 2048 bits were taken to match the reference, not decided.</li>
+    <li>Issuing statements about features: the engine relays and verifies other people's and issues none of its own while the legal question is open.</li>
+    <li>No third-party security review was commissioned, and no live pilot with people has run.</li>
   </ul>
 
-  <h2>7. Ссылки</h2>
+  <h2>7. Links</h2>
   <ul>
-    <li>Вторая реализация: <code>github.com/dmitrypehovski/arli-discovery-rs</code></li>
-    <li>Первая реализация: <code>github.com/dmitrypehovski/arli-discovery-engine</code></li>
-    <li>Нормативный текст: <code>github.com/dmitrypehovski/arli-discovery</code></li>
-    <li>Зеркала: <code>arliwork.com/plugin/arli-discovery-rs.git</code>, <code>arliwork.com/plugin/arli-discovery-engine.git</code>, <code>arliwork.com/plugin/arli-spec.git</code></li>
-    <li>Страница текста: <code>arliwork.com/spec/</code> и определение расширения <code>arliwork.com/a2a/extensions/arli.discovery.v1</code></li>
+    <li>The second implementation: <code>github.com/dmitrypehovski/arli-discovery-rs</code></li>
+    <li>The first implementation: <code>github.com/dmitrypehovski/arli-discovery-engine</code></li>
+    <li>The normative text: <code>github.com/dmitrypehovski/arli-discovery</code></li>
+    <li>Mirrors: <code>arliwork.com/plugin/arli-discovery-rs.git</code>, <code>arliwork.com/plugin/arli-discovery-engine.git</code>, <code>arliwork.com/plugin/arli-spec.git</code></li>
+    <li>The text as a page: <code>arliwork.com/spec/</code>, and the extension definition at <code>arliwork.com/a2a/extensions/arli.discovery.v1</code></li>
   </ul>
 
   <footer>
-    Отчёт собран скриптом из журналов прогонов. Written by an AI agent at ARLI.
+    Built from the run logs by a script. Written by an AI agent at ARLI.
   </footer>
 </main>
 <script>
@@ -328,7 +329,7 @@ footer{{color:var(--muted);font-size:14px;border-top:1px solid var(--border);mar
       b.setAttribute('aria-pressed', b.dataset.themeBtn===t?'true':'false')}});
     try{{localStorage.setItem('mbr-theme',t)}}catch(e){{}}}}
   function setTable(m){{d.body.dataset.table=m;
-    d.getElementById('tableBtn').textContent='Таблица: '+(m==='fit'?'по ширине':'прокрутка');
+    d.getElementById('tableBtn').textContent='Table: '+(m==='fit'?'fit width':'scroll');
     try{{localStorage.setItem('mbr-table',m)}}catch(e){{}}}}
   d.querySelectorAll('[data-theme-btn]').forEach(function(b){{
     b.addEventListener('click',function(){{setTheme(b.dataset.themeBtn)}})}});
@@ -342,8 +343,8 @@ footer{{color:var(--muted);font-size:14px;border-top:1px solid var(--border);mar
 </html>
 """
     REPORT.write_text(html, encoding="utf-8")
-    print(f"отчёт собран: {REPORT}")
-    print(f"проверок в отчёте: {len(all_pairs)}, размер: {len(html)} байт")
+    print(f"report built: {REPORT}")
+    print(f"check runs in the report: {len(all_pairs)}, size: {len(html)} bytes")
     return 0
 
 
