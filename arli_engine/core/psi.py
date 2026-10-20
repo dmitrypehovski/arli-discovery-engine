@@ -24,7 +24,7 @@ multiplication is cheaper.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import gcd
 from secrets import randbelow
 
@@ -88,6 +88,50 @@ def generate_keys() -> Keys:
     key = rsa.generate_private_key(public_exponent=65537, key_size=MODULUS_BYTES * 8)
     numbers = key.private_numbers()
     return Keys(n=numbers.public_numbers.n, e=numbers.public_numbers.e, d=numbers.d)
+
+
+DEFAULT_EPOCH_SECONDS = 3600
+
+
+@dataclass
+class EpochKey:
+    """One key for an epoch, with the holder's own tokens computed once.
+
+    Why an epoch and not a key per exchange. Generating an RSA key costs more than the exchange itself, and
+    the holder was recomputing tokens over its own list for every seeker. Within an epoch the key is made
+    once and the tokens are computed once; the remaining per-exchange work is signing the seeker's blinded
+    values, which nobody else can do for us.
+
+    What this costs, stated plainly: tokens are stable within an epoch, so two seekers that compare notes
+    can tell that they hold the same item. They could already tell that by intersecting their own lists, but
+    the text has to say it rather than leave it to be discovered. An epoch must expire, and a revoked agent's
+    epoch must stop being served.
+    """
+
+    epoch_id: str
+    keys: "Keys"
+    created_at: float
+    ttl_seconds: int = DEFAULT_EPOCH_SECONDS
+    _tokens: dict[str, int] = field(default_factory=dict)
+
+    def expired(self, now: float) -> bool:
+        return (now - self.created_at) >= self.ttl_seconds
+
+    def tokens_for(self, features: list[str]) -> list[int]:
+        """Signed tokens over our own list, computed once per epoch and then reused."""
+        missing = [feature for feature in features if feature not in self._tokens]
+        if missing:
+            for feature in missing:
+                self._tokens[feature] = sign(feature_hash(feature), self.keys.d, self.keys.n)
+        return [self._tokens[feature] for feature in features]
+
+
+def new_epoch(ttl_seconds: int = DEFAULT_EPOCH_SECONDS) -> EpochKey:
+    import secrets as _secrets
+    import time as _time
+
+    return EpochKey(epoch_id=f"ep-{_secrets.token_hex(6)}", keys=generate_keys(),
+                    created_at=_time.time(), ttl_seconds=ttl_seconds)
 
 
 def _blind_factor(n: int) -> int:

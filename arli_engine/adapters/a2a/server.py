@@ -24,11 +24,13 @@ from arli_engine.core.match import (
     closed_match_holder,
     local_match,
 )
-from arli_engine.core.psi import (
+from arli_engine.core.psi import (  # noqa: F401
+    EpochKey,
     MAX_FEATURES_PER_EXCHANGE,
     Keys,
     blind_set,
     generate_keys,
+    sign,
     own_signed_tokens,
     sign as rsa_sign,
     unblind_set,
@@ -97,6 +99,11 @@ class AgentState:
     # blindings and the recorded results. Big numbers travel as hex strings, otherwise
     # clients in other languages would lose precision.
     psi_keys: dict[str, Keys] = field(default_factory=dict)
+    # One key per epoch, not per exchange: key generation costs more than the exchange, and the holder's
+    # own tokens are computed once per epoch instead of once per seeker.
+    epoch: "EpochKey | None" = None
+    # Which epoch's key was handed to which session: the epoch must not outlive its binding.
+    psi_issued: dict[str, str] = field(default_factory=dict)
     psi_blinds: dict[str, tuple[list[str], list[int]]] = field(default_factory=dict)
     psi_results: dict[str, list[str]] = field(default_factory=dict)
     # Key registry and retention: rotation separate from principal revocation,
@@ -114,6 +121,22 @@ def health_document(state: AgentState) -> dict:
 
     return {"ok": True, "agent": state.name, "extension_version": extension_version(),
             "features_held_at_home": len(state.features), "kid": state.kid}
+
+
+def current_epoch(state: AgentState, now: float):
+    """The agent's epoch, created when there is none or when the old one expired.
+
+    An epoch carries a key and the holder's own tokens. Expiry is not decoration: a token table that lives
+    for ever is a dictionary an attacker can accumulate against, and a revoked agent must stop being served.
+    """
+    from arli_engine.core.psi import DEFAULT_EPOCH_SECONDS, new_epoch
+
+    epoch = state.epoch
+    if epoch is None or epoch.expired(now):
+        ttl = DEFAULT_EPOCH_SECONDS
+        epoch = new_epoch(ttl)
+        state.epoch = epoch
+    return epoch
 
 
 def _rpc_ok(req_id, result) -> dict:
@@ -236,18 +259,23 @@ def _methods(state: AgentState) -> dict:
         session_id = params.get("session_id")
         if not session_id:
             raise MatchRejected("missing_pair_key", "session_id is required")
-        keys = state.psi_keys.get(session_id)
-        if keys is None:
-            keys = generate_keys()
-            state.psi_keys[session_id] = keys
-        n, e = keys.public()
+        import time as _time
+
+        epoch = current_epoch(state, _time.time())
+        # A session is bound to the epoch that issued its key. Signing without that binding, or with a
+        # binding whose epoch has expired, is refused: a seeker that never fetched a key blinded its values
+        # with something else entirely, and pairing it against this key would be work with no honest outcome.
+        state.psi_issued[session_id] = epoch.epoch_id
+        n, e = epoch.keys.public()
         return {
             "session_id": session_id,
             "n": format(n, "x"),
             "e": format(e, "x"),
             "scheme": "closed_blind_rsa",
+            "epoch_id": epoch.epoch_id,
+            "epoch_expires_in_seconds": max(0, int(epoch.ttl_seconds - (_time.time() - epoch.created_at))),
             "feature_cap": MAX_FEATURES_PER_EXCHANGE,
-            "note": "the private exponent never leaves this agent",
+            "note": "the private exponent never leaves this agent; the key lasts one epoch and then expires",
         }
 
     def psi_commit(params: dict) -> dict:
@@ -278,17 +306,28 @@ def _methods(state: AgentState) -> dict:
         blinded = params.get("blinded")
         if not session_id or not blinded:
             raise MatchRejected("missing_pair_key", "session_id and blinded are required")
-        keys = state.psi_keys.get(session_id)
-        if keys is None:
-            raise MatchRejected("missing_private_key", "no holder key for this session yet")
+        import time as _time
+
+        epoch = current_epoch(state, _time.time())
+        issued = state.psi_issued.get(session_id)
+        if issued is None:
+            raise MatchRejected("missing_private_key", "no key was issued for this session yet")
+        if issued != epoch.epoch_id:
+            raise MatchRejected(
+                "missing_private_key",
+                "the epoch that issued this session's key has expired; keys are per epoch, not for ever",
+            )
         if len(blinded) > MAX_FEATURES_PER_EXCHANGE:
             raise MatchRejected(
                 "too_many_features", f"{len(blinded)} values, cap is {MAX_FEATURES_PER_EXCHANGE}"
             )
-        signed = [rsa_sign(int(v, 16), keys.d, keys.n) for v in blinded]
-        tokens = own_signed_tokens(list(state.features), keys)
+        # Signing the seeker's values is per-exchange work nobody else can do for us. Our own tokens come
+        # from the epoch cache and are computed once for every seeker in this epoch.
+        signed = [sign(int(v, 16), epoch.keys.d, epoch.keys.n) for v in blinded]
+        tokens = epoch.tokens_for(list(state.features))
         return {
             "session_id": session_id,
+            "epoch_id": epoch.epoch_id,
             "signed": [format(v, "x") for v in signed],
             "holder_tokens": [format(v, "x") for v in tokens],
             "note": "signatures only: guesses cannot be matched against them without the private exponent",

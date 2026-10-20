@@ -52,14 +52,21 @@ a protocol one.
 
 ### Layer C: one signing per epoch, not per exchange
 
-Today the holder signs the seeker's blinded values again for every pair, which is why 64 items cost 2.7
-seconds of somebody's CPU. The fix is old and unglamorous: the holder signs its own list once per epoch
-under an epoch key, keeps that table, and serves it to as many seekers as ask. A seeker fetches one table
-and does its own comparison, so the heavy side is the side that asked, which is where cost belongs.
+Today the holder signs the seeker's blinded values again for every pair, and recomputes signatures over
+its own list for every seeker. The fix, measured rather than asserted: one key per epoch, and the holder's
+own tokens computed once per epoch and reused. At thirty two items that took a holder's exchange from 1572
+milliseconds to 800, so throughput roughly doubles, and key generation turned out to be only 2.6 percent of
+the cold cost, which is why the token table is the part worth caching.
 
-This is the change that turns thousands of searches a day into millions on the same hardware, and it is
-the change that makes revocation and epochs interact: a table must expire, and a revoked agent's table
-must stop being served.
+What the epoch cannot remove is signing the seeker's blinded values: that work is per exchange, and only the
+holder can do it. So the honest ceiling on one core is about 1.25 exchanges a second at thirty two items,
+and a search of fifty candidates is about forty seconds of one core. Beyond that it fans out across cores,
+which is why the number of candidates per search is a budget a product decides and states.
+
+Two things follow, and both must be written down rather than discovered: tokens are stable within an epoch,
+so two seekers comparing notes can tell they hold the same item (they could already, by intersecting their
+own lists, but saying it is not optional); and an epoch must expire, and a revoked agent's epoch must stop
+being served.
 
 ## The same model, seen from the person with no agent
 
