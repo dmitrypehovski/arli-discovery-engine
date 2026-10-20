@@ -35,12 +35,21 @@ it waits for the legal check in `spec/PUBLISHING.md`.
 - Normative specification in English (`spec/SPEC.en.md`) with a Russian working translation,
   clause numbers kept identical by a test.
 
+### Fixed
+
+- Card signatures are now the raw R||S pair that JWS ES256 defines, not the DER form. Our own
+  verifier accepted the DER form because both sides agreed with each other rather than with the
+  text; a third party verifying our cards by the JWS rules would have rejected them. Found by the
+  second implementation in Rust, not by us. Card verification now has a single path, and a DER
+  signature is refused with a reason that says why.
+- The plugin manifest is portable: it names a console script instead of the interpreter path of
+  the machine that built it, so the artefact built here and the one built by CI agree. Caught by
+  the CI run itself.
+- The envelope identifier is recomputable from the nine body fields on both sides.
+
 ### Known limits, stated rather than hidden
 
 - Online probing of a single guess is not closed by the matching scheme. It is bounded by the
   one-exchange-per-session rule, and the honest wording is in the envelope limitations.
 - The trust anchor for features (phase 5 of the plan) is not built: a feature is only as good
   as the side that declares it, and this version does not change that.
-- The plugin manifest carries the interpreter path of the machine that generated it. That is
-  correct for a local install and wrong for a redistributed artefact; a portable build is not
-  done yet.
