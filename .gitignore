@@ -6,3 +6,7 @@ out/
 build/
 dist/
 *.egg-info/
+
+# Прогон оценки: числа и снимки храним, служебное нет
+evaluation/out/*.log
+evaluation/out/*-raw.png
