@@ -26,6 +26,13 @@ from arli_engine.core.signing import sign_card
 
 EXTENSION_URI = "https://arliwork.com/a2a/extensions/arli.discovery.v1"
 
+
+def extension_version() -> str:
+    """The version of the text this card is built from, named in the card itself."""
+    import arli_engine  # imported here so the card module does not depend on the package's order
+
+    return arli_engine.EXTENSION_VERSION
+
 # Our addition to the card: what is in neither A2A nor Index Network.
 DEFAULT_LIMITATIONS = [
     "This prototype runs one matching algorithm; it is not a product.",
@@ -74,6 +81,7 @@ def build_card(
         "extensions": [
             {
                 "uri": EXTENSION_URI,
+                "version": extension_version(),
                 "description": (
                     "Verified discovery: honest capability manifest, local-only "
                     "matching over salted commitments, evidence on every claim."

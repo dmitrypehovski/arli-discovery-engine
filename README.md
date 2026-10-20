@@ -37,7 +37,8 @@ As a user of the package, without our repository:
 
 ```
 pip install arli_engine-0.1.0-py3-none-any.whl
-arli-discovery-agent --port-a 8841 --port-b 8842          # leave it running
+arli-discovery-pair --port-a 8841 --port-b 8842           # a pair, for the conformance suite
+arli-discovery-agent --port 8811 --name my-agent --features "skill:brand-design,city:shenzhen"
 arli-discovery-conformance --target http://127.0.0.1:8841 --holder http://127.0.0.1:8842
 arli-discovery-client http://127.0.0.1:8841 arli/registry/check '{"kid": "nope"}'
 ```

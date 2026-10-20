@@ -53,3 +53,25 @@ it waits for the legal check in `spec/PUBLISHING.md`.
   one-exchange-per-session rule, and the honest wording is in the envelope limitations.
 - The trust anchor for features (phase 5 of the plan) is not built: a feature is only as good
   as the side that declares it, and this version does not change that.
+
+### Changed
+
+- `arli-discovery-agent` now runs one agent with `--port`, `--name`, `--features` and keeps its key
+  in `~/.arli-agent/NAME.pem` (owner-only), so an address keeps its identity across restarts. The
+  pair of agents used by the conformance suite moved to `arli-discovery-pair`. A participant needs
+  one agent, and the old command gave them two with a key that died with the process.
+- The card names the extension version in its `extensions` entry, as the second implementation and
+  the independent example already did: a visitor can tell which text an agent speaks without asking.
+- `GET /api/health` answers on every agent: `ok`, the agent's name, the extension version, the count
+  of features held at home and the key id. A run can tell "up" from "not up" without a card fetch.
+- `start_agent` takes a bind address, because a container has to bind `0.0.0.0` while everything
+  local stays on the loopback.
+
+### Added
+
+- `examples/independent_agent.py`: the holder side of a match written from the text alone, importing
+  nothing from this engine. It connected to the live service, passed all three checks and matched two
+  of four features at 5000 basis points with nothing on the wire. Six tests keep it honest, including
+  one that fails if the file ever imports our code.
+- `docs/host-your-agent.md`: what a participant's address has to serve, a unit file, TLS in front,
+  tunnel caveats, and the failures a host will actually see.

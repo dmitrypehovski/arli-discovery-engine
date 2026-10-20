@@ -64,6 +64,7 @@ CAPS_PATH = "/.well-known/arli-capabilities.json"
 MIN_NONCE_CHARS = 16
 IDENTITY_WINDOW_SECONDS = 60
 RPC_PATH = "/a2a/rpc"
+HEALTH_PATH = "/api/health"
 
 
 @dataclass
@@ -105,6 +106,14 @@ class AgentState:
     # Feature claims: issuers, their keys and declared claims.
     claims: ClaimRegistry = field(default_factory=ClaimRegistry)
     declared_claims: dict[str, FeatureClaim] = field(default_factory=dict)
+
+
+def health_document(state: AgentState) -> dict:
+    """What a run needs to tell "up" from "not up", without a card fetch."""
+    from .cards import extension_version
+
+    return {"ok": True, "agent": state.name, "extension_version": extension_version(),
+            "features_held_at_home": len(state.features), "kid": state.kid}
 
 
 def _rpc_ok(req_id, result) -> dict:
@@ -750,6 +759,8 @@ def make_handler(state: AgentState):
                 self._send(200, state.card)
             elif self.path == CAPS_PATH:
                 self._send(200, capability_document(state.operations))
+            elif self.path == HEALTH_PATH:
+                self._send(200, health_document(state))
             else:
                 self._send(404, {"error": "not found", "path": self.path})
 
@@ -796,9 +807,13 @@ def make_handler(state: AgentState):
     return Handler
 
 
-def start_agent(state: AgentState, port: int) -> tuple[ThreadingHTTPServer, threading.Thread]:
-    """Start the agent in the background, returning the server and the thread."""
-    server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(state))
+def start_agent(state: AgentState, port: int, host: str = "127.0.0.1") -> tuple[ThreadingHTTPServer, threading.Thread]:
+    """Start the agent in the background, returning the server and the thread.
+
+    The bind address is a parameter because a container has to bind 0.0.0.0 while everything local
+    should stay on the loopback. TLS and the public name belong in front, not here.
+    """
+    server = ThreadingHTTPServer((host, port), make_handler(state))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server, thread

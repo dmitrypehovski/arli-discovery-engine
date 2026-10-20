@@ -43,7 +43,8 @@ def test_entry_points_exist_and_point_at_callables():
         "arli-discovery-conformance": "arli_engine.conformance.__main__:main",
         "arli-discovery-client": "arli_engine.client.cli:main",
         "arli-discovery-mcp": "arli_engine.adapters.mcp.server:main",
-        "arli-discovery-agent": "arli_engine.serve:main",
+        "arli-discovery-agent": "arli_engine.agent:main",
+        "arli-discovery-pair": "arli_engine.serve:main",
     }
     assert scripts == expected
     for target in scripts.values():
