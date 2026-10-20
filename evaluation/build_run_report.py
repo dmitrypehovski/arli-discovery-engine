@@ -21,7 +21,26 @@ COVERAGE_PERCENT = 92  # measured on 2026-10-20 with coverage 7.16.2, recorded i
 
 
 def parse(text: str) -> dict:
-    tests = re.search(r"(\d+) passed", text)
+    # The newest run is the one that matters: the log is appended to, so the last count wins.
+    found_tests = re.findall(r"(\d+) passed", text)
+    tests = found_tests[-1] if found_tests else None
+    direct_match = re.search(
+        r'"direct_exchange": \{"opened": (\w+), "agreed": (\w+), "overlap": (\d+), '
+        r'"median_ms": ([\d.]+), "vocabulary_agrees": (\w+)\}', text)
+    direct = ({
+        "opened": direct_match.group(1) == "true",
+        "agreed": direct_match.group(2) == "true",
+        "overlap": int(direct_match.group(3)),
+        "median_ms": float(direct_match.group(4)),
+        "vocabulary_agrees": direct_match.group(5) == "true",
+    } if direct_match else None)
+    performance_match = re.search(r'"performance": \[(.*?)\], "direct_exchange"', text)
+    performance = []
+    if performance_match:
+        performance = [
+            (int(size), float(py_ms), int(wire))
+            for size, py_ms, wire in re.findall(r"\[(\d+), ([\d.]+), (\d+)\]", performance_match.group(1))
+        ]
     conformant = re.findall(r"total checks (\d+), mismatches (\d+)", text)
     comparison = re.findall(
         r"(\d+) \| *([\d.]+) \| *([\d.]+) \| *([\d.]+)", text
@@ -30,7 +49,9 @@ def parse(text: str) -> dict:
     clone_build = re.search(r"Finished `release`[^)]*\) in ([\d.]+)s", text)
     mirror_commit = re.search(r"коммит зеркала: ([0-9a-f]+)", text)
     return {
-        "tests": int(tests.group(1)) if tests else None,
+        "tests": int(tests) if tests else None,
+        "direct": direct,
+        "performance": performance,
         "conformance": [(int(total), int(bad)) for total, bad in conformant],
         "comparison": [(int(size), float(py), float(rs), float(ratio)) for size, py, rs, ratio in comparison],
         "clone_commit": clone_commit.group(1) if clone_commit else None,
@@ -235,7 +256,25 @@ footer{{color:var(--muted);font-size:14px;border-top:1px solid var(--border);mar
   и выходило до 33 раз. Скорость покупалась обещанием схемы, 256 бит вообще разлагается на
   множители.</p>
 
-  <h2>3. Что именно прогонялось</h2>
+  <h2>3. Прямой обмен и словарь</h2>
+  <p>Две вещи, которые продукт обещает, и потому измерены: что обмен работает без комнаты посередине, и
+  что потребность встречается с предложением одного товара.</p>
+  <div class="kv">
+    <div><b>{(run["direct"] or {}).get("overlap", "—")}</b><span>пересечение в прямом обмене, где 10000 это всё, что отправлено</span></div>
+    <div><b>{(run["direct"] or {}).get("median_ms", "—")} мс</b><span>медиана прямого обмена, три прогона</span></div>
+    <div><b>{"сходится" if (run["direct"] or {}).get("vocabulary_agrees") else "не сходится"}</b><span>словарь: потребность и предложение одного товара это один токен</span></div>
+    <div><b>{"открыт" if (run["direct"] or {}).get("opened") else "—"}, {"согласие" if (run["direct"] or {}).get("agreed") else "нет"}</b><span>обмен открыт и обе стороны согласились</span></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Признаков на сторону</th><th>Медиана, мс</th><th>Байт на проводе</th></tr></thead>
+      <tbody>
+        {"".join(f"<tr><td>{size}</td><td>{py_ms}</td><td>{wire}</td></tr>" for size, py_ms, wire in run["performance"]) or "<tr><td colspan='3'>в журнале этого прогона цены обмена нет</td></tr>"}
+      </tbody>
+    </table>
+  </div>
+
+  <h2>4. Что именно прогонялось</h2>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Шаг</th><th>Команда</th><th>Исход</th></tr></thead>
@@ -253,14 +292,14 @@ footer{{color:var(--muted);font-size:14px;border-top:1px solid var(--border);mar
   <p>Журналы прогонов как есть: <code>evaluation/out/runs-20261020.log</code> и
   <code>evaluation/out/runs-clone-20261020.log</code>.</p>
 
-  <h2>4. Что найдено и исправлено</h2>
+  <h2>5. Что найдено и исправлено</h2>
   <p>Вторая реализация нашла в первой дефект, который первая сама у себя найти не могла: подписи
   карточек были в формате DER, тогда как JWS ES256 определяет значение подписи как сырую пару R‖S
   из 64 байт. Наш проверяющий DER и ожидал, поэтому обе половины соглашались друг с другом, а не с
   текстом, и сторонний проверяющий по правилам JWS наши карточки отверг бы. Причина названа: проверка
   карточки жила в двух местах, и в одном из них эта ошибка держалась. Исправлено, путь проверки один.</p>
 
-  <h2>5. Что не измерено</h2>
+  <h2>6. Что не измерено</h2>
   <ul>
     <li>Нагрузка: сколько держит параллельных сессий и где предел, не измерялось.</li>
     <li>Сила ключа пунктом текста не записана: 2048 бит взяты как совпадение с эталоном, а не как решение.</li>
@@ -268,7 +307,7 @@ footer{{color:var(--muted);font-size:14px;border-top:1px solid var(--border);mar
     <li>Внешний разбор безопасности не заказывался, живого пилота на людях не было.</li>
   </ul>
 
-  <h2>6. Ссылки</h2>
+  <h2>7. Ссылки</h2>
   <ul>
     <li>Вторая реализация: <code>github.com/dmitrypehovski/arli-discovery-rs</code></li>
     <li>Первая реализация: <code>github.com/dmitrypehovski/arli-discovery-engine</code></li>
