@@ -738,3 +738,38 @@ def test_terms_before_an_introduction_are_refused(monkeypatch, tmp_path) -> None
         raise AssertionError("terms come after both sides agreed to be introduced")
     except service.AgreementRefused as refused:
         assert refused.code == "not_introduced_yet"
+
+
+# --- an agent that reads its own intent out of words ---------------------------------------------------
+
+def test_an_agent_can_be_made_from_a_description_alone(monkeypatch, tmp_path) -> None:
+    """The second door: a person who cannot write a list writes a sentence."""
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    agent, _token = service.create_agent({
+        "name": "shenzhen-buyer", "description": "We need warehousing and customs clearance near shenzhen, "
+                                                 "three teams, gdpr"})
+    assert agent["feature_count"] == 5, agent
+    assert agent["kind"] == "demand", "the direction came from the words"
+    read = agent["read"]
+    assert "need:warehousing" in read["features"] and "city:shenzhen" in read["features"]
+    assert read["buckets"], "and it landed in a bucket, or a search would never offer it"
+
+
+def test_a_description_with_nothing_placeable_makes_no_agent(monkeypatch, tmp_path) -> None:
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    try:
+        service.create_agent({"name": "nothing", "description": "please give me something good"})
+        raise AssertionError("an agent with an empty list would match nobody and look like a working search")
+    except ValueError as error:
+        assert "could be placed" in str(error)
+
+
+def test_a_list_still_wins_when_both_are_given(monkeypatch, tmp_path) -> None:
+    """A typed list is the person's own words about themselves; the reader does not get to override it."""
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    agent, _token = service.create_agent({"name": "typed", "kind": "supply",
+                                          "features": ["offer:solar"],
+                                          "description": "we need warehousing in berlin"})
+    assert agent["feature_count"] == 1
+    assert agent["kind"] == "supply"
+    assert "read" not in agent, "no reading happened, so none is reported"

@@ -348,11 +348,31 @@ def room_view() -> list[dict]:
 
 
 def create_agent(payload: dict) -> tuple[dict, str]:
+    """An agent from a list, or from words it reads for itself.
+
+    Both doors lead to the same place. A person who can write their list writes it; a person who cannot writes
+    a sentence, and the same reader the intake uses names what it can and refuses to invent the rest. That is
+    the difference between a network only programmers can join and one anybody can.
+    """
     name = str(payload.get("name") or "").strip()
     if len(name) > MAX_NAME_CHARS:
         raise ValueError(f"a name of {MAX_NAME_CHARS} characters at most, not {len(name)}")
-    kind = str(payload.get("kind") or "demand").strip()
+    kind = str(payload.get("kind") or "").strip()
     features = [str(item).strip() for item in (payload.get("features") or []) if str(item).strip()]
+    description = str(payload.get("description") or "").strip()
+    read: dict | None = None
+
+    if not features and description:
+        read = read_request(description, taxonomy=taxonomy(), kind=kind or None)
+        if not read["features"]:
+            raise ValueError(
+                "nothing in that description could be placed, so the agent would hold an empty list and "
+                "match nobody. " + (read["questions"][0] if read["questions"] else "")
+            )
+        features = list(read["features"])
+        kind = kind or read["kind"] or "demand"
+
+    kind = kind or "demand"
     if not name:
         raise ValueError("name is required")
     if kind not in ("demand", "supply", "person"):
@@ -371,14 +391,19 @@ def create_agent(payload: dict) -> tuple[dict, str]:
             " features, owner_token, created_at, active) VALUES (?,?,?,?,?,?,?,?,?,?,1)",
             (
                 agent_id, name, kind, str(payload.get("city") or "").strip(),
-                str(payload.get("headline") or "").strip(),
+                str(payload.get("headline") or "").strip() or description[:140],
                 str(payload.get("claim_level") or "declared").strip(),
                 str(payload.get("will_not_publish") or "").strip(),
                 json.dumps(features), token, created,
             ),
         )
-    return {"id": agent_id, "name": name, "kind": kind, "feature_count": len(features),
-            "created_at": created}, token
+    created_agent = {"id": agent_id, "name": name, "kind": kind, "feature_count": len(features),
+                     "created_at": created}
+    if read is not None:
+        # What it understood itself to be, told to the person rather than kept: the same reading the intake
+        # shows, so an agent made from words can be argued with.
+        created_agent["read"] = read
+    return created_agent, token
 
 
 def owned_agent(agent_id: str, token: str) -> dict | None:

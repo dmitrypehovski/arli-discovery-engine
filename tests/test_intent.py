@@ -91,3 +91,33 @@ def test_intent_rejections_are_a_closed_set():
     assert set(INTENT_REJECTIONS) & set(OPENING_REJECTIONS) == {
         "intent_inactive", "synthetic_not_admitted", "types_not_comparable", "network_mismatch",
     }
+
+
+def test_which_pairings_the_network_allows_today() -> None:
+    """The matrix, written down so a change to it is a decision and not a drift.
+
+    Opposite directions match: a buyer and a seller. People match with people. Two sellers are competition
+    and two buyers are a queue, so neither is a pair. A person and a company are not a pair either, because
+    the type says what a side IS rather than which way it points: a freelancer who offers work declares
+    supply, and a client who needs work declares demand.
+    """
+    from arli_engine.core.intent import types_comparable
+
+    assert types_comparable("demand", "supply") is True
+    assert types_comparable("supply", "demand") is True
+    assert types_comparable("person", "person") is True
+    for first, second in (("supply", "supply"), ("demand", "demand"),
+                          ("person", "supply"), ("person", "demand")):
+        assert types_comparable(first, second) is False, f"{first} and {second} must not pair"
+
+
+def test_a_person_offering_work_declares_supply_not_person() -> None:
+    """The reading that keeps a freelancer matchable: the words decide the direction, not the human."""
+    from arli_engine.core.intake import Taxonomy, read_request
+
+    read = read_request("I offer translation into English, based in london", taxonomy=Taxonomy.built_in())
+    assert read["kind"] == "supply", read
+    # and somebody who needs that work declares demand, so the two are comparable
+    other = read_request("We need a translator for legal documents, based in london",
+                         taxonomy=Taxonomy.built_in())
+    assert other["kind"] == "demand", other
