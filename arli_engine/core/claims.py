@@ -1,25 +1,28 @@
-"""Утверждения о признаках: уровень, выдающий и его собственный конверт.
+"""Feature claims: level, issuer and the issuer's own envelope.
 
-Дыра, которую закрывает этот слой. Конверт сегодня может сказать: сторона сама заявила эти
-признаки о себе. Это правда и это бесполезно: никто не проверяет заявление, поэтому лжец
-выигрывает совпадения, которых не заслужил, а человека можно свести с подставным
-контрагентом. Отказ от синтетики в человеческих сетях тоже заявление, и он тоже не
-проверяется.
+The gap this layer closes. An envelope today can say that a party declared these
+features about itself. That is true and useless: nobody checks the statement, so
+a liar wins matches it did not earn, and a person can be matched with a stand-in
+counterparty. Opting out of synthetic participants in human networks is also a
+statement, and it too goes unchecked.
 
-Что этот слой делает и чего не делает. Он проводит утверждение вместе с его основанием и
-проверяет основание подписью выдающего. Он НЕ решает, кому позволено выдавать
-подтверждения: это вопрос к юристу, и в коде он не решён намеренно. Поэтому здесь нет
-выдачи, здесь есть перенос и проверка чужого утверждения.
+What this layer does and does not do. It carries a claim together with its basis
+and verifies the basis with the issuer's signature. It does NOT decide who is
+allowed to issue attestations: that is a question for a lawyer, and in code it is
+left unsolved on purpose. So there is no issuing here, only transfer and
+verification of someone else's claim.
 
-Три уровня:
-- `declared`: сторона говорит о себе сама. Выдающий не нужен, и верить тут нечему.
-- `third_party_verified`: кто-то третий утверждает, что признак держался на момент времени,
-  и его утверждение само является конвертом.
-- `topic_owner_verified`: владелец темы, в чьей власти этот признак.
+Three levels:
+- `declared`: the party speaks about itself. No issuer is needed, and there is
+  nothing to trust here.
+- `third_party_verified`: a third party asserts that the feature held at a point in
+  time, and its assertion is itself an envelope.
+- `topic_owner_verified`: the owner of the topic, in whose authority this feature falls.
 
-Уровень это не свойство человека. Это утверждение с выдающим. Уровень не доказывает, кто
-стоит за агентом, и не переносится между сетями. Обе фразы запрещены и в тексте, и в
-проверках, потому что обе были бы прочитаны как гарантия.
+A level is not a property of a person. It is a claim with an issuer. A level does
+not prove who stands behind the agent and does not carry over between networks.
+Both statements are forbidden in the text and in the checks, because both would be
+read as a guarantee.
 """
 
 from __future__ import annotations
@@ -29,10 +32,10 @@ from datetime import datetime, timezone
 
 from arli_engine.core.crypto import verify_envelope
 
-# Уровни утверждения. Порядок важен: он же порядок силы.
+# Claim levels. The order matters: it is also the order of strength.
 CLAIM_LEVELS = ("declared", "third_party_verified", "topic_owner_verified")
 
-# Состояние утверждения, кроме действующего.
+# The state of a claim other than active.
 CLAIM_STATES = ("active", "stale", "withdrawn")
 
 CLAIM_REJECTIONS = (
@@ -53,7 +56,7 @@ def now_utc() -> datetime:
 
 
 class ClaimRejected(RuntimeError):
-    """Утверждение отклонено. Код из закрытого перечня CLAIM_REJECTIONS."""
+    """The claim was rejected. The code is from the closed list CLAIM_REJECTIONS."""
 
     def __init__(self, code: str, detail: str = "") -> None:
         if code not in CLAIM_REJECTIONS:
@@ -64,7 +67,7 @@ class ClaimRejected(RuntimeError):
 
 
 def level_strength(level: str) -> int:
-    """Сила уровня числом. Неизвестный уровень это отказ, а не ноль."""
+    """The strength of a level as a number. An unknown level is a rejection, not zero."""
     if level not in CLAIM_LEVELS:
         raise ClaimRejected("unknown_level", f"{level!r} is not a level")
     return CLAIM_LEVELS.index(level)
@@ -72,10 +75,11 @@ def level_strength(level: str) -> int:
 
 @dataclass
 class FeatureClaim:
-    """Утверждение о признаке вместе с основанием.
+    """A claim about a feature together with its basis.
 
-    `issuer_evidence` это конверт выдающего: кто, когда, что проверено. Для уровня `declared`
-    он не нужен; для остальных без него утверждение не принимается.
+    `issuer_evidence` is the issuer's envelope: who, when, what was checked. For the
+    `declared` level it is not needed; for the others the claim is not accepted
+    without it.
     """
 
     feature: str
@@ -94,7 +98,7 @@ class FeatureClaim:
         if self.checked_at is None:
             raise ClaimRejected("missing_checked_at", self.feature)
         if self.level == "declared":
-            # самозахваченный уровень не может требовать выдающего
+            # a self-asserted level cannot require an issuer
             return
         if not self.issuer:
             raise ClaimRejected("missing_issuer", self.feature)
@@ -119,7 +123,7 @@ class FeatureClaim:
 
 @dataclass
 class ClaimRegistry:
-    """Выдающие и их ключи. Кто именно вправе выдавать, решает не этот класс."""
+    """Issuers and their keys. Who exactly is allowed to issue is not decided by this class."""
 
     issuers: dict[str, bytes] = field(default_factory=dict)
 
@@ -129,8 +133,8 @@ class ClaimRegistry:
         self.issuers[name] = public_pem
 
     def verify_issuer_envelope(self, claim: FeatureClaim) -> tuple[bool, list[str]]:
-        """Проверить основание утверждения. Без верной подписи выдающего уровня нет."""
-        # Общий путь проверок: сначала форма, потом срок, потом подпись.
+        """Verify the basis of the claim. Without a valid issuer signature there is no level."""
+        # The common check path: shape first, then expiry, then the signature.
         claim.validate()
         reasons: list[str] = []
         if claim.state == "withdrawn":
@@ -140,7 +144,7 @@ class ClaimRegistry:
         if claim.valid_until is not None and claim.valid_until <= now_utc():
             reasons.append("claim_expired")
         if claim.level == "declared":
-            # уровня выше заявленного нет, проверять нечего
+            # there is no level above the declared one, nothing to check
             return (not reasons), reasons
         public_pem = self.issuers.get(claim.issuer)
         if public_pem is None:
@@ -157,5 +161,5 @@ class ClaimRegistry:
 
 
 def strongest(claims: list[FeatureClaim]) -> FeatureClaim | None:
-    """Самое сильное утверждение из списка. Пустой список это None, а не «заявлено»."""
+    """The strongest claim in the list. An empty list is None, not "declared"."""
     return max(claims, key=lambda claim: claim.strength) if claims else None

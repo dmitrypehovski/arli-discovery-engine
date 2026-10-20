@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Фаза 0, задача 0.4: перенос адаптера A2A и примера в движок.
+"""Phase 0, task 0.4: move the A2A adapter and the example into the engine.
 
-Переносим без изменения поведения: правим только пути импортов и добавляем
-единственную новую строку, подъём корня репозитория в примере, иначе
-`python examples/two_agents/main.py` не найдёт пакет `arli_engine`.
+We move without changing behavior: we only fix import paths and add a single new
+block, raising the repository root in the example, otherwise
+`python examples/two_agents/main.py` will not find the `arli_engine` package.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ ORG = Path("/home/paperclip/arli-org")
 STAND = ORG / "proto-a2a-discovery"
 ENGINE = ORG / "arli-engine"
 
-# Один путь импорта в движке, чтобы не было двух источников правды.
+# A single import path in the engine, so there are not two sources of truth.
 IMPORT_MAP = [
     ("from arli_a2a.cards import", "from arli_engine.adapters.a2a.cards import"),
     ("from arli_a2a.effects import", "from arli_engine.core.capability import"),
@@ -32,7 +32,7 @@ IMPORT_MAP = [
     ("from .negotiation import", "from arli_engine.core.negotiate import"),
 ]
 
-# Файлы, переезжающие в движок: источник, цель.
+# Files moving into the engine: source, destination.
 MOVES = [
     (STAND / "arli_a2a" / "server.py", ENGINE / "arli_engine" / "adapters" / "a2a" / "server.py"),
     (STAND / "run_demo.py", ENGINE / "examples" / "two_agents" / "main.py"),
@@ -43,7 +43,7 @@ BOOTSTRAP = (
     "import sys as _sys\n"
     "from pathlib import Path as _Path\n"
     "\n"
-    "# Пример запускается из корня репозитория, поэтому корень поднимаем в путь сами.\n"
+    "# The example runs from the repository root, so we add the root to the path ourselves.\n"
     "_ROOT = _Path(__file__).resolve().parents[2]\n"
     "if str(_ROOT) not in _sys.path:\n"
     "    _sys.path.insert(0, str(_ROOT))\n"
@@ -59,16 +59,16 @@ def rewrite(text: str) -> str:
 def main() -> int:
     for src, dst in MOVES:
         if not src.exists():
-            print(f"нет источника: {src}")
+            print(f"no source: {src}")
             return 1
         dst.parent.mkdir(parents=True, exist_ok=True)
         text = rewrite(src.read_text(encoding="utf-8"))
         if dst.name == "main.py":
             text = text.replace(
-                "Запуск:\n    .venv/bin/python run_demo.py",
-                "Запуск (из корня репозитория):\n    .venv/bin/python examples/two_agents/main.py",
+                "Run:\n    .venv/bin/python run_demo.py",
+                "Run (from the repository root):\n    .venv/bin/python examples/two_agents/main.py",
             )
-            # подъём корня ставим до первого импорта движка
+            # place the root bootstrap before the first engine import
             text = text.replace(
                 "from arli_engine import (",
                 BOOTSTRAP + "\nfrom arli_engine import (",
@@ -76,9 +76,9 @@ def main() -> int:
             )
         dst.write_text(text, encoding="utf-8")
         src.unlink()
-        print(f"перенесён: {src.name} → {dst.relative_to(ORG)}")
+        print(f"moved: {src.name} → {dst.relative_to(ORG)}")
 
-    # экспорт пакета: то же, что было, но по новым путям
+    # package export: the same as before, but along the new paths
     init = ENGINE / "arli_engine" / "__init__.py"
     exports = (
         "\nfrom arli_engine.adapters.a2a.cards import EXTENSION_URI, build_card, capability_document\n"
@@ -98,18 +98,18 @@ def main() -> int:
     )
     body = init.read_text(encoding="utf-8").rstrip() + "\n"
     init.write_text(body + exports, encoding="utf-8")
-    print("обновлён экспорт пакета arli_engine")
+    print("updated the arli_engine package export")
 
-    # каталог стенда больше не содержит кода: оставляем указатель, чтобы не было двух правд
+    # the stand directory no longer holds code: leave a pointer so there are not two truths
     shutil.rmtree(STAND / "arli_a2a", ignore_errors=True)
     (STAND / "README.md").write_text(
-        "# Стенд перенесён\n\nЖивой стенд переехал в `arli-engine/`: код ядра в `arli_engine/core`,\n"
-        "адаптер A2A в `arli_engine/adapters/a2a`, прогон двух агентов в\n"
-        "`examples/two_agents/main.py`. Здесь остались только результаты прогона (`out/`)\n"
-        "и виртуальное окружение, которым гоняются тесты движка.\n",
+        "# The stand moved\n\nThe live stand moved to `arli-engine/`: the core code in `arli_engine/core`,\n"
+        "the A2A adapter in `arli_engine/adapters/a2a`, the two-agent run in\n"
+        "`examples/two_agents/main.py`. Only the run results (`out/`) remain here,\n"
+        "along with the virtual environment used to run the engine tests.\n",
         encoding="utf-8",
     )
-    print("стенд оставлен только как каталог с результатами и окружением")
+    print("the stand is left only as a directory with results and an environment")
     return 0
 
 

@@ -1,1 +1,1 @@
-"""Привязка MCP: поверхность движка как инструменты для модели."""
+"""MCP binding: the engine surface exposed as tools for a model."""

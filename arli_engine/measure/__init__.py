@@ -1,4 +1,4 @@
-"""Числа из конвертов: измерение как отдельный слой, а не как счётчик."""
+"""Numbers from envelopes: measurement as a separate layer, not as a counter."""
 
 from arli_engine.measure.metrics import (
     KNOWN_REFUSAL_CODES,

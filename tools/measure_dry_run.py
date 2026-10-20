@@ -1,12 +1,13 @@
-"""Калибровка измерителя на живых агентах, без людей.
+"""Calibrating the measurer on live agents, without people.
 
-Что это такое и чем не является. Это прогон измерителя по настоящим конвертам, которые выдали
-настоящие агенты движка, чтобы к моменту пилота у нас были работающая методика и таблица.
-Это НЕ числа пилота: признаки в стенде синтетические, людей здесь нет, и выдавать эти числа
-за воронку нельзя. Пилот по плану идёт на согласившихся людях.
+What this is and what it is not. This runs the measurer over real envelopes issued by
+real engine agents, so that by pilot time we have a working method and a table. These
+are NOT pilot numbers: the features in the stand are synthetic, there are no people
+here, and these numbers must not be presented as a funnel. The pilot per the plan runs
+on people who consented.
 
-Запуск: python -m tools.measure_dry_run
-Результат: out/measure_dry_run.json и таблица в выводе.
+Run: python -m tools.measure_dry_run
+Result: out/measure_dry_run.json and a table in the output.
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ def main() -> int:
     states, servers = build_pair(0, 0)
     ports = [port_of(server) for server in servers]
     url_a, url_b = (f"http://127.0.0.1:{port}" for port in ports)
-    # Ключи выдающих: проверяем оба ключа по каждому конверту, а не угадываем автора.
+    # Issuer keys: we check both keys against every envelope rather than guessing the author.
     candidate_keys = {state.name: public_pem_from_private(state.private_pem) for state in states}
     public_keys: dict[str, bytes] = {}
 
@@ -41,7 +42,7 @@ def main() -> int:
 
     try:
         with AgentClient(url_a) as client_a, AgentClient(url_b) as client_b:
-            # 1. Полный обмен закрытого пересечения: только совпадения по своим признакам.
+            # 1. A full closed-intersection exchange: only the matches among our own features.
             session_id = secrets.token_hex(6)
             holder_keys = client_b.arli_psi_keys({"session_id": session_id})
             commit = client_a.arli_psi_commit({
@@ -65,8 +66,8 @@ def main() -> int:
             for side in ("a", "b"):
                 intents.append({"intent_id": f"unit-{side}", "closed": bool(match_a["matched_features"])})
 
-            # 2. Обмен с объявленным, но недостижимым порогом: находка не возвращается,
-            # а не добивается до предела.
+            # 2. An exchange with a declared but unreachable floor: the finding is not
+            # returned rather than padded up to the limit.
             tight_session = secrets.token_hex(6)
             tight_keys = client_b.arli_psi_keys({"session_id": tight_session})
             tight_commit = client_a.arli_psi_commit({
@@ -86,7 +87,7 @@ def main() -> int:
                 "matched": len(tight_match["matched_features"]),
             })
 
-            # 3. Отказы: каждый обязан прийти кодом из закрытого перечня.
+            # 3. Refusals: each must arrive as a code from the closed list.
             try:
                 client_a.arli_registry_register({
                     "kid": "k-dry", "principal_id": "p-dry", "public_pem": "pem-dry",
@@ -124,7 +125,7 @@ def main() -> int:
             server.shutdown()
             server.server_close()
 
-    # Ключ для каждого выдающего: тот, которым подпись конверта действительно проверяется.
+    # A key for each issuer: the one that actually verifies the envelope signature.
     for envelope in envelopes:
         issuer = str(envelope.get("provider", {}).get("id"))
         for owner, pem in candidate_keys.items():
@@ -139,8 +140,8 @@ def main() -> int:
         "refusals": refusals,
         "intents": intents,
         "matches": matches,
-        # Решения, пометки человека и состояние участников здесь отсутствуют намеренно:
-        # без людей эти величины неизмерены, и измеритель так и скажет.
+        # Decisions, human labels and participant state are absent here on purpose:
+        # without people these quantities are unmeasured, and the measurer will say so.
     }
     report = measure(record, source="dry-run on synthetic features, not a pilot")
     OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -152,9 +153,9 @@ def main() -> int:
         **report.to_json(),
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    print("калибровка измерителя, синтетические признаки, людей нет")
+    print("measurer calibration, synthetic features, no people")
     print(report.as_table())
-    print(f"записано: {OUT}")
+    print(f"written: {OUT}")
     return 0
 
 

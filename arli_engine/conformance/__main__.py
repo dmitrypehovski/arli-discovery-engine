@@ -1,9 +1,9 @@
-"""Запуск набора проверок из командной строки.
+"""Run the conformance suite from the command line.
 
     python -m arli_engine.conformance --target http://127.0.0.1:8801 --holder http://127.0.0.1:8802
 
-Без --holder обе стороны это одна и та же реализация: так проверяют свой движок.
-Код выхода 0 означает соответствие, 1 означает расхождения с их списком.
+Without --holder both sides are the same implementation: that is how you check your
+own engine. Exit code 0 means conformant, 1 means mismatches with their list.
 """
 
 from __future__ import annotations
@@ -35,12 +35,12 @@ def main() -> int:
     if args.json:
         print(json.dumps(report.to_json(), ensure_ascii=False, indent=1))
     else:
-        print(f"набор проверок: {report.target}")
+        print(f"conformance suite: {report.target}")
         for check in report.checks:
-            mark = "ок" if check["passed"] else "НЕ СООТВЕТСТВУЕТ"
+            mark = "ok" if check["passed"] else "NOT CONFORMANT"
             print(f"  [{mark}] {check['code']}: {check['detail']}")
-        print(f"\nвсего проверок {len(report.checks)}, расхождений {len(report.failures)}")
-        print("итог: соответствует" if report.compliant else "итог: есть расхождения")
+        print(f"\ntotal checks {len(report.checks)}, mismatches {len(report.failures)}")
+        print("result: conformant" if report.compliant else "result: mismatches found")
     return 0 if report.compliant else 1
 
 

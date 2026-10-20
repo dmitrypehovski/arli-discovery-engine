@@ -26,9 +26,10 @@ import httpx
 from arli_engine.adapters.a2a.server import make_handler  # noqa: F401  (форма поверхности)
 from arli_engine.adapters.mcp.server import McpServer, tool_result_payload
 from arli_engine.client import AgentClient, AgentRefused
+from arli_engine.client.agent import rejection_code
 from arli_engine.conformance import Target, run_conformance
 from arli_engine.core.crypto import verify_envelope
-from arli_engine.core.surface import METHOD_NAMES
+from arli_engine.core.surface import METHOD_NAMES, MUTATING_METHODS
 from arli_engine.serve import build_pair, port_of
 
 OUT = Path(__file__).resolve().parent / "out"
@@ -90,6 +91,7 @@ def _arguments_for(method: str, state, suffix: str) -> dict:
     """Осмысленные аргументы для метода: пустой вызов не проверяет ничего."""
     peer = "peer"
     table = {
+        "arli/commitments": {"session_id": f"bind-{suffix}", "peer_name": peer},
         "arli/registry/check": {"kid": "evaluation-unknown"},
         "arli/registry/register": {"kid": f"k-{suffix}", "principal_id": "evaluation",
                                    "public_pem": "pem"},
@@ -150,14 +152,22 @@ def evaluate_bindings() -> dict:
                         return ("error", type(exc).__name__)
 
                 http_outcome = outcome(lambda: client.call(method, arguments))
+                # For a mutating method the second call must not reuse the first call's
+                # identifiers: otherwise the second refusal is about the state the first call
+                # left behind, and comparing the two says nothing about the bindings.
+                mcp_arguments = dict(arguments)
+                if method in MUTATING_METHODS:
+                    for field in ("kid", "new_kid", "evidence_id", "intent_id", "negotiation_id"):
+                        if field in mcp_arguments and isinstance(mcp_arguments[field], str):
+                            mcp_arguments[field] = f"mcp-{mcp_arguments[field]}"
                 response = mcp.handle({
                     "jsonrpc": "2.0", "id": 1, "method": "tools/call",
-                    "params": {"name": tool, "arguments": arguments},
+                    "params": {"name": tool, "arguments": mcp_arguments},
                 })
                 if response and "result" in response:
                     if response["result"].get("isError"):
                         text = response["result"]["content"][0]["text"]
-                        mcp_outcome = ("refused", "missing_field" if "missing required" in text else text[:40])
+                        mcp_outcome = ("refused", rejection_code(text))
                     else:
                         try:
                             mcp_outcome = ("ok", json.dumps(tool_result_payload(response), sort_keys=True))

@@ -1,4 +1,4 @@
-"""Опись плагина: поверхность движка как устанавливаемый набор инструментов."""
+"""Plugin manifest: the engine surface as an installable tool set."""
 
 from arli_engine.adapters.plugin.manifest import build_manifest
 

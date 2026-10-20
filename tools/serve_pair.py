@@ -1,8 +1,8 @@
-"""Обёртка над пакетным стендом агентов: оставлена для привычки, логика в пакете.
+"""A wrapper over the packaged agent stand: kept out of habit, the logic is in the package.
 
-    .venv/bin/python tools/serve_pair.py [порт A] [порт B]
+    .venv/bin/python tools/serve_pair.py [port A] [port B]
 
-Служит до прерывания. Второй процесс: набор проверок соответствия:
+Serves until interrupted. Second process: the conformance suite:
 
     python -m arli_engine.conformance --target http://127.0.0.1:8801 --holder http://127.0.0.1:8802
 """
@@ -36,7 +36,7 @@ def operations() -> list[Operation]:
 def main() -> int:
     port_a = int(sys.argv[1]) if len(sys.argv) > 1 else 8801
     port_b = int(sys.argv[2]) if len(sys.argv) > 2 else 8802
-    # Стенд живёт в пакете: здесь только разбор двух чисел для привычной команды.
+    # The stand lives in the package: here we only parse two numbers for the familiar command.
     from arli_engine.serve import serve
 
     serve(port_a, port_b)
@@ -63,7 +63,7 @@ def _legacy() -> int:
     state_b.peer_keys = {"arli-agent-a": key_a.public_pem}
     start_agent(state_a, port_a)
     start_agent(state_b, port_b)
-    print(f"агенты движка: http://127.0.0.1:{port_a} и http://127.0.0.1:{port_b}", flush=True)
+    print(f"engine agents: http://127.0.0.1:{port_a} and http://127.0.0.1:{port_b}", flush=True)
     while True:
         time.sleep(3600)
 

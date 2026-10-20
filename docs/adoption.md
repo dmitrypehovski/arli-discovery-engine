@@ -26,12 +26,12 @@ Both are Apache-2.0. The name ARLI and the conformance mark are not, see `TRADEM
 ```
 cd arli-discovery-engine
 python -m pip install cryptography httpx pytest
-python -m pytest tests -q                     # 166 passed, 2 skipped without the text
+python -m pytest tests -q                     # 171 passed, 2 skipped without the text
 python -m arli_engine.serve --port-a 8841 --port-b 8842 &
 python -m arli_engine.conformance --target http://127.0.0.1:8841 --holder http://127.0.0.1:8842
 ```
 
-The suite prints 28 checks and one line: `conforms`, or the exact list of divergences with the
+The suite prints 30 checks and one line: `conforms`, or the exact list of divergences with the
 check codes. The suite is the promise; where it and the text disagree, the suite is right.
 
 `python examples/two_agents/main.py` walks the whole protocol on two live agents and ends with

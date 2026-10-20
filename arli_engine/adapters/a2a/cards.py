@@ -1,9 +1,9 @@
-"""Карточка агента в форме A2A 1.0 и наше расширение к ней.
+"""The agent card in the A2A 1.0 form and our extension to it.
 
-Базовые поля карточки взяты такими, какими их описывает спецификация A2A:
+The base card fields are taken as the A2A specification describes them:
 name, description, version, provider, capabilities, skills, interfaces,
-securitySchemes, signatures. Всё, чего в A2A нет, лежит в отдельном
-расширении arli.discovery.v1, чтобы карточка оставалась совместимой.
+securitySchemes, signatures. Everything A2A lacks lives in a separate
+extension arli.discovery.v1, so the card stays compatible.
 """
 
 from __future__ import annotations
@@ -20,13 +20,13 @@ from arli_engine.core.negotiate import ACTIONS, MAX_TURNS, OPENING_REJECTIONS, R
 from arli_engine.core.psi import MAX_FEATURES_PER_EXCHANGE
 from arli_engine.core.claims import CLAIM_LEVELS, CLAIM_REJECTIONS, CLAIM_STATES
 from arli_engine.core.registry import KEY_REVOCATION_REASONS, REGISTRY_REJECTIONS
-from arli_engine.core.surface import METHOD_NAMES, tool_name
+from arli_engine.core.surface import CALL_REJECTIONS, METHOD_NAMES, tool_name
 from arli_engine.core.retention import RETENTION_DEFAULT_DAYS, RETENTION_REJECTIONS
 from arli_engine.core.signing import sign_card
 
 EXTENSION_URI = "https://arliwork.com/a2a/extensions/arli.discovery.v1"
 
-# Наша добавка к карточке: то, чего нет ни в A2A, ни у Index Network.
+# Our addition to the card: what is in neither A2A nor Index Network.
 DEFAULT_LIMITATIONS = [
     "This prototype runs one matching algorithm; it is not a product.",
     "The card is self-declared until the evidence envelope is checked.",
@@ -46,7 +46,7 @@ def build_card(
     version: str = "0.1.0",
     region: str = "eu-central",
 ) -> dict:
-    """Собрать карточку. Если передан ключ, карточка сразу подписывается."""
+    """Build the card. If a key is passed, the card is signed right away."""
     card: dict = {
         "name": name,
         "description": description,
@@ -91,7 +91,7 @@ def build_card(
             }
         ],
         "signatures": [],
-        # Публичные признаки нужны для матчинга, но сами значения не секретны.
+        # Public features are needed for matching, but the values themselves are not secret.
         "x-arli-public-feature-count": len(public_features),
         "x-arli-capabilities": capability_manifest(operations),
     }
@@ -102,10 +102,10 @@ def build_card(
 
 
 def capability_document(operations: list[Operation]) -> dict:
-    """Отдельный документ, чтобы карточка не разрасталась.
+    """A separate document so the card does not grow too large.
 
-    Сюда же положены оба закрытых перечня причин: чужая сторона читает их
-    машиной, а не из документации, и может проверить нас на соответствие.
+    Both closed lists of reasons are placed here too: another party reads them by
+    machine rather than from documentation, and can check us for conformance.
     """
     return {
         "manifest": capability_manifest(operations),
@@ -164,6 +164,7 @@ def capability_document(operations: list[Operation]) -> dict:
             "key_revocation_reasons": list(KEY_REVOCATION_REASONS),
             "registry_rejections": list(REGISTRY_REJECTIONS),
         },
+        "call_rejections": list(CALL_REJECTIONS),
         "claims": {
             "levels": list(CLAIM_LEVELS),
             "states": list(CLAIM_STATES),

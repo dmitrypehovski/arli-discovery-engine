@@ -1,8 +1,8 @@
-"""Командная строка: вызвать метод агента из оболочки, без своего кода.
+"""Command line: call an agent method from the shell, without your own code.
 
-Запуск: python -m arli_engine.client.cli <адрес> <метод> ['{параметры в JSON}']
-Печатает результат как JSON. Отказ печатает причину в поток ошибок и выходит с кодом 3,
-чтобы в скриптах отказ нельзя было спутать с успехом. Прочие сбои выходят с кодом 2.
+Usage: python -m arli_engine.client.cli <address> <method> ['{parameters in JSON}']
+Prints the result as JSON. A refusal prints the reason to stderr and exits with code 3,
+so in scripts a refusal cannot be confused with success. Other failures exit with code 2.
 """
 
 from __future__ import annotations

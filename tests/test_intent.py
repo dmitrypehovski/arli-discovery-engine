@@ -1,8 +1,8 @@
-"""Типы намерения, происхождение и их влияние на годность пары.
+"""Intent types, provenance and their effect on pair eligibility.
 
-Здесь проверяется то, ради чего единица работы это закрытое намерение, а не
-знакомство: спрос сопоставляется с предложением, два предложения между собой нет,
-а синтетическое намерение не входит в человеческую сеть.
+Here we check what makes the unit of work a closed intent rather than an
+introduction: demand matches with supply, two supplies do not match each other,
+and a synthetic intent does not enter a human network.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ def test_synthetic_is_refused_in_a_human_network_and_admitted_when_declared():
     with pytest.raises(IntentRejected) as exc:
         check_admission(synthetic, admits_synthetic=False)
     assert exc.value.code == "synthetic_not_admitted"
-    check_admission(synthetic, admits_synthetic=True)  # проходит без исключения
+    check_admission(synthetic, admits_synthetic=True)  # passes without an exception
 
     human = Intent(intent_id="i", owner="o", network="n")
     check_admission(human, admits_synthetic=False)
@@ -87,7 +87,7 @@ def test_intent_rejections_are_a_closed_set():
         IntentRejected("not_a_real_code")
     assert "synthetic_not_admitted" in INTENT_REJECTIONS
     assert "types_not_comparable" in INTENT_REJECTIONS
-    # коды годности пары и намерения пересекаются осмысленно: оба набора закрыты
+    # the pair eligibility codes and the intent codes overlap meaningfully: both sets are closed
     assert set(INTENT_REJECTIONS) & set(OPENING_REJECTIONS) == {
         "intent_inactive", "synthetic_not_admitted", "types_not_comparable", "network_mismatch",
     }

@@ -1,12 +1,12 @@
-"""Честный перечень возможностей агента.
+"""An honest capability list for an agent.
 
-Этот модуль отвечает на дыру, найденную у Index Network: их агенты говорят
-что умеют, но не говорят, что при этом произойдёт. Здесь каждая операция
-несёт свои эффекты, доступность и ограничения, а отсутствие данных не
-трактуется как разрешение.
+This module addresses a gap found in Index Network: their agents say what they
+can do but not what will happen as a result. Here every operation carries its
+effects, availability and limitations, and a missing declaration is not treated
+as permission.
 
-Форма повторяет ту, что выдаёт `rea capabilities`, которую мы наблюдали
-вживую: доступность с кодом причины, набор эффектов и список ограничений.
+The shape follows what `rea capabilities` returns, which we observed live:
+availability with a reason code, a set of effects and a list of limitations.
 """
 
 from __future__ import annotations
@@ -14,8 +14,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable
 
-# Эффекты операции. Значение None означает "не объявлено" и трактуется
-# fail-closed: необъявленный эффект считается возможным.
+# Effects of an operation. A missing value means "not declared" and is treated
+# fail-closed: an undeclared effect is assumed possible.
 EFFECT_KEYS = (
     "mutates_artifact",
     "launches_process",
@@ -37,7 +37,7 @@ AVAILABILITY_CODES = (
 
 @dataclass(frozen=True)
 class Operation:
-    """Одна операция агента с объявленными последствиями."""
+    """A single agent operation with its declared consequences."""
 
     name: str
     description: str
@@ -60,7 +60,7 @@ class Operation:
         return self.availability_code == "available"
 
     def declared_effects(self) -> dict[str, bool]:
-        """Эффекты с fail-closed заполнением: необъявленное считается возможным."""
+        """Effects with fail-closed filling: an undeclared one is assumed possible."""
         return {k: bool(self.effects.get(k, True)) for k in EFFECT_KEYS}
 
     def to_json(self) -> dict:
@@ -77,7 +77,7 @@ class Operation:
 
 
 def capability_manifest(operations: Iterable[Operation]) -> dict:
-    """Перечень как объект для карточки агента и для отдельного запроса."""
+    """The manifest as an object for the agent card and for a standalone request."""
     ops = list(operations)
     undeclared = [o.name for o in ops if len(o.declared_effects()) != len(o.effects)]
     return {

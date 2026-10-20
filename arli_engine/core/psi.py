@@ -1,22 +1,24 @@
-"""Закрытое пересечение: экспериментальный прототип для задачи 1.5 плана.
+"""Closed intersection: an experimental prototype for task 1.5 of the plan.
 
-Схема: слепое подписывание RSA (one-sided PSI). Сторона B держит ключ (N, e, d),
-сторона A присылает свои признаки ослеплёнными, B подписывает их своим ключом и
-возвращает подписанное вместе со своей подписью над своими признаками. A снимает
-ослепление и сравнивает. Отсюда свойства:
+The scheme: blind RSA signing (one-sided PSI). Party B holds the key (N, e, d),
+party A sends its features blinded, B signs them with its key and returns the
+signed values together with its own signature over its own features. A unblinds
+and compares. Properties:
 
-- A узнаёт только пересечение: подпись над чужим признаком это H(признак)^d, и без
-  d перебрать словарь нельзя, то есть закрыт наш T1;
-- B не узнаёт ничего о признаках A: до него доходят только ослеплённые значения,
-  и он видит лишь их количество;
-- обе стороны получают одно и то же пересечение.
+- A learns only the intersection: the signature over another party's feature is
+  H(feature)^d, and without d the dictionary cannot be enumerated, which closes
+  our T1;
+- B learns nothing about A's features: only blinded values reach it, and it sees
+  just their count;
+- both sides obtain the same intersection.
 
-Модуль помечен экспериментальным: он НЕ подключён к матчингу. Матчинг переключается
-на него только после решения основателя по замеру (шаг 3 задачи 1.5).
+The module is marked experimental: it is NOT wired into matching. Matching switches
+to it only after the founder's decision based on the measurement (step 3 of task 1.5).
 
-Оговорка для чтения цифр замера: экспоненцирование делает C-реализация
-больших чисел Python, поэтому это честная оценка для схемы на больших числах,
-но не для реализации на кривой через OpenSSL, где умножение точки дешевле.
+A caveat for reading the measurement numbers: the exponentiation is done by Python's
+C implementation of big numbers, so this is an honest estimate for a big-number
+scheme, but not for an implementation on a curve through OpenSSL, where point
+multiplication is cheaper.
 """
 
 from __future__ import annotations
@@ -28,17 +30,17 @@ from secrets import randbelow
 
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-MODULUS_BYTES = 256  # 2048 бит
-MAX_FEATURES_PER_EXCHANGE = 64  # потолок из замера: дальше цена растёт линейно
+MODULUS_BYTES = 256  # 2048 bits
+MAX_FEATURES_PER_EXCHANGE = 64  # cap from the measurement: beyond it the cost grows linearly
 
 
 def feature_hash(feature: str) -> int:
-    """Признак в число по модулю: одно и то же у обеих сторон."""
+    """A feature as a number modulo: the same on both sides."""
     return int.from_bytes(hashlib.sha256(feature.encode("utf-8")).digest(), "big")
 
 
 def blind_set(features: list[str], n: int, e: int) -> tuple[list[int], list[int]]:
-    """Ослепить набор признаков. Возвращает значения и множители для снятия."""
+    """Blind a set of features. Returns the values and the factors for unblinding."""
     if len(features) > MAX_FEATURES_PER_EXCHANGE:
         raise ValueError("too_many_features")
     pairs = [blind(f, n, e) for f in features]
@@ -46,7 +48,7 @@ def blind_set(features: list[str], n: int, e: int) -> tuple[list[int], list[int]
 
 
 def unblind_set(signed: list[int], factors: list[int], n: int) -> list[int]:
-    """Снять ослепление с подписанных значений."""
+    """Unblind the signed values."""
     if len(signed) != len(factors):
         raise ValueError("signed values and factors must have the same length")
     return [unblind(value, factor, n) for value, factor in zip(signed, factors)]
@@ -55,7 +57,7 @@ def unblind_set(signed: list[int], factors: list[int], n: int) -> list[int]:
 def matched_features(
     features: list[str], unblinded: list[int], holder_tokens: set[int]
 ) -> list[str]:
-    """Что из своих признаков нашлось у держателя: подписи сравниваются как значения."""
+    """Which of our own features were found at the holder: signatures are compared as values."""
     if len(features) != len(unblinded):
         raise ValueError("features and unblinded values must have the same length")
     return sorted(
@@ -65,7 +67,7 @@ def matched_features(
 
 @dataclass(frozen=True)
 class Keys:
-    """Ключ подписывающей стороны: N и e публичны, d остаётся у B."""
+    """The signing party's key: N and e are public, d stays with B."""
 
     n: int
     e: int
@@ -89,14 +91,14 @@ def _blind_factor(n: int) -> int:
 
 
 def blind(feature: str, n: int, e: int) -> tuple[int, int]:
-    """Ослепить признак: (значение, множитель) для последующего снятия ослепления."""
+    """Blind a feature: (value, factor) for later unblinding."""
     r = _blind_factor(n)
     blinded = feature_hash(feature) * pow(r, e, n) % n
     return blinded, r
 
 
 def sign(blinded: int, d: int, n: int) -> int:
-    """Подписать ослеплённое значение ключом стороны B."""
+    """Sign the blinded value with party B's key."""
     return pow(blinded, d, n)
 
 
@@ -105,15 +107,15 @@ def unblind(signed: int, r: int, n: int) -> int:
 
 
 def own_signed_tokens(features: list[str], keys: Keys) -> list[int]:
-    """Свои признаки в подписанном виде: то, с чем сравнивает сторона A."""
+    """Our own features in signed form: what party A compares against."""
     return [pow(feature_hash(f), keys.d, keys.n) for f in features]
 
 
 def set_intersection(n: int, e: int, d: int, learner: list[str], holder: list[str]) -> list[str]:
-    """Полный проход схемы, возвращает признаки learner, найденные у holder.
+    """A full pass of the scheme, returning the learner's features found at the holder.
 
-    Здесь обе стороны в одном процессе: это нужно для проверки корректности.
-    В замере те же шаги считаются отдельно, чтобы честно измерить каждую сторону.
+    Here both sides are in one process: this is needed to check correctness. In the
+    measurement the same steps are counted separately, to honestly measure each side.
     """
     blinded = {f: blind(f, n, e) for f in learner}
     signed_back = {f: sign(b, d, n) for f, (b, _) in blinded.items()}

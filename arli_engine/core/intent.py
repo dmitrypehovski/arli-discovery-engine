@@ -1,15 +1,15 @@
-"""Объект намерения: типы, происхождение и правила сопоставимости.
+"""The intent object: types, provenance and comparability rules.
 
-До этого шага движок сравнивал признаки, но не спрашивал, о чём вообще намерение.
-Здесь появляется то, что делает единицей работы не знакомство двух людей, а
-закрытое намерение:
+Before this step the engine compared features but never asked what the intent was
+even about. This introduces what makes the unit of work a closed intent rather
+than an introduction between two people:
 
-- тип: ``person`` (люди), ``supply`` (есть что предложить), ``demand`` (нужно);
-- сопоставимы только встречные типы: спрос с предложением, человек с человеком;
-  два предложения или два спроса между собой не совпадение, а конкуренция;
-- происхождение: ``human``, ``organisation``, ``synthetic``. Сеть объявляет,
-  допускает ли она синтетические намерения, и в человеческой сети синтетическое
-  намерение отклоняется с кодом, а не участвует потихоньку.
+- type: ``person`` (people), ``supply`` (something to offer), ``demand`` (a need);
+- only opposite types are comparable: demand with supply, a person with a person;
+  two offers or two demands facing each other are not a match but competition;
+- provenance: ``human``, ``organisation``, ``synthetic``. The network declares
+  whether it admits synthetic intents, and in a human network a synthetic intent
+  is rejected with a code rather than quietly taking part.
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ INTENT_TYPES = ("person", "supply", "demand")
 INTENT_STATUSES = ("active", "paused", "archived")
 PROVENANCE = ("human", "organisation", "synthetic")
 
-# Причины отказа намерения. Закрытый перечень: попытка либо проходит, либо
-# получает один из этих кодов, и тест проверяет достижимость каждого.
+# Reasons an intent is rejected. A closed list: an attempt either passes or gets
+# one of these codes, and a test checks that each one is reachable.
 INTENT_REJECTIONS = (
     "unknown_type",
     "unknown_status",
@@ -34,7 +34,7 @@ INTENT_REJECTIONS = (
 
 
 class IntentRejected(RuntimeError):
-    """Намерение не годится к участию. Код из закрытого перечня INTENT_REJECTIONS."""
+    """The intent is not fit to take part. The code is from the closed list INTENT_REJECTIONS."""
 
     def __init__(self, code: str, detail: str = "") -> None:
         if code not in INTENT_REJECTIONS:
@@ -46,7 +46,7 @@ class IntentRejected(RuntimeError):
 
 @dataclass(frozen=True)
 class Intent:
-    """Намерение: что человек или организация ищет либо предлагает."""
+    """An intent: what a person or an organisation seeks or offers."""
 
     intent_id: str
     owner: str
@@ -67,10 +67,10 @@ class Intent:
 
 
 def types_comparable(first: str, second: str) -> bool:
-    """Сопоставимы ли типы двух намерений.
+    """Whether the types of two intents are comparable.
 
-    Встречные типы сопоставимы: спрос с предложением. Люди сопоставляются с людьми.
-    Два предложения это конкуренция, два спроса это очередь за одним и тем же.
+    Opposite types are comparable: demand with supply. People match with people.
+    Two offers are competition, two demands are a queue for the same thing.
     """
     for value in (first, second):
         if value not in INTENT_TYPES:
@@ -81,7 +81,7 @@ def types_comparable(first: str, second: str) -> bool:
 
 
 def check_admission(intent: Intent, *, admits_synthetic: bool) -> None:
-    """Годится ли намерение участвовать в сети. Поднимает отказ с кодом, если нет."""
+    """Whether the intent is fit to take part in the network. Raises a coded rejection if not."""
     intent.validate()
     if intent.provenance == "synthetic" and not admits_synthetic:
         raise IntentRejected(

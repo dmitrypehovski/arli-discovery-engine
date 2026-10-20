@@ -1,8 +1,8 @@
-"""Реестр ключей и хранение: то, чем отзыв и удаление отличаются от украшения.
+"""Key registry and retention: what makes revocation and deletion different from decoration.
 
-Главное здесь: смена ключа и отзыв личности это разные записи. Смена ключа закрывает
-конкретный ключ, а отзыв личности закрывает дорогу новым ключам под тем же именем до
-повторного подтверждения. Второе и есть то, чего нет у Index вовсе.
+The main point here: a key rotation and a principal revocation are separate records. A key
+rotation closes a specific key, while a principal revocation blocks new keys under the same
+identifier until a fresh confirmation. The second is exactly what Index lacks entirely.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ def test_rotation_revokes_the_old_key_only():
     assert registry.check("k1")[0] is False
     assert "key_revoked:rotated" in registry.check("k1")[1]
     assert registry.check("k2") == (True, [])
-    # личность при ротации цела: это разные записи
+    # the principal is untouched by a rotation: these are different records
     assert registry.principals == {}
 
 
@@ -98,7 +98,7 @@ def test_registry_rejections_are_a_closed_set():
     assert {"unknown_key", "key_revoked", "principal_revoked"} <= set(REGISTRY_REJECTIONS)
 
 
-# --- хранение ---
+# --- retention ---
 
 def test_archiving_an_intent_hides_its_envelopes_but_keeps_the_record():
     retention = Retention(days=RETENTION_DEFAULT_DAYS)
@@ -110,7 +110,7 @@ def test_archiving_an_intent_hides_its_envelopes_but_keeps_the_record():
     touched = retention.archive_intent("intent-1")
     assert touched == 2
     assert retention.searchable() == ["ev-3"]
-    # запись остаётся, но помечена: видно, что конверт был и почему скрыт
+    # the record stays but is marked: it is visible that the envelope existed and why it is hidden
     record = retention.records["ev-1"]
     assert record.deleted_reason == "intent_archived"
     assert retention.visible("ev-1") is False

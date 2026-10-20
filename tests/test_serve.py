@@ -1,9 +1,9 @@
-"""Ворота фазы 6: сторонний разработчик ставит пакет и проходит набор проверок.
+"""The phase 6 gate: a third-party developer installs the package and passes the conformance suite.
 
-Здесь проверяется то, что видит человек снаружи: он получает пакет, поднимает агентов
-штатной командой пакета и получает ответ «соответствует». Каталог `tools` в пакет не
-входит, поэтому агентов обязан уметь поднимать сам пакет. Если это сломается, ворота
-фазы 6 закрыты, и тест обязан это показать.
+Here we check what a person sees from the outside: they get the package, start the agents
+with the package's own command and get an answer of "conformant". The `tools` directory is
+not part of the package, so the package itself must be able to start the agents. If this
+breaks, the phase 6 gate is closed, and the test must show it.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from arli_engine.serve import LIMITATIONS, DEFAULT_PORTS, build_pair, port_of
 
 
 def test_the_package_can_raise_agents_on_its_own():
-    """Порт 0 означает «любой свободный»: фактический порт берём у сервера."""
+    """Port 0 means "any free port": we read the actual port from the server."""
     states, servers = build_pair(0, 0)
     try:
         ports = [port_of(server) for server in servers]

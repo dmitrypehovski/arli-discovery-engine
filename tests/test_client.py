@@ -1,8 +1,8 @@
-"""Обёртка для внешних клиентов: покрытие методов, разбор ответа, коды отказов.
+"""The wrapper for external clients: method coverage, response parsing, refusal codes.
 
-Обёртка проверяется на живом агенте, а не на заглушке: заглушка показала бы, что клиент
-умеет разговаривать с заглушкой. Отдельно проверяется, что причина отказа доходит кодом,
-иначе клиентская часть обесценивает работу движка.
+The wrapper is checked against a live agent, not a stub: a stub would only show that the
+client can talk to a stub. Separately it is checked that a refusal reason arrives as a
+code, otherwise the client side devalues the engine's work.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ def test_a_call_returns_the_same_result_as_the_engine(live_agent):
     with AgentClient(url) as client:
         expected = {"kid": "nope", "valid": False, "reasons": ["unknown_key"]}
         assert client.call("arli/registry/check", {"kid": "nope"}) == expected
-        # и то же самое через именованный метод, развёрнутый из перечня поверхности
+        # and the same through the named method unfolded from the surface list
         assert client.arli_registry_check({"kid": "nope"}) == expected
 
 
@@ -78,7 +78,7 @@ def test_documents_are_reachable_through_the_client(live_agent):
         card = client.get_card()
         capabilities = client.get_capabilities()
     assert card["name"] == "arli-client-agent"
-    # признак замкнутого отказа лежит в описании перечня операций, а не на верхнем уровне
+    # the fail-closed flag sits inside the operation manifest, not at the top level
     assert capabilities["manifest"]["fail_closed"] is True
     assert capabilities["bindings"]["mcp"]["tools"] == [
         tool.replace("/", "_") for tool in capabilities["bindings"]["a2a"]["methods"]

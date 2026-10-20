@@ -1,13 +1,14 @@
-"""Адаптер плагина: опись инструментов для установки в среду пользователя.
+"""Plugin adapter: a tool manifest for installing into a user's environment.
 
-Плагин не заводит собственный код движка и не ходит в сеть напрямую. Он запускает ту же
-привязку MCP отдельным процессом и объявляет её инструменты. Поэтому кода здесь почти нет,
-а есть опись: имя, версия, команда запуска, перечень инструментов и честные ограничения.
+The plugin brings no engine code of its own and does not reach the network directly.
+It runs the same MCP binding as a separate process and declares its tools. So there is
+almost no code here, just a manifest: name, version, launch command, tool list and
+honest limitations.
 
-Опись не пишется руками. Рукописная опись расходится с движком на первой же правке, и
-расходится молча: установленный плагин начнёт звать инструмент, которого больше нет.
-Поэтому опись собирается из общего перечня поверхности, а набор проверок сверяет, что
-записанный файл совпадает с собранным.
+The manifest is not written by hand. A hand-written manifest drifts from the engine on
+the first edit, and drifts silently: an installed plugin would start calling a tool
+that no longer exists. So the manifest is built from the shared surface list, and the
+conformance suite checks that the written file matches the built one.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ PLUGIN_NAME = "arli-discovery"
 PLUGIN_VERSION = "0.1.0"
 MANIFEST_FILENAME = "arli-discovery.json"
 
-# Команда запуска: тот же пакет, что и привязка MCP. Плагин не дублирует движок.
+# The launch command: the same package as the MCP binding. The plugin does not duplicate the engine.
 SERVER_COMMAND = (sys.executable, "-m", "arli_engine.adapters.mcp.server")
 
 LIMITATIONS = [
@@ -34,7 +35,7 @@ LIMITATIONS = [
 
 
 def build_manifest(*, command: tuple[str, ...] = SERVER_COMMAND) -> dict:
-    """Собрать опись из поверхности. Один источник, никаких рукописных списков."""
+    """Build the manifest from the surface. One source, no hand-written lists."""
     tools = build_tools()
     return {
         "name": PLUGIN_NAME,

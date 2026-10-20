@@ -1,8 +1,9 @@
-"""Измеритель: числа выводятся из конвертов, а неизмеренное честно называется неизмеренным.
+"""The measurer: numbers are derived from envelopes, and the unmeasured is honestly named unmeasured.
 
-Главная проверка здесь одна и она из плана: величины считаются из конвертов, а не из
-отдельного счётчика, который можно поправить руками. Поэтому конверты берутся настоящие,
-подписанные живым агентом, и тест показывает, что подмена набора конвертов меняет число.
+The main check here is one and it comes from the plan: quantities are computed from
+envelopes, not from a separate counter that can be edited by hand. So the envelopes are
+real, signed by a live agent, and the test shows that swapping the set of envelopes changes
+the number.
 """
 
 from __future__ import annotations
@@ -59,7 +60,7 @@ def _agent(port: int = 0) -> tuple[AgentState, KeyPair, object]:
 
 
 def _signed_envelope(server) -> dict:
-    """Настоящий подписанный конверт от живого агента."""
+    """A real signed envelope from a live agent."""
     port = server.server_address[1]
     with AgentClient(f"http://127.0.0.1:{port}") as client:
         client.arli_retention_record({"evidence_id": "ev-1", "intent_id": "intent-1"})
@@ -73,9 +74,9 @@ def test_a_real_signed_envelope_counts_as_evidence():
         envelope = _signed_envelope(server)
         assert envelope["signature"] is not None
         assert envelope_is_evidence(envelope, key.public_pem) is True
-        # без ключа выдающего конверт доказательством не считается
+        # without the issuer key the envelope does not count as evidence
         assert envelope_is_evidence(envelope, None) is False
-        # с чужим ключом тоже
+        # with someone else's key neither
         assert envelope_is_evidence(envelope, KeyPair.generate().public_pem) is False
     finally:
         server.shutdown()
@@ -104,7 +105,7 @@ def test_coverage_is_computed_from_the_envelopes_not_from_a_counter():
         broken.pop("signature")
         assert evidence_coverage([good, broken], keys).value == 0.5
         assert evidence_coverage([broken, broken], keys).value == 0.0
-        # и у выдающего без ключа покрытие падает: подпись без ключа не проверка
+        # and for an issuer without a key the coverage drops: a signature without a key is not verification
         assert evidence_coverage([good], {}).value == 0.0
     finally:
         server.shutdown()
@@ -135,7 +136,7 @@ def test_an_empty_record_reports_everything_as_not_measured_with_a_reason():
     assert len(report.metrics) == 7
     assert report.measured_count == 0
     assert all(metric.state == NOT_MEASURED and metric.reason for metric in report.metrics)
-    # ноль вместо «не знаем» это худший вид вранья, поэтому значения здесь нет
+    # zero instead of "we don't know" is the worst kind of lie, so there is no value here
     assert all(metric.value is None for metric in report.metrics)
 
 
@@ -156,7 +157,7 @@ def test_the_report_renders_a_table_and_json():
     assert "refusal_code_completeness: 1.0000 share" in table
     assert "false_positive_share: not measured" in table
     payload = report.to_json()
-    # измерены три: отказы, намерения, находки. Не измерены четыре, и это сказано вслух.
+    # three are measured: refusals, intents, finds. Four are not, and that is said out loud.
     assert payload["measured"] == 3 and payload["not_measured"] == 4
     assert payload["source"] == "unit"
 
@@ -171,7 +172,7 @@ def test_metric_names_and_states_are_closed_sets():
 
 
 def test_the_calibration_run_says_what_it_is_and_what_it_is_not():
-    """Прогон по синтетике обязан называть себя калибровкой, а не числами пилота."""
+    """A run over synthetic data must call itself calibration, not pilot numbers."""
     import importlib.util
     import json
     from pathlib import Path
@@ -186,7 +187,7 @@ def test_the_calibration_run_says_what_it_is_and_what_it_is_not():
     assert "must not be presented as a funnel" in payload["caveat"]
     names = {metric["name"] for metric in payload["metrics"]}
     assert len(names) == 7
-    # синтетический прогон не может измерить человеческие величины, и не притворяется
+    # a synthetic run cannot measure human quantities, and does not pretend to
     by_name = {metric["name"]: metric for metric in payload["metrics"]}
     assert by_name["false_positive_share"]["state"] == "not_measured"
     assert by_name["evidence_coverage"]["value"] == 1.0

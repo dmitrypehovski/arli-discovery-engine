@@ -1,14 +1,16 @@
-"""Реализации-обманки для набора проверок.
+"""Cheating implementations for the conformance suite.
 
-Набор, который проходит на нашей же реализации, ничего не доказывает. Поэтому в
-комплекте лежат три заведомо неправильные реализации, и тест требует, чтобы набор
-каждую поймал. Так набор не превращается в штамп.
+A suite that passes on our own implementation proves nothing. So the kit ships three
+deliberately wrong implementations, and a test requires the suite to catch each one.
+That way the suite does not become a rubber stamp.
 
-Обманки:
-- ``leaky``: карточка без ключа в заголовке (чужой не проверит), схема объявлена
-  как пересечение по хешам, а в конверте матча есть число чужих признаков;
-- ``unsigned``: всё честно, кроме подписи конвертов: их нет;
-- ``padding``: всё честно, но пересечение добивается до потолка и у сторон разное.
+The cheats:
+- ``leaky``: a card with no key in the header (another party cannot verify it), the
+  scheme declared as hash intersection, and the match envelope carries the count of
+  the other side's features;
+- ``unsigned``: everything honest except envelope signatures: there are none;
+- ``padding``: everything honest, but the intersection is padded up to the cap and
+  differs between the two sides.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ CHEAT_KINDS = ("leaky", "unsigned", "padding")
 
 
 def _operations() -> list[Operation]:
-    """Объявляем все семь эффектов: обманка ломает не это, а схему и подписи."""
+    """Declare all seven effects: the cheat breaks the scheme and signatures, not this."""
     every_effect = {key: False for key in EFFECT_KEYS}
     every_effect["may_access_network"] = True
     every_effect["mutates_artifact"] = True
@@ -43,7 +45,7 @@ def _operations() -> list[Operation]:
 
 
 class CheatingAgent:
-    """Минимальная реализация нашей поверхности с одной намеренной ошибкой."""
+    """A minimal implementation of our surface with one deliberate fault."""
 
     def __init__(self, kind: str, name: str, port: int, features: list[str]) -> None:
         if kind not in CHEAT_KINDS:
@@ -69,7 +71,7 @@ class CheatingAgent:
             private_pem=self.key.private_pem,
         )
         if self.kind == "leaky":
-            # ключ из заголовка убираем: чужая сторона не сможет проверить карточку
+            # drop the key from the header: another party cannot verify the card
             for entry in card["signatures"]:
                 protected = json.loads(
                     __import__("base64").urlsafe_b64decode(entry["protected"] + "==")
@@ -85,7 +87,7 @@ class CheatingAgent:
 
         doc = capability_document(_operations())
         if self.kind == "leaky":
-            # объявляем старую схему вместо закрытого пересечения
+            # declare the old scheme instead of closed intersection
             doc["intersection"] = {
                 "scheme": "hash_intersection",
                 "feature_cap": 64,
@@ -185,7 +187,7 @@ class CheatingAgent:
         if method == "arli/psi/record":
             matched = params.get("matched") or []
             if self.kind == "padding":
-                # у держателя получается другой набор: добивка несимметрична
+                # the holder ends up with a different set: the padding is asymmetric
                 matched = [m for m in matched if not str(m).startswith("padded:")]
             return {"side": self.name, "matched_features": matched,
                     "overlap_basis_points": 5000, "overlap_ratio": "2/4",
@@ -206,7 +208,7 @@ def _handler_for(agent: CheatingAgent):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
-        def log_message(self, *args, **kwargs) -> None:  # тишина в тестах
+        def log_message(self, *args, **kwargs) -> None:  # silence in tests
             return
 
         def _json(self, code: int, payload: dict) -> None:

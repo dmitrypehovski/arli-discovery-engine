@@ -1,15 +1,15 @@
 """ARLI Discovery Engine.
 
-Ядро обнаружения агентов без транспорта. Спецификация расширения и набор
-проверок соответствия.
+Transport-free agent discovery core. The extension specification and the
+conformance check suite.
 
-Границы слоёв описаны в разделе 10 плана: из ``arli_engine.core`` не должно
-быть ни одного импорта сети, потоков и HTTP.
+The layer boundaries are described in section 10 of the plan: there must not be
+a single import of network, threads or HTTP anywhere under ``arli_engine.core``.
 
-Версии в одном месте. Версия пакета это версия кода, версия расширения это версия
-протокольного текста. Они не обязаны совпадать и не совпадают: текст уже на 1.0.0,
-а код идёт к этому отдельными шагами. Смешивать их в одну цифру значит врать в одной
-из двух сторон.
+Versions live in one place. The package version is the version of the code, the
+extension version is the version of the protocol text. They do not have to match and
+do not match: the text is already at 1.0.0 while the code gets there in separate
+steps. Merging them into a single number would mean lying about one of the two sides.
 """
 
 __version__ = "0.1.0"

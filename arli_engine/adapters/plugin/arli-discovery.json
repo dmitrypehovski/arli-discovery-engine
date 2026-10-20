@@ -42,7 +42,10 @@
       "inputSchema": {
         "type": "object",
         "properties": {},
-        "required": [],
+        "required": [
+          "session_id",
+          "peer_name"
+        ],
         "additionalProperties": true
       }
     },
@@ -53,7 +56,9 @@
         "type": "object",
         "properties": {},
         "required": [
-          "commitment"
+          "session_id",
+          "peer_name",
+          "counterpart_commitments"
         ],
         "additionalProperties": true
       }
@@ -163,7 +168,8 @@
         "type": "object",
         "properties": {},
         "required": [
-          "reason"
+          "reason",
+          "kid"
         ],
         "additionalProperties": true
       }
@@ -307,8 +313,8 @@
         "properties": {},
         "required": [
           "negotiation_id",
-          "agent",
-          "act"
+          "seat",
+          "action"
         ],
         "additionalProperties": true
       }
@@ -321,7 +327,8 @@
         "properties": {},
         "required": [
           "negotiation_id",
-          "agent"
+          "actor",
+          "approve"
         ],
         "additionalProperties": true
       }

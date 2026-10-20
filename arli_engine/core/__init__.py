@@ -1,5 +1,5 @@
-"""Ядро движка: правила и данные без транспорта.
+"""Engine core: rules and data without transport.
 
-Никаких импортов ``http``, ``httpx``, ``threading``, ``socket``. Граница
-проверяется тестом ``tests/test_boundaries.py``, а не обещанием.
+No imports of ``http``, ``httpx``, ``threading``, ``socket``. The boundary is
+enforced by the test ``tests/test_boundaries.py``, not by a promise.
 """

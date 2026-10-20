@@ -1,18 +1,19 @@
-"""Хранение и удаление: срок, пометка удаления и физическая чистка.
+"""Retention and deletion: lifetime, deletion mark and physical purge.
 
-Что именно хранится у нас: метаданные конвертов доказательства, и ничего больше.
-Сырых признаков на стороне сервера нет по построению, поэтому и удалять по требованию
-человека надо не признаки, а следы выводов о нём.
+What we actually store: the metadata of evidence envelopes, and nothing else. Raw
+features never exist on the server side by construction, so a person's deletion
+request removes the traces of conclusions about them, not features.
 
-Правила:
+Rules:
 
-- у конверта есть срок жизни, по умолчанию 30 дней, и он объявлен;
-- архивация намерения помечает связанные конверты удалёнными: они больше не видны
-  и не находятся поиском, но запись о том, что конверт был, остаётся до физической чистки;
-- физическая чистка убирает записи старше срока целиком.
+- an envelope has a lifetime, 30 days by default, and it is declared;
+- archiving an intent marks the related envelopes as deleted: they are no longer
+  visible and are not found by search, but the record that an envelope existed
+  stays until a physical purge;
+- a physical purge removes records older than the lifetime altogether.
 
-Пометка и чистка это разные вещи намеренно: пометка мгновенна и обратима только явным
-действием, а чистка идёт по сроку.
+The mark and the purge are different things on purpose: the mark is instant and is
+reversed only by an explicit action, while the purge runs by lifetime.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ def now_utc() -> datetime:
 
 
 class RetentionRejected(RuntimeError):
-    """Операция хранения отклонена. Код из закрытого перечня RETENTION_REJECTIONS."""
+    """A retention operation was rejected. The code is from the closed list RETENTION_REJECTIONS."""
 
     def __init__(self, code: str, detail: str = "") -> None:
         if code not in RETENTION_REJECTIONS:
@@ -69,7 +70,7 @@ class EnvelopeRecord:
 
 @dataclass
 class Retention:
-    """Срок жизни конвертов, пометка удаления по намерению и чистка по сроку."""
+    """Envelope lifetime, deletion marking by intent and purge by lifetime."""
 
     days: int = RETENTION_DEFAULT_DAYS
     records: dict[str, EnvelopeRecord] = field(default_factory=dict)
@@ -84,7 +85,7 @@ class Retention:
         return record
 
     def archive_intent(self, intent_id: str, *, reason: str = "intent_archived") -> int:
-        """Пометить конверты намерения удалёнными. Возвращает, сколько помечено."""
+        """Mark the intent's envelopes as deleted. Returns how many were marked."""
         touched = 0
         for record in self.records.values():
             if record.intent_id == intent_id and record.visible:
@@ -110,11 +111,11 @@ class Retention:
         return bool(record and record.visible)
 
     def searchable(self) -> list[str]:
-        """Только видимые конверты: поиск не находит удалённые."""
+        """Only visible envelopes: search does not find deleted ones."""
         return sorted(r.evidence_id for r in self.records.values() if r.visible)
 
     def purge(self, *, at: datetime | None = None) -> int:
-        """Физически убрать записи старше срока. Возвращает, сколько убрано."""
+        """Physically remove records older than the lifetime. Returns how many were removed."""
         moment = at or now_utc()
         deadline = moment - timedelta(days=self.days)
         stale = [eid for eid, r in self.records.items() if r.captured_at <= deadline]

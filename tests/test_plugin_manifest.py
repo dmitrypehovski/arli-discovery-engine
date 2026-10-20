@@ -1,8 +1,9 @@
-"""Опись плагина: собирается из поверхности и не разъезжается с движком.
+"""The plugin manifest: built from the surface and not drifting from the engine.
 
-Проверяется то, ради чего опись вообще сделана из кода, а не руками: список инструментов
-совпадает с перечнем методов, команда запуска указывает на ту же привязку, а записанный на
-диске файл совпадает с собранным. Последнее и есть защита от тихого расхождения.
+We check what the manifest is generated from code for in the first place: the tool list
+matches the method list, the launch command points at the same binding, and the file
+recorded on disk matches the generated one. The last item is the guard against silent
+drift.
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ def test_manifest_summarises_itself_honestly():
     assert manifest["transport"]["type"] == "stdio"
     assert manifest["transport"]["framing"] == "newline-delimited"
     assert manifest["server"]["command"] == list(SERVER_COMMAND)
-    # движок MCP обязан лежать в команде запуска: плагин не дублирует логику
+    # the MCP engine must be part of the launch command: the plugin does not duplicate logic
     assert "arli_engine.adapters.mcp.server" in manifest["server"]["command"]
     assert manifest["limitations"] == list(LIMITATIONS)
     assert any("no engine logic of its own" in note for note in manifest["limitations"])
@@ -52,7 +53,7 @@ def test_command_points_at_the_mcp_binding_that_actually_exists():
 
 
 def test_the_recorded_manifest_on_disk_matches_the_generated_one():
-    """Расхождение означает ручную правку файла: это дефект, а не удобство."""
+    """A mismatch means the file was hand-edited: that is a defect, not a convenience."""
     recorded = manifest_path().read_text(encoding="utf-8")
     assert recorded == manifest_json(), "manifest on disk drifted from the engine surface"
 

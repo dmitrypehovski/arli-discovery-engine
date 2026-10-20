@@ -1,14 +1,15 @@
-"""Ограниченные переговоры агентов и отдельное согласие человека.
+"""Bounded agent negotiation and a separate human consent.
 
-Правила намеренно узкие: агент договаривается, человек решает. Согласие
-агента никогда не открывает связь. Молчание, ошибка и тайм-аут не считаются
-ни согласием, ни отказом.
+The rules are deliberately narrow: the agent negotiates, the human decides. Agent
+agreement never opens a connection by itself. Silence, an error and a timeout count
+as neither consent nor refusal.
 
-Грамматика (как у Index, но с нашим следом на каждом переходе):
-- первый ход делает инициатор: propose или decline;
-- accept возможен только сразу после propose противной стороны;
-- counter никогда не первый и его нельзя принять, на него отвечают propose;
-- не больше 12 ходов; на пределе переговоры остаются нерешёнными, это не отказ.
+The grammar (as at Index, but with our trail on every transition):
+- the initiator makes the first turn: propose or decline;
+- accept is possible only immediately after the other side's propose;
+- counter is never first and cannot be accepted, it is answered with propose;
+- no more than 12 turns; at the limit the negotiation stays undecided, which is not
+  a rejection.
 """
 
 from __future__ import annotations
@@ -20,9 +21,9 @@ from arli_engine.core.evidence import Completeness, Evidence
 MAX_TURNS = 12
 ACTIONS = ("propose", "counter", "accept", "decline")
 
-# Перечень причин отказа. Закрытый список: ход либо проходит, либо отклоняется
-# с одним из этих кодов. Тест проверяет, что каждый код достижим, иначе список
-# превращается в украшение.
+# The list of rejection reasons. A closed list: a turn either passes or is rejected
+# with one of these codes. A test checks that each code is reachable, otherwise the
+# list is just decoration.
 REJECTIONS = (
     "not_a_seat",
     "unknown_action",
@@ -35,7 +36,7 @@ REJECTIONS = (
     "propose_over_offer",
 )
 
-# Причины, по которым пара не открывается вовсе. Проверяются до первого хода.
+# Reasons a pair does not open at all. Checked before the first turn.
 OPENING_REJECTIONS = (
     "intent_inactive",
     "synthetic_not_admitted",
@@ -54,11 +55,11 @@ LIMITATIONS = [
 
 
 class NegotiationError(RuntimeError):
-    """Ход нарушает грамматику."""
+    """A turn violates the grammar."""
 
 
 class NegotiationRejected(NegotiationError):
-    """Отказ с кодом из закрытого перечня REJECTIONS."""
+    """A rejection with a code from the closed list REJECTIONS."""
 
     def __init__(self, code: str, detail: str = "") -> None:
         if code not in REJECTIONS:
@@ -69,7 +70,7 @@ class NegotiationRejected(NegotiationError):
 
 
 class OpeningRejected(RuntimeError):
-    """Пара не годна к открытию. Код из закрытого перечня OPENING_REJECTIONS."""
+    """The pair is not fit to open. The code is from the closed list OPENING_REJECTIONS."""
 
     def __init__(self, code: str, detail: str = "") -> None:
         if code not in OPENING_REJECTIONS:
@@ -81,10 +82,11 @@ class OpeningRejected(RuntimeError):
 
 @dataclass(frozen=True)
 class IntentStanding:
-    """Что нужно знать о намерении, чтобы решить, годится ли пара.
+    """What one needs to know about an intent to decide whether the pair fits.
 
-    Намерение годится, когда оно активно, принадлежит участнику, приписано той же
-    сети, его происхождение допущено сетью и типы сторон встречные.
+    An intent fits when it is active, belongs to a participant, is attributed to the
+    same network, its provenance is admitted by the network and the two types are
+    opposite.
     """
 
     intent_id: str
@@ -93,7 +95,7 @@ class IntentStanding:
     active: bool = True
     type: str = "person"
     provenance: str = "human"
-    # Уровень утверждения о признаках. По умолчанию заявлено самой стороной: верить тут нечему.
+    # The claim level about features. Defaults to self-declared: there is nothing to trust here.
     claim_level: str = "declared"
 
 
@@ -105,11 +107,12 @@ def decide_opening(
     admits_synthetic: bool = False,
     required_level: str | None = None,
 ) -> str | None:
-    """Годится ли пара к открытию. None означает «годится», иначе код причины.
+    """Whether the pair is fit to open. None means "fits", otherwise a reason code.
 
-    Проверяется до первого хода: неактивное намерение не договаривается, синтетическое
-    не входит в человеческую сеть, один человек не пара сам себе, типы должны быть
-    встречными (спрос с предложением, человек с человеком), и сеть одна.
+    Checked before the first turn: an inactive intent does not negotiate, a synthetic
+    one does not enter a human network, a person is not a pair with itself, the types
+    must be opposite (demand with supply, a person with a person) and the network is
+    shared.
     """
     from arli_engine.core.claims import level_strength
     from arli_engine.core.intent import types_comparable
@@ -127,7 +130,7 @@ def decide_opening(
     if not types_comparable(a.type, b.type):
         return "types_not_comparable"
     if required_level:
-        # Сеть вправе потребовать подтверждённый признак. Тогда заявленного уровня мало.
+        # The network may require a verified feature. Then the declared level is not enough.
         needed = level_strength(required_level)
         if min(level_strength(a.claim_level), level_strength(b.claim_level)) < needed:
             return "below_required_level"
@@ -146,7 +149,7 @@ class Turn:
 
 @dataclass
 class Opportunity:
-    """Связка двух сторон и их переговоров, с отдельными согласиями людей."""
+    """A pair of parties and their negotiation, with separate human consents."""
 
     actors: tuple[str, str]
     negotiation: "Negotiation"
@@ -170,7 +173,7 @@ class Opportunity:
         return "pending"
 
     def decide(self, actor: str, approve: bool) -> str:
-        """Отдельное действие человека. Одно место не решает за другое."""
+        """A separate human action. One seat does not decide for the other."""
         if actor not in self.human_consent:
             raise NegotiationError(f"{actor} is not an actor of this opportunity")
         if self.negotiation.outcome != "agreed":
@@ -184,7 +187,7 @@ class Opportunity:
 
 
 class Negotiation:
-    """Журнал переговоров: два места, один журнал, никакого провода между агентами."""
+    """The negotiation log: two seats, one log, no wire between the agents."""
 
     def __init__(self, seats: tuple[str, str]) -> None:
         if seats[0] == seats[1]:
@@ -193,7 +196,7 @@ class Negotiation:
         self.turns: list[Turn] = []
         self.outcome: str | None = None
 
-    # --- проверки грамматики ---
+    # --- grammar checks ---
 
     def _validate(self, seat: str, action: str) -> None:
         if seat not in self.seats:
@@ -227,7 +230,7 @@ class Negotiation:
             )
 
     def turn(self, seat: str, action: str, message: str) -> dict:
-        """Один ход. Возвращает след хода с конвертом доказательства."""
+        """A single turn. Returns the turn trail with an evidence envelope."""
         self._validate(seat, action)
         self.turns.append(Turn(seat=seat, action=action, message=message))
         if action in ("accept", "decline"):

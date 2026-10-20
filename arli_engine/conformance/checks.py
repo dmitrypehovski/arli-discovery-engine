@@ -1,8 +1,9 @@
-"""Набор проверок соответствия нашему слою: то, что делает нас первоисточником.
+"""A conformance suite for our layer: the thing that makes us the source of truth.
 
-Наборы значений ниже это нормативные ожидания. Их держит НАБОР, а не реализация:
-именно поэтому чужая сторона может получить ответ «соответствует» или точный
-список расхождений, а не пересказ чужой документации.
+The value sets below are normative expectations. They are held by the SUITE, not by
+the implementation: that is exactly why another party can get an answer of
+"conformant" or an exact list of mismatches, rather than a retelling of someone
+else's documentation.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ CARD_PATH = "/.well-known/agent-card.json"
 CAPS_PATH = "/.well-known/arli-capabilities.json"
 RPC_PATH = "/a2a/rpc"
 
-# Нормативные ожидания набора.
+# The suite's normative expectations.
 EXPECTED_SCHEME = "closed_blind_rsa"
 EXPECTED_MAX_TURNS = 12
 EXPECTED_ACTIONS = ["propose", "counter", "accept", "decline"]
@@ -63,7 +64,7 @@ EXPECTED_FEATURE_CAP = 64
 
 @dataclass
 class Target:
-    """Одна реализация, которую проверяем. Ходит по HTTP, как чужая сторона."""
+    """One implementation under test. It talks over HTTP, like another party would."""
 
     base_url: str
     name: str = "target"
@@ -130,7 +131,7 @@ class Report:
 
 
 def _check(report: Report, code: str, fn) -> None:
-    """Один прогон одной проверки: исключение внутри проверки это провал, не падение набора."""
+    """One run of one check: an exception inside a check is a failure, not a suite crash."""
     try:
         passed, detail = fn()
     except Exception as exc:  # noqa: BLE001
@@ -139,7 +140,7 @@ def _check(report: Report, code: str, fn) -> None:
 
 
 def run_conformance(target: Target, holder: Target | None = None) -> Report:
-    """Проверить реализацию. Для закрытого пересечения нужны две стороны."""
+    """Check an implementation. Closed intersection needs two sides."""
     report = Report(target=target.name)
     holder = holder or target
 
@@ -151,7 +152,7 @@ def run_conformance(target: Target, holder: Target | None = None) -> Report:
         return card_cache["card"]
 
     def agent_name() -> str:
-        """Имя агента берём из его карточки: метка отчёта это не имя в переговорах."""
+        """Take the agent name from its card: the report label is not a negotiation name."""
         try:
             return card().get("name") or target.name
         except Exception:  # noqa: BLE001
@@ -248,11 +249,12 @@ def run_conformance(target: Target, holder: Target | None = None) -> Report:
     _check(report, "negotiation.not_a_seat", not_a_seat)
 
     def first_turn_grammar():
-        """Первый ход это предложение или отказ: согласие без предложения не проходит.
+        """The first turn is a proposal or a refusal: acceptance without a proposal fails.
 
-        Проверка односторонняя намеренно: через две отдельные реализации нельзя
-        выставить чужое предложение, поэтому здесь проверяется правило первого хода,
-        а сам случай accept_without_offer покрыт тестами ядра с общим журналом.
+        The check is one-sided on purpose: across two separate implementations one
+        cannot stage the other side's proposal, so here we check the first-turn rule,
+        while the accept_without_offer case itself is covered by core tests with a
+        shared log.
         """
         session = "conf-accept"
         target.result("arli/negotiation/open", {
@@ -450,7 +452,7 @@ def run_conformance(target: Target, holder: Target | None = None) -> Report:
     ))
 
     def registry_rotation_separate_from_revocation():
-        """Ротация закрывает ключ, отзыв личности закрывает дорогу новым ключам."""
+        """Rotation closes a key; principal revocation blocks new keys."""
         import secrets as _secrets
 
         suffix = _secrets.token_hex(3)
@@ -497,7 +499,7 @@ def run_conformance(target: Target, holder: Target | None = None) -> Report:
     _check(report, "retention.archived_is_hidden", retention_hides_archived_envelopes)
 
     def bindings_expose_the_same_surface():
-        """Обе привязки обязаны описывать одну поверхность, а не свои списки."""
+        """Both bindings must describe one surface, not their own lists."""
         bindings = target.capabilities().get("bindings") or {}
         a2a_methods = list(bindings.get("a2a", {}).get("methods") or [])
         mcp_tools = list(bindings.get("mcp", {}).get("tools") or [])
@@ -517,11 +519,11 @@ def run_conformance(target: Target, holder: Target | None = None) -> Report:
     _check(report, "surface.bindings_agree", bindings_expose_the_same_surface)
 
     def claims_level_needs_an_issuer():
-        """Уровень выше заявленного без конверта выдающего не принимается."""
+        """A level above declared without an issuer envelope is not accepted."""
         import secrets as _secrets
 
         suffix = _secrets.token_hex(3)
-        # Два случая: назван выдающий без его конверта, и выдающий не назван вовсе.
+        # Two cases: an issuer is named without its envelope, and no issuer is named at all.
         named = target.result("arli/claims/declare", {
             "feature": f"skill:{suffix}", "level": "third_party_verified",
             "issuer": f"body-{suffix}",
@@ -541,7 +543,7 @@ def run_conformance(target: Target, holder: Target | None = None) -> Report:
     _check(report, "claims.level_needs_issuer", claims_level_needs_an_issuer)
 
     def claims_required_level_is_enforced():
-        """Сеть, потребовавшая подтверждённый признак, не открывает пару на заявленном."""
+        """A network that required a verified feature does not open a pair on a declared one."""
         import secrets as _secrets
 
         suffix = _secrets.token_hex(3)
@@ -574,6 +576,24 @@ def run_conformance(target: Target, holder: Target | None = None) -> Report:
 
     _check(report, "claims.required_level_is_enforced", claims_required_level_is_enforced)
 
+    def missing_field_carries_a_code():
+        """A refusal about the call itself must carry a code, like any other refusal."""
+        response = httpx.post(f"{target.base_url}{RPC_PATH}", json={
+            "jsonrpc": "2.0", "id": 1, "method": "arli/registry/check", "params": {},
+        }, timeout=10)
+        payload = response.json()
+        message = (payload.get("error") or {}).get("message", "")
+        return "missing_field" in message, f"message={message!r}"
+
+    _check(report, "call.missing_field_carries_a_code", missing_field_carries_a_code)
+
+    def call_refusals_are_published():
+        codes = target.capabilities().get("call_rejections") or []
+        ok = "missing_field" in codes and "unknown_method" in codes and len(codes) >= 4
+        return ok, f"call_rejections={codes}"
+
+    _check(report, "caps.call_refusals_published", call_refusals_are_published)
+
     return report
 
 
@@ -585,7 +605,7 @@ def _pem(key) -> bytes:
 
 
 def _agent_public_key(card: dict):
-    """Взять ключ агента из его же карточки: чужая сторона другого ключа не имеет."""
+    """Take the agent key from its own card: another party has no other key."""
     protected = (card.get("signatures") or [{}])[0].get("protected", "")
     if not protected:
         raise ValueError("card carries no signature to take the key from")

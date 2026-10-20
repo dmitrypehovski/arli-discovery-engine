@@ -1,10 +1,10 @@
-"""Упаковка к публикации на стороне движка: лицензия, знак, отдельный дом текста.
+"""Packaging for publication on the engine side: license, mark, a separate home for the text.
 
-Проверяется то, что нельзя проверить глазами один раз и забыть. Текст лицензии обязан
-совпадать с официальным Apache-2.0 побайтово: подменённая или сокращённая лицензия это не
-мелочь, а сломанное разрешение. Нормативный текст обязан жить ОТДЕЛЬНО от пакета с кодом:
-движок на него ссылается, а своей копии не держит. Иначе копия тихо разойдётся с текстом, и
-мы будем выполнять одно, а обещать другое.
+We check what cannot be checked by eye once and then forgotten. The license text must match
+the official Apache-2.0 byte for byte: a swapped or shortened license is not a trifle but a
+broken permission. The normative text must live SEPARATELY from the package with the code:
+the engine references it and keeps no copy of its own. Otherwise the copy would quietly
+drift from the text, and we would do one thing while promising another.
 """
 
 from __future__ import annotations
@@ -18,10 +18,10 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Официальный текст Apache License 2.0 с сайта Apache Software Foundation.
+# The official Apache License 2.0 text from the Apache Software Foundation site.
 CANONICAL_LICENSE_SHA256 = "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
 
-CYRILLIC = re.compile(r"[А-Яа-яЁё]")
+CYRILLIC = re.compile(r"[\u0410-\u044f\u0401\u0451]")
 
 
 def _read(name: str) -> str:
@@ -29,16 +29,16 @@ def _read(name: str) -> str:
 
 
 def spec_dir() -> Path:
-    """Дом нормативного текста. Переезд задаётся переменной окружения, не правкой теста."""
+    """The home of the normative text. A move is set by an environment variable, not by editing the test."""
     override = os.environ.get("ARLI_SPEC_DIR")
     return Path(override) if override else ROOT.parent / "arli-spec"
 
 
 def require_spec_house() -> Path:
-    """Нормативный текст живёт отдельным домом. В чистом клоне его рядом нет.
+    """The normative text lives in its own home. In a clean clone it is not adjacent.
 
-    Это не повод молча пропустить проверку: причина называется прямо, чтобы отсутствие
-    текста не выглядело как зелёный прогон.
+    This is not a reason to silently skip the check: the reason is named plainly, so the
+    absence of the text does not look like a green run.
     """
     house = spec_dir()
     if not (house / "SPEC.en.md").is_file():
@@ -70,7 +70,7 @@ def test_trademark_policy_reserves_the_mark_and_points_at_certification():
     policy = _read("TRADEMARK.md")
     assert "ARLI verified" in policy
     assert "remain the property of Shenzhen Capernaum Technology Co., Ltd." in policy
-    # знак не наследуется от лицензии: это должно быть сказано прямо
+    # the mark is not inherited from the license: this must be said plainly
     assert "not granted by the" in policy
     assert "conformance suite v" in policy
 
@@ -83,7 +83,7 @@ def test_contributing_terms_are_inbound_equals_outbound():
 
 
 def test_the_normative_text_lives_outside_the_engine():
-    """Текст обещания обязан жить отдельно: движок ссылается, а копии не держит."""
+    """The promise text must live separately: the engine references it and keeps no copy."""
     require_spec_house()
     assert not (ROOT / "spec").exists(), "the engine must not keep a copy of the normative text"
 
@@ -99,19 +99,19 @@ def test_the_engine_matches_the_version_of_the_text_it_depends_on():
 
 
 def test_changing_the_spec_house_is_a_setting_not_a_code_edit():
-    """Переезд задаётся переменной окружения, чтобы разделение не ломалось правкой тестов."""
+    """A move is set by an environment variable, so the separation is not broken by editing tests."""
     assert os.environ.get("ARLI_SPEC_DIR") is None or Path(os.environ["ARLI_SPEC_DIR"]).is_dir()
 
 
 def test_the_engine_does_not_publish_the_text():
-    """В колесе текста быть не должно: его публикуют отдельно от кода."""
+    """The text must not be in the wheel: it is published separately from the code."""
     language = _read("pyproject.toml")
     assert "arli-spec" not in language or "SPEC.en.md" not in language
     assert not (ROOT / "docs" / "spec.html").exists(), "the spec page belongs to the spec house"
 
 
 def test_package_metadata_is_publishable():
-    """Метаданные пакета уходят наружу вместе с кодом, поэтому без кириллицы."""
+    """Package metadata goes outward together with the code, so it carries no Cyrillic."""
     metadata = _read("pyproject.toml")
     assert 'license = "Apache-2.0"' in metadata
     assert 'license-files = ["LICENSE", "NOTICE"]' in metadata
@@ -124,10 +124,10 @@ def test_readme_points_at_the_suite_the_licence_and_the_honest_limits():
     readme = _read("README.md")
     assert "arli_engine.conformance" in readme
     assert "Apache License 2.0" in readme
-    # код вышел: адреса обязаны быть названы, как и то, что замечания к коду пока на русском
+    # the code is out: both addresses must be named, and the stale claim about Russian notes is gone
     assert "published under Apache-2.0" in readme
     assert "https://github.com/dmitrypehovski/arli-discovery-engine" in readme
-    assert "comments in the code are" in readme and "in Russian" in readme
-    # ограничения обязаны быть в описании, а не только в спецификации
+    assert "comments in the code are" not in readme
+    # limitations must be in the description, not only in the specification
     assert "does not close online probing" in readme
     assert "not a unique human" in readme

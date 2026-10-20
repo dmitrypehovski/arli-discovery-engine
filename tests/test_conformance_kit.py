@@ -1,8 +1,7 @@
-"""Набор проверок соответствия: свой движок проходит, обманки ловятся.
+"""The conformance suite: our own engine passes, the cheats are caught.
 
-Главная мысль: набор, который проходит только на нашей реализации, ничего не
-доказывает. Поэтому тест требует, чтобы каждая обманка была поймана именно той
-проверкой, которая для этого предназначена.
+The main idea: a suite that passes only on our implementation proves nothing. So the test
+requires each cheat to be caught by exactly the check meant for it.
 """
 
 from __future__ import annotations
@@ -68,7 +67,7 @@ def test_our_engine_is_compliant(engine_pair):
         holder.close()
     assert report.failures == [], report.failures
     assert report.compliant
-    # набор не пустой: проверок должно быть много, иначе «соответствие» ничего не значит
+    # the suite is not empty: there must be many checks, otherwise "conformance" means nothing
     assert len(report.checks) >= 14
 
 
@@ -89,8 +88,8 @@ def test_cheating_targets_are_caught(kind, expected):
     try:
         report = run_conformance(target, other)
         codes = {c["code"] for c in report.failures}
-        assert not report.compliant, f"обманка {kind} прошла набор"
-        assert expected <= codes, f"ожидали {expected}, поймано {codes}"
+        assert not report.compliant, f"cheat {kind} passed the suite"
+        assert expected <= codes, f"expected {expected}, caught {codes}"
     finally:
         for server in servers:
             server.shutdown()

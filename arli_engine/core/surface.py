@@ -1,19 +1,19 @@
-"""Единый перечень методов поверхности: одна точка правды для всех привязок.
+"""A single list of surface methods: one point of truth for every binding.
 
-Смысл файла в том, чтобы адаптеры не разъезжались. Поверхность движка одна, а привязок
-к ней несколько: наш A2A по HTTP и MCP для тех, кто живёт в мире инструментов модели.
-Если каждая привязка будет вести свой список, они разойдутся на первой же правке и
-разойдутся молча. Поэтому перечень живёт здесь, а привязки обязаны с ним совпадать и
-проверяются на совпадение в наборе проверок.
+The point of this file is to keep the adapters from drifting apart. The engine
+surface is one, but there are several bindings to it: our HTTP-based A2A and MCP
+for those who live in the world of model tools. If each binding kept its own list,
+they would diverge on the first edit and diverge silently. So the list lives here,
+and the bindings must match it and are checked for a match in the conformance suite.
 
-Правило имён: имя инструмента MCP есть имя метода с косой чертой, заменённой на
-подчёркивание. Правило обратимо, поэтому соответствие один к одному проверяемо.
+Naming rule: an MCP tool name is the method name with the slash replaced by an
+underscore. The rule is reversible, so the one-to-one correspondence is checkable.
 """
 
 from __future__ import annotations
 
-# Методы, которые агент обязан уметь по спецификации. Порядок фиксирован, чтобы
-# документ возможностей был побайтово устойчив между прогонами.
+# Methods the agent must support per the specification. The order is fixed so that
+# the capability document is byte-stable between runs.
 METHOD_NAMES = (
     "agent/card",
     "arli/capabilities",
@@ -43,8 +43,17 @@ METHOD_NAMES = (
     "arli/opportunity/decide",
 )
 
-# Методы, которые меняют состояние агента. Нужны, чтобы описание инструмента MCP было
-# честным: вызывающий видит, что действие оставляет след.
+# Methods that change the agent's state. Needed so that the MCP tool description is
+# honest: the caller sees that the action leaves a trace.
+# Refusals about the call itself, as opposed to refusals about a pair, a claim or a match.
+# They exist so that a caller can tell "you forgot a field" from "the engine failed".
+CALL_REJECTIONS = (
+    "missing_field",
+    "unknown_method",
+    "parse_error",
+    "bad_type",
+)
+
 MUTATING_METHODS = (
     "arli/psi/commit",
     "arli/psi/sign",
@@ -65,11 +74,12 @@ MUTATING_METHODS = (
     "arli/opportunity/decide",
 )
 
-# Обязательные поля у методов, где пустой вызов бессмысленен. Перечень неполный
-# намеренно: он честно перечисляет то, что действительно обязательно, и не выдумывает
-# ограничений там, где движок их не ставит.
+# Required fields for methods where an empty call is meaningless. The list is
+# deliberately incomplete: it honestly lists what is truly required and does not
+# invent constraints where the engine imposes none.
 REQUIRED_FIELDS = {
-    "arli/match": ("commitment",),
+    "arli/commitments": ("session_id", "peer_name"),
+    "arli/match": ("session_id", "peer_name", "counterpart_commitments"),
     "arli/psi/keys": (),
     "arli/psi/commit": ("features",),
     "arli/psi/sign": ("blinded",),
@@ -77,7 +87,8 @@ REQUIRED_FIELDS = {
     "arli/psi/record": ("matched", "floor_basis_points"),
     "arli/registry/register": ("kid", "principal_id", "public_pem"),
     "arli/registry/rotate": ("kid", "new_kid", "new_public_pem"),
-    "arli/registry/revoke": ("reason",),
+    # revoke accepts either a key or a principal; the probe uses the key form
+    "arli/registry/revoke": ("reason", "kid"),
     "arli/registry/confirm": ("principal_id",),
     "arli/registry/check": ("kid",),
     "arli/retention/record": ("evidence_id", "intent_id"),
@@ -86,23 +97,24 @@ REQUIRED_FIELDS = {
     "arli/claims/issuers": ("name", "public_pem"),
     "arli/claims/declare": ("feature", "level"),
     "arli/negotiation/open": ("negotiation_id", "peers", "intents"),
-    "arli/negotiation/turn": ("negotiation_id", "agent", "act"),
-    "arli/opportunity/decide": ("negotiation_id", "agent"),
+    "arli/negotiation/turn": ("negotiation_id", "seat", "action"),
+    "arli/opportunity/decide": ("negotiation_id", "actor", "approve"),
 }
 
 
 def tool_name(method: str) -> str:
-    """Имя инструмента MCP по имени метода."""
+    """The MCP tool name for a method name."""
     return method.replace("/", "_")
 
 
-# Таблица обратного перевода строится из перечня, а не из правил замены: правило
-# замены обратимо не всегда, а таблица обратима по построению.
+# The reverse mapping table is built from the list, not from the substitution rule:
+# the substitution rule is not always reversible, while the table is reversible by
+# construction.
 _TOOL_TO_METHOD = {tool_name(method): method for method in METHOD_NAMES}
 
 
 def method_for_tool(name: str) -> str:
-    """Имя метода по имени инструмента. Обратно к tool_name, точно или отказ."""
+    """The method name for a tool name. Inverse of tool_name, exact or a refusal."""
     try:
         return _TOOL_TO_METHOD[name]
     except KeyError:

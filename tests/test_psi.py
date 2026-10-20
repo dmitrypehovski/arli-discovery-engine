@@ -1,17 +1,16 @@
-"""Проверки корректности и границ закрытого пересечения (задача 1.5).
+"""Correctness and boundary checks of closed intersection (task 1.5).
 
-Что именно проверяется и почему именно так:
+What exactly is checked and why exactly so:
 
-- корректность: схема обязана находить ровно то же пересечение, что и прежняя,
-  иначе её нельзя даже сравнивать по цене;
-- держатель ничего не узнаёт: до стороны B доходят только ослеплённые значения,
-  их количество совпадает с числом признаков A, а сами значения случайны при
-  каждом проходе;
-- офлайн-перебор закрыт: полученные стороной A значения нельзя сопоставить с
-  догадками без ключа d, поэтому тихо перебрать чужой набор нельзя;
-- онлайн-проверка догадки остаётся возможной, потому что это свойство любого
-  пересечения по множествам. Это записано честно и закрывается частотой
-  обращений и правилом одного обмена на сессию.
+- correctness: the scheme must find exactly the same intersection as the earlier one,
+  otherwise it cannot even be compared on cost;
+- the holder learns nothing: only blinded values reach party B, their count equals the
+  number of A's features, and the values themselves are random on each pass;
+- offline enumeration is closed: the values party A receives cannot be matched against
+  guesses without the key d, so another party's set cannot be quietly enumerated;
+- online probing of a single guess remains possible, because that is a property of any set
+  intersection. This is stated honestly and is bounded by request frequency and the rule
+  of one exchange per session.
 """
 
 from __future__ import annotations
@@ -47,30 +46,30 @@ def test_blinding_hides_the_value_and_is_random_each_time():
     first, _ = blind("skill:design", keys.n, keys.e)
     second, _ = blind("skill:design", keys.n, keys.e)
     plain = feature_hash("skill:design")
-    assert first != second, "ослепление обязано быть случайным при каждом проходе"
-    assert first != plain, "ослеплённое значение не должно совпадать с открытым хешем"
+    assert first != second, "blinding must be random on each pass"
+    assert first != plain, "a blinded value must not equal the open hash"
 
 
 def test_holder_learns_only_the_count():
-    """Сторона B видит ослеплённые значения: ни признаков, ни их связи с догадками."""
+    """Party B sees blinded values: no features, and no link between them and guesses."""
     keys = generate_keys()
     learner = ["role:founder", "skill:design", "city:sf"]
     blinded = [blind(f, keys.n, keys.e)[0] for f in learner]
-    assert len(blinded) == len(learner), "B узнаёт только количество"
-    # ни одно ослеплённое значение не равно подписи над открытым признаком
+    assert len(blinded) == len(learner), "B learns only the count"
+    # no blinded value equals a signature over an open feature
     signed_own = set(own_signed_tokens(learner, keys))
     assert not set(blinded) & signed_own
 
 
 def test_offline_enumeration_is_closed():
-    """Без ключа d чужой набор не перебрать: подпись над догадкой невычислима."""
+    """Without the key d another party's set cannot be enumerated: the signature over a guess is uncomputable."""
     keys = generate_keys()
     holder = ["skill:design", "city:sf"]
     tokens = set(own_signed_tokens(holder, keys))
     vocabulary = ["skill:design", "city:sf", "role:investor", "city:berlin"]
-    # попытка сопоставить догадку с подписью без знания d
+    # an attempt to match a guess against a signature without knowing d
     naive = {f for f in vocabulary if pow(feature_hash(f), keys.e, keys.n) in tokens}
-    assert naive == set(), "догадка плюс открытый показатель не даёт подписи"
+    assert naive == set(), "a guess plus the public exponent does not give a signature"
 
 
 def test_unblinding_returns_the_signed_feature():

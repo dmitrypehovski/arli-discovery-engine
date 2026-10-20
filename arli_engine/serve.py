@@ -1,12 +1,13 @@
-"""Локальные агенты из самого пакета: поднять движок снаружи, не имея нашего дерева.
+"""Local agents from the package itself: start the engine from outside, without our tree.
 
-Зачем это в пакете, а не в каталоге `tools`. Ворота фазы 6 звучат так: сторонний
-разработчик ставит движок и проходит набор проверок за вечер. Установленный пакет без
-способа поднять агента эти ворота не проходит: у человека есть движок и набор проверок,
-но нет ни одной реализации, по которой набор можно прогнать. Поэтому стенд едет внутри.
+Why this lives in the package rather than in the `tools` directory. The phase 6 gate
+reads: a third-party developer installs the engine and passes the conformance suite in
+an evening. An installed package with no way to start an agent fails that gate: a person
+has the engine and the suite, but no implementation to run the suite against. So the
+stand ships inside.
 
-Это не производственная служба и не должно ею притворяться: два агента в одной памяти, ключи
-на процесс, признаки для примера. Ограничения перечислены вслух.
+This is not a production service and should not pretend to be one: two agents in one
+memory, keys per process, example features. The limitations are listed out loud.
 """
 
 from __future__ import annotations
@@ -23,11 +24,12 @@ from arli_engine.core.signing import KeyPair
 
 DEFAULT_PORTS = (8841, 8842)
 
-# Объявленный порог по умолчанию: сорок процентов совпадения.
+# The declared default floor: forty percent overlap.
 FLOOR_DEFAULT = 4000
 
-# Примерные признаки. Они здесь для того, чтобы пересечение было непустым и набор проверок
-# проверял схему, а не пустоту. Настоящих данных о людях в этом файле нет.
+# Example features. They are here so that the intersection is non-empty and the
+# conformance suite checks the scheme rather than emptiness. There is no real personal
+# data in this file.
 FEATURES_A = ["role:founder", "skill:design", "city:sf", "need:infra"]
 FEATURES_B = ["skill:design", "city:sf", "offer:infra", "role:investor"]
 
@@ -56,13 +58,17 @@ def operations() -> list[Operation]:
 def build_pair(
     port_a: int = 0, port_b: int = 0, *, names: tuple[str, str] = ("arli-agent-a", "arli-agent-b")
 ) -> tuple[list[AgentState], list[ThreadingHTTPServer]]:
-    """Собрать двух агентов и поднять их. Порт 0 означает «любой свободный».
+    """Build two agents and start them. Port 0 means "any free port".
 
-    Возвращает состояния и серверы, поэтому фактический порт берётся у сервера, а не
-    угадывается: на нулевом порту угадать его нельзя.
+    Returns the states and the servers, so the actual port is read from the server
+    rather than guessed: on port zero it cannot be guessed.
     """
     key_a, key_b = KeyPair.generate(), KeyPair.generate()
     name_a, name_b = names
+    # One journal per pair, shared by both sides. Without it the second side's turn is invisible
+    # to the first, and a cross-side negotiation never settles.
+    shared_journal: dict = {}
+    shared_opportunities: dict = {}
 
     def make(name: str, key: KeyPair, port: int, features: list[str]) -> AgentState:
         card = build_card(
@@ -93,6 +99,10 @@ def build_pair(
 
     state_a = make(name_a, key_a, port_a, FEATURES_A)
     state_b = make(name_b, key_b, port_b, FEATURES_B)
+    state_a.negotiations = shared_journal
+    state_b.negotiations = shared_journal
+    state_a.opportunities = shared_opportunities
+    state_b.opportunities = shared_opportunities
     state_a.peer_keys = {name_b: key_b.public_pem}
     state_b.peer_keys = {name_a: key_a.public_pem}
     server_a, _ = start_agent(state_a, port_a)
@@ -105,7 +115,7 @@ def port_of(server: ThreadingHTTPServer) -> int:
 
 
 def serve(port_a: int = DEFAULT_PORTS[0], port_b: int = DEFAULT_PORTS[1]) -> None:
-    """Поднять пару и служить до прерывания."""
+    """Start a pair and serve until interrupted."""
     _states, servers = build_pair(port_a, port_b)
     real_a, real_b = (port_of(server) for server in servers)
     print(

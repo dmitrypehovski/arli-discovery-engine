@@ -8,10 +8,9 @@ Status: **published under Apache-2.0**. Sources: https://github.com/dmitrypehovs
 mirrored on our own domain at https://arliwork.com/plugin/arli-discovery-engine.git. The normative text
 lives separately, see below.
 
-Two honest notes for a reader arriving today. The repository sits under a personal account
-because the company has no organisation on that platform yet. And the comments in the code are
-in Russian while the documentation and the specification are in English: the reasoning is
-written down, but not yet in the language most readers of this repository will use.
+One honest note for a reader arriving today: the repository sits under a personal account,
+because the company has no organisation on that platform yet. A transfer keeps the history and
+the links. The code, the comments and the documentation are all in English.
 
 ## The idea in one paragraph
 
@@ -27,7 +26,7 @@ the other side.
 - The normative text lives in a separate artefact, `../arli-spec`: `SPEC.en.md` (English,
   the published one), `SPEC.md` (Russian working translation, clause numbers kept identical)
   and `CHANGELOG.md`. The engine depends on that text and keeps no copy of it.
-- `arli_engine/conformance`: the conformance suite, 26 checks, including deliberately wrong
+- `arli_engine/conformance`: the conformance suite, 30 checks, including deliberately wrong
   implementations that it catches.
 - `examples/two_agents/main.py`: two live agents, a full round trip, a signature that breaks
   on an edit.

@@ -1,11 +1,10 @@
-"""JCS-подобная каноникализация для подписи карточек агентов.
+"""JCS-like canonicalization for signing agent cards.
 
-RFC 8785 требует сортировки ключей по код-поинтам UTF-16, минимальных
-экранирований и отсутствия незначащих пробелов. Здесь реализуется тот
-подмножества, которое использует карточка агента (строки, целые, булевы,
-null, массивы, объекты). Числа с плавающей точкой в карточку не кладём:
-их представление в JCS отличается от json.dumps, и это записано как
-ограничение в LIMITATIONS.
+RFC 8785 requires sorting keys by UTF-16 code points, minimal escaping and no
+insignificant whitespace. This implements the subset that an agent card uses
+(strings, integers, booleans, null, arrays, objects). We do not put floating
+point numbers into the card: their representation in JCS differs from
+json.dumps, and that is recorded as a limitation in LIMITATIONS.
 """
 
 from __future__ import annotations
@@ -20,7 +19,7 @@ LIMITATIONS = [
 
 
 class NotCanonicalizable(ValueError):
-    """Значение нельзя каноникализировать по нашим правилам."""
+    """The value cannot be canonicalized by our rules."""
 
 
 def _check(value: Any, path: str = "$") -> None:
@@ -42,12 +41,12 @@ def _check(value: Any, path: str = "$") -> None:
 
 
 def canonicalize(value: Any) -> bytes:
-    """Вернуть канонический UTF-8 байтовый вид значения."""
+    """Return the canonical UTF-8 byte form of the value."""
     _check(value)
     text = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return text.encode("utf-8")
 
 
 def canonical_json(value: Any) -> str:
-    """То же, но строкой (для показа и для хешей содержимого)."""
+    """The same, but as a string (for display and for content hashes)."""
     return canonicalize(value).decode("utf-8")

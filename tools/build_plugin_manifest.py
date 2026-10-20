@@ -1,8 +1,9 @@
-"""Сборка описи плагина из поверхности движка.
+"""Build the plugin manifest from the engine surface.
 
-Запуск: python -m tools.build_plugin_manifest [путь]
-Без пути пишет рядом с адаптером. Опись детерминирована, поэтому записанный файл
-сверяется с собранным в тестах: расхождение означает, что кто-то правил файл руками.
+Run: python -m tools.build_plugin_manifest [path]
+Without a path it writes next to the adapter. The manifest is deterministic, so the
+written file is checked against the built one in tests: a mismatch means someone edited
+the file by hand.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     target = Path(argv[0]) if argv else manifest_path()
     written = write_manifest(target)
-    print(f"опись плагина записана: {written}")
+    print(f"plugin manifest written: {written}")
     return 0
 
 

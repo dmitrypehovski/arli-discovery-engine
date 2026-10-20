@@ -1,23 +1,24 @@
-"""Согласование ключа пары и привязка отпечатков.
+"""Pair key agreement and commitment binding.
 
-Ключ пары больше не передаётся по проводу. Он выводится согласованием на кривой
-(те же ключи P-256, которыми подписывается карточка) и HKDF, где во вход идут
-идентификаторы обоих агентов и идентификатор сессии. Отсюда два свойства:
+The pair key is no longer sent over the wire. It is derived through curve
+agreement (the same P-256 keys used to sign the card) and HKDF, whose input
+carries the identifiers of both agents and the session identifier. Two properties
+follow:
 
-- третья сторона ключа не знает и вывести его не может (T2 из модели угроз);
-- отпечаток из другой сессии не совпадёт, потому что сессия входит и в ключ,
-  и в сам отпечаток (T12).
+- a third party does not know the key and cannot derive it (T2 in the threat model);
+- a commitment from another session will not match, because the session enters both
+  the key and the commitment itself (T12).
 
-Чего это НЕ решает и что записано в ограничениях: противная сторона по-прежнему
-знает ключ, потому что обязана считать свои отпечатки, и по-прежнему может
-перебирать словарь признаков (T1). Этот вопрос закрывается только закрытым
-пересечением, и решение по нему вынесено отдельно (задача 1.5 плана).
+What this does NOT solve, and what is recorded in the limitations: the opposite
+party still knows the key, because it has to compute its own commitments, and it
+can still enumerate a dictionary of features (T1). That is closed only by private
+set intersection, and the decision on it is deferred (task 1.5 of the plan).
 
-Про привязку к стороне: она обязана быть общей для пары, иначе стороны посчитают
-разные отпечатки одного и того же признака и сопоставление не сработает вовсе.
-Поэтому в отпечаток входит каноническая метка пары, а не сторона отправителя.
-Отражение (когда противная сторона присылает ваш же список) при этом не даёт ей
-ничего нового: она получает обратно ваши же отпечатки.
+On binding to a party: it must be shared across the pair, otherwise the two sides
+would compute different commitments for the same feature and matching would not
+work at all. So the commitment includes the canonical pair label, not the sender's
+side. Reflection (when the opposite party sends back your own list) gives it
+nothing new: it gets your own commitments back.
 """
 
 from __future__ import annotations
@@ -51,11 +52,12 @@ def _load_public(pem: bytes) -> ec.EllipticCurvePublicKey:
 
 
 def public_pem_from_private(private_pem: bytes) -> bytes:
-    """Открытый ключ из закрытого. Нужен там, где сторона известна только закрытым ключом.
+    """The public key from the private one. Needed where a party is known only by its private key.
 
-    Проверяющему нужен открытый ключ выдающего. В стенде и в движке он есть у стороны, но в
-    некоторых путях (измерение, разовая проверка) на руках только закрытый. Выводить его
-    честнее, чем складывать второй ключ, который потом разойдётся с первым.
+    A verifier needs the issuer's public key. In the harness and in the engine the
+    party has it, but on some paths (measurement, one-off verification) only the
+    private key is at hand. Deriving it is more honest than storing a second key
+    that would later drift from the first.
     """
     return _load_private(private_pem).public_key().public_bytes(
         encoding=serialization.Encoding.PEM,
@@ -71,7 +73,7 @@ def derive_pair_key(
     agent_a: str,
     agent_b: str,
 ) -> str:
-    """Вывести ключ пары. По проводу он не ходит, обе стороны получают один и тот же."""
+    """Derive the pair key. It does not travel over the wire; both sides get the same one."""
     if not session_id:
         raise ValueError("session_id is required: a key without a session can be replayed")
     if not agent_a or not agent_b:
@@ -85,10 +87,10 @@ def derive_pair_key(
 
 
 def commitment(pair_key_hex: str, *, session_id: str, pair: str, feature: str) -> str:
-    """Отпечаток признака, привязанный к сессии и к паре.
+    """A commitment for a feature, bound to the session and to the pair.
 
-    Метка пары обязана быть одинаковой у обеих сторон: иначе один и тот же
-    признак даст разные отпечатки и сопоставление не сработает.
+    The pair label must be the same on both sides: otherwise the same feature
+    would yield different commitments and matching would not work.
     """
     if not session_id or not pair:
         raise ValueError("a commitment must be bound to a session and to the pair")
@@ -97,22 +99,22 @@ def commitment(pair_key_hex: str, *, session_id: str, pair: str, feature: str) -
 
 
 def pair_label(agent_a: str, agent_b: str) -> str:
-    """Каноническая метка пары: порядок не зависит от того, кто считает."""
+    """The canonical pair label: the order does not depend on who computes it."""
     if not agent_a or not agent_b or agent_a == agent_b:
         raise ValueError("a pair label needs two different agents")
     return "|".join(sorted((agent_a, agent_b)))
 
 
-# --- подпись конверта доказательства ---
+# --- evidence envelope signature ---
 
 def _envelope_signing_input(envelope: dict) -> bytes:
-    """Тело конверта без самой подписи: идентификатор входит, поэтому он тоже защищён."""
+    """The envelope body without the signature itself: the identifier is included, so it is protected too."""
     body = {k: v for k, v in envelope.items() if k != "signature"}
     return canonical_json(body).encode("utf-8")
 
 
 def sign_envelope(envelope: dict, private_pem: bytes, kid: str) -> dict:
-    """Подписать конверт ключом агента. Возвращает новый конверт с полем подписи."""
+    """Sign the envelope with the agent key. Returns a new envelope with a signature field."""
     key = _load_private(private_pem)
     der = key.sign(_envelope_signing_input(envelope), ec.ECDSA(hashes.SHA256()))
     r, s = utils.decode_dss_signature(der)
@@ -130,7 +132,7 @@ def sign_envelope(envelope: dict, private_pem: bytes, kid: str) -> dict:
 
 
 def verify_envelope(envelope: dict, public_pem: bytes) -> tuple[bool, list[str]]:
-    """Проверить подпись конверта. Без неё доказательство неотличимо от подделки."""
+    """Verify the envelope signature. Without it, evidence is indistinguishable from a forgery."""
     import base64
 
     errors: list[str] = []

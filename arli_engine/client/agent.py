@@ -1,16 +1,17 @@
-"""Тонкая обёртка над поверхностью агента для внешних клиентов.
+"""A thin wrapper over the agent surface for external clients.
 
-Мы держим один слой и много обёрток. Слой это перечень методов в `core/surface.py`,
-а обёртки это способы дотянуться до него: A2A по HTTP, MCP по потокам, плагин. Этот файл
-четвёртая обёртка, для того, кто пишет на Python и не хочет собирать запросы руками.
+We keep one layer and many wrappers. The layer is the method list in `core/surface.py`,
+and the wrappers are ways to reach it: A2A over HTTP, MCP over streams, the plugin. This
+file is the fourth wrapper, for someone writing Python who does not want to assemble
+requests by hand.
 
-Обёртка не описывает методы заново, а разворачивает тот же перечень: по методу на каждый
-метод поверхности. Если метод появится в перечне, он появится и здесь, а если исчезнет,
-здесь его не останется. Тест сверяет это.
+The wrapper does not describe methods anew, it unfolds the same list: one method per
+surface method. If a method appears in the list, it appears here too, and if it
+disappears, it does not remain here. A test checks this.
 
-Отказы не съедаются. Причина, которую движок вернул кодом, остаётся кодом и на стороне
-клиента: `AgentRefused.code`. Клиент, который показывает «ошибка 500» вместо причины,
-заставляет людей заново выяснять то, что мы уже знали.
+Refusals are not swallowed. The reason the engine returned as a code stays a code on the
+client side too: `AgentRefused.code`. A client that shows "error 500" instead of a reason
+forces people to figure out again what we already knew.
 """
 
 from __future__ import annotations
@@ -24,15 +25,16 @@ from arli_engine.core.match import MATCH_REJECTIONS
 from arli_engine.core.negotiate import OPENING_REJECTIONS, REJECTIONS
 from arli_engine.core.registry import REGISTRY_REJECTIONS
 from arli_engine.core.retention import RETENTION_REJECTIONS
-from arli_engine.core.surface import METHOD_NAMES
+from arli_engine.core.surface import CALL_REJECTIONS, METHOD_NAMES
 
 CARD_PATH = "/.well-known/agent-card.json"
 CAPS_PATH = "/.well-known/arli-capabilities.json"
 RPC_PATH = "/a2a/rpc"
 
-# Все коды отказов движка в одном месте: по ним причина достаётся из текста ошибки.
+# All engine refusal codes in one place: they are used to pull the reason out of an error text.
 KNOWN_REJECTION_CODES: tuple[str, ...] = (
-    tuple(REJECTIONS)
+    tuple(CALL_REJECTIONS)
+    + tuple(REJECTIONS)
     + tuple(OPENING_REJECTIONS)
     + tuple(MATCH_REJECTIONS)
     + tuple(RETENTION_REJECTIONS)
@@ -42,20 +44,25 @@ KNOWN_REJECTION_CODES: tuple[str, ...] = (
 
 
 class AgentClientError(RuntimeError):
-    """Поверхность ответила так, что разобрать ответ нельзя."""
+    """The surface replied in a way that cannot be parsed."""
 
 
 class AgentRefused(RuntimeError):
-    """Агент отказал по причине из закрытого перечня."""
+    """The agent refused for a reason from a closed list."""
 
     def __init__(self, code: str, message: str) -> None:
         self.code = code
         self.message = message
-        super().__init__(f"{code}: {message}" if code != "unlisted" else message)
+        # Do not repeat a code the message already carries: "missing_field: missing_field: ..."
+        # reads like two different problems.
+        if code == "unlisted" or message.startswith(f"{code}:"):
+            super().__init__(message)
+        else:
+            super().__init__(f"{code}: {message}")
 
 
 def rejection_code(message: str) -> str:
-    """Достать код отказа из текста. Нет кода — вернуть «unlisted», а не выдумывать."""
+    """Pull the refusal code out of the text. Without a code return "unlisted", not a guess."""
     for code in KNOWN_REJECTION_CODES:
         if code in message:
             return code
@@ -63,7 +70,7 @@ def rejection_code(message: str) -> str:
 
 
 class AgentClient:
-    """Клиент одного агента. Методы поверхности разворачиваются из общего перечня."""
+    """A client for one agent. Surface methods are unfolded from the shared list."""
 
     def __init__(
         self,
@@ -75,7 +82,7 @@ class AgentClient:
         self.base_url = base_url.rstrip("/")
         self._client = httpx.Client(timeout=timeout, transport=transport)
 
-    # --- служебное ---
+    # --- plumbing ---
     def close(self) -> None:
         self._client.close()
 
@@ -96,7 +103,7 @@ class AgentClient:
         return response.json()
 
     def call(self, method: str, params: dict | None = None) -> dict:
-        """Вызвать метод по имени. Причина отказа приходит как AgentRefused."""
+        """Call a method by name. A refusal reason arrives as AgentRefused."""
         if method not in METHOD_NAMES:
             raise ValueError(f"unknown method: {method!r}")
         response = self._client.post(
@@ -121,11 +128,11 @@ def _bind(method: str) -> Callable[..., dict]:
 
     call.__name__ = method.replace("/", "_")
     call.__qualname__ = f"AgentClient.{call.__name__}"
-    call.__doc__ = f"Вызвать {method}. Аргументы передаются движку без правок."
+    call.__doc__ = f"Call {method}. Arguments are passed to the engine unchanged."
     return call
 
 
-# По методу на каждый метод поверхности. Расхождение ловит тест.
+# One per surface method. A mismatch is caught by a test.
 def _install_bindings() -> None:
     for method in METHOD_NAMES:
         setattr(AgentClient, method.replace("/", "_"), _bind(method))
@@ -135,10 +142,10 @@ _install_bindings()
 
 
 def bound_method_names() -> list[str]:
-    """Имена, под которыми методы доступны в клиенте, в порядке перечня."""
+    """The names under which methods are available on the client, in list order."""
     return [method.replace("/", "_") for method in METHOD_NAMES]
 
 
 def as_params(**kwargs: Any) -> dict:
-    """Мелкая удобность: собрать параметры из именованных аргументов."""
+    """A small convenience: assemble parameters from keyword arguments."""
     return dict(kwargs)

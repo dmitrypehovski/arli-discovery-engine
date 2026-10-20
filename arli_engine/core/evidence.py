@@ -1,9 +1,9 @@
-"""Конверт доказательства.
+"""Evidence envelope.
 
-Каждый вывод стенда отдаётся конвертом: что именно наблюдалось, чем, с
-какой уверенностью, что осталось непроверенным и что выброшено фильтром.
-Отсутствие данных не трактуется как благополучие: разделы, закрытые
-политикой, перечисляются по именам с причиной и количеством.
+Every output of the harness is delivered as an envelope: what exactly was
+observed, by what, with what confidence, what was left unverified and what was
+dropped by a filter. Absence of data is not treated as good health: sections
+closed by policy are listed by name with their reason and count.
 """
 
 from __future__ import annotations
@@ -18,7 +18,8 @@ from arli_engine.core.canonical import canonical_json
 
 CONFIDENCE_LEVELS = ("observed", "derived", "declared", "unverified")
 
-# Как REA трактует владельца утверждения: внешний сервис, наш расчёт, заявление стороны.
+# How REA treats the owner of a claim: an external service, our own calculation,
+# a statement by a party.
 AUTHORITIES = ("external-service", "local-calculation", "self-declared")
 
 
@@ -28,7 +29,7 @@ def now_utc() -> str:
 
 @dataclass
 class Completeness:
-    """Учёт полноты: что показано, что выброшено и почему."""
+    """Completeness accounting: what is shown, what is dropped and why."""
 
     status: str = "complete_within_window"
     conditions: list[str] = field(default_factory=list)
@@ -70,8 +71,9 @@ class Evidence:
     completeness: Completeness = field(default_factory=Completeness)
     evidence_id: str = ""
     captured_at: str = ""
-    # Подпись ключом агента. В тело конверта не входит, поэтому идентификатор
-    # остаётся воспроизводимым, а подделка тела всё равно ломает проверку.
+    # Signature by the agent key. It is not part of the envelope body, so the
+    # identifier stays reproducible while tampering with the body still breaks
+    # verification.
     signature: dict | None = None
 
     def __post_init__(self) -> None:
@@ -107,7 +109,7 @@ class Evidence:
 
     @classmethod
     def from_json(cls, payload: dict) -> "Evidence":
-        """Собрать конверт из записи, чтобы перепроверить идентификатор с диска."""
+        """Rebuild an envelope from a record so the id can be rechecked from disk."""
         data = dict(payload)
         evidence_id = data.pop("evidence_id", "")
         completeness = Completeness(**data.pop("completeness", {"excluded": [], "dropped_events": {}}))
@@ -117,7 +119,7 @@ class Evidence:
         return json.dumps(self.to_json(), ensure_ascii=False, indent=indent, sort_keys=False)
 
     def verify_id(self) -> bool:
-        """Идентификатор обязан пересчитываться из тела конверта."""
+        """The id must recompute from the envelope body."""
         return self.evidence_id == "ev_" + hashlib.sha256(
             canonical_json(self._body()).encode("utf-8")
         ).hexdigest()

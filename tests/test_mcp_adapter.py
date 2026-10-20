@@ -1,9 +1,9 @@
-"""Привязка MCP: та же поверхность, тот же код отказа, другой транспорт.
+"""The MCP binding: the same surface, the same refusal code, a different transport.
 
-Проверяется главное свойство: привязка не своя поверхность, а способ дотянуться до
-общей. Список инструментов совпадает с перечнем методов один к одному, результат
-инструмента совпадает с результатом прямого вызова метода, а причина отказа приходит
-кодом движка, а не словом «ошибка».
+We check the key property: the binding is not its own surface but a way to reach the
+shared one. The tool list matches the method list one to one, a tool result matches the
+result of a direct method call, and a refusal reason arrives as the engine's code, not the
+word "error".
 """
 
 from __future__ import annotations
@@ -129,7 +129,7 @@ def test_missing_required_field_is_reported_before_the_engine_is_touched():
     server = McpServer(_state())
     response = _call(server, "arli_registry_check", {})
     assert response["result"]["isError"] is True
-    assert "missing required fields" in response["result"]["content"][0]["text"]
+    assert "missing_field" in response["result"]["content"][0]["text"]
     assert "kid" in response["result"]["content"][0]["text"]
 
 

@@ -1,11 +1,11 @@
-"""Замер двух схем пересечения: задача 1.5 плана, шаг 1.
+"""Benchmark of two intersection schemes: task 1.5 of the plan, step 1.
 
-Считаем время работы каждой стороны и объём обмена для двух схем:
-- пересечение по хешам (то, что в движке сейчас): n отпечатков по 32 байта;
-- закрытое пересечение на слепом подписывании RSA: 3n значений по 257 байт.
+We measure the running time of each side and the exchange size for two schemes:
+- hash intersection (what the engine uses now): n commitments of 32 bytes each;
+- closed intersection on blind RSA signing: 3n values of 257 bytes each.
 
-Запуск: `.venv/bin/python tools/bench_psi.py`
-Ничего не меняет: только считает и печатает.
+Run: `.venv/bin/python tools/bench_psi.py`
+It changes nothing: it only computes and prints.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from arli_engine.core.psi import blind, generate_keys, own_signed_tokens, sign, 
 
 SIZES = (10, 100, 1000)
 REPEATS = 5
-MODULUS_BYTES = 257  # 2048-битный модуль плюс байт на знак
+MODULUS_BYTES = 257  # a 2048-bit modulus plus a byte for the sign
 DIGEST_BYTES = 32
 
 
@@ -32,7 +32,7 @@ def features(count: int, prefix: str) -> list[str]:
 
 
 def bench_hashes(n: int) -> dict:
-    """Пересечение по хешам: сколько считает каждая сторона и сколько уходит в провод."""
+    """Hash intersection: how much each side computes and how much goes onto the wire."""
     key = "33" * 32
     session = "s-bench"
     pair = pair_label("agent-a", "agent-b")
@@ -58,7 +58,7 @@ def bench_hashes(n: int) -> dict:
 
 
 def bench_psi(n: int) -> dict:
-    """Закрытое пересечение: те же поля, но с экспоненцированием на каждой стороне."""
+    """Closed intersection: the same fields, but with exponentiation on each side."""
     keys = generate_keys()
     unrelated = features(n, "aside")
     holder_view = unrelated[: n // 2] + features(n - n // 2, "shared")
@@ -88,8 +88,8 @@ def bench_psi(n: int) -> dict:
 
 def main() -> int:
     rows = []
-    print("признаков |           схема | сторона A, мс | сторона B, мс | провод, байт")
-    print("----------|-----------------|---------------|---------------|-------------")
+    print("features |            scheme | side A, ms | side B, ms | wire, bytes")
+    print("---------|-------------------|------------|------------|-------------")
     for n in SIZES:
         for bench in (bench_hashes, bench_psi):
             row = bench(n)
@@ -104,9 +104,9 @@ def main() -> int:
     (out / "bench_intersection.json").write_text(
         json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8"
     )
-    print(f"\nзаписан замер: {out / 'bench_intersection.json'}")
-    print("оговорка: экспоненцирование делает C-реализация больших чисел Python,")
-    print("поэтому это оценка для схемы на больших числах, не для кривой через OpenSSL.")
+    print(f"\nbenchmark written: {out / 'bench_intersection.json'}")
+    print("caveat: the exponentiation is done by Python's C implementation of big numbers,")
+    print("so this is an estimate for a big-number scheme, not for a curve through OpenSSL.")
     return 0
 
 

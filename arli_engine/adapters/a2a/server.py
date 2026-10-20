@@ -1,12 +1,13 @@
-"""HTTP-поверхность агента: карточка, возможности, матчинг, переговоры.
+"""The agent's HTTP surface: card, capabilities, matching, negotiation.
 
-Сервер держит только своё состояние. Наружу отдаёт карточку по стандартному
-адресу A2A, отдельный документ возможностей и JSON-RPC для остального.
+The server holds only its own state. Outward it serves the card at the standard A2A
+address, a separate capability document and JSON-RPC for the rest.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import threading
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -40,7 +41,7 @@ from arli_engine.core.claims import (
     FeatureClaim,
 )
 from arli_engine.core.registry import Registry
-from arli_engine.core.surface import METHOD_NAMES
+from arli_engine.core.surface import CALL_REJECTIONS, METHOD_NAMES
 from arli_engine.core.retention import Retention
 from arli_engine.core.negotiate import (
     IntentStanding,
@@ -63,11 +64,11 @@ RPC_PATH = "/a2a/rpc"
 
 @dataclass
 class AgentState:
-    """Всё, чем агент владеет на этом стенде.
+    """Everything the agent owns on this harness.
 
-    Журнал переговоров может быть общим для двух сторон: по нашему замыслу
-    протокол и есть сервер для этого журнала. Если общее хранилище не
-    передано, агент держит свой журнал сам.
+    The negotiation log can be shared between two parties: by our design the protocol
+    itself is the server for that log. If no shared storage is passed in, the agent
+    keeps its own log.
     """
 
     name: str
@@ -78,22 +79,22 @@ class AgentState:
     negotiations: dict[str, Negotiation] = field(default_factory=dict)
     opportunities: dict[str, Opportunity] = field(default_factory=dict)
     seen_commitments: dict[str, list[str]] = field(default_factory=dict)
-    # Ключ пары выводится согласованием, поэтому агенту нужен свой закрытый ключ
-    # и открытый ключ противной стороны. По проводу ключ пары не ходит.
+    # The pair key is derived through agreement, so the agent needs its own private
+    # key and the peer's public key. The pair key never travels over the wire.
     private_pem: bytes | None = None
     kid: str = ""
     peer_keys: dict[str, bytes] = field(default_factory=dict)
-    # Состояние закрытого пересечения: ключи держателя по сессиям, ослепления
-    # заявителя и записанные результаты. Большие числа по проводу идут шестнадцатеричными
-    # строками, иначе клиенты на других языках потеряют точность.
+    # Closed-intersection state: the holder's keys per session, the applicant's
+    # blindings and the recorded results. Big numbers travel as hex strings, otherwise
+    # clients in other languages would lose precision.
     psi_keys: dict[str, Keys] = field(default_factory=dict)
     psi_blinds: dict[str, tuple[list[str], list[int]]] = field(default_factory=dict)
     psi_results: dict[str, list[str]] = field(default_factory=dict)
-    # Реестр ключей и хранение: ротация отдельно от отзыва личности, пометка удаления
-    # отдельно от физической чистки.
+    # Key registry and retention: rotation separate from principal revocation,
+    # deletion marking separate from physical purge.
     registry: Registry = field(default_factory=Registry)
     retention: Retention = field(default_factory=Retention)
-    # Утверждения о признаках: выдающие, их ключи и объявленные утверждения.
+    # Feature claims: issuers, their keys and declared claims.
     claims: ClaimRegistry = field(default_factory=ClaimRegistry)
     declared_claims: dict[str, FeatureClaim] = field(default_factory=dict)
 
@@ -108,7 +109,7 @@ def _rpc_err(req_id, code, message) -> dict:
 
 def _methods(state: AgentState) -> dict:
     def _pair_key(params: dict) -> tuple[str, str, str]:
-        """Вывести ключ пары для сессии из запроса. Наружу ключ не уходит."""
+        """Derive the pair key for the session from the request. The key does not leave."""
         if state.private_pem is None:
             raise ValueError("this agent has no private key: pair key cannot be derived")
         peer_name = params.get("peer_name")
@@ -117,7 +118,9 @@ def _methods(state: AgentState) -> dict:
             raise ValueError("peer_name and session_id are required")
         peer_public = state.peer_keys.get(peer_name)
         if peer_public is None:
-            raise ValueError(f"no public key known for {peer_name!r}")
+            # A refusal with a code from the matching list, not a bare message: the caller has
+            # to tell "you have no key for that side" from "the engine broke".
+            raise MatchRejected("missing_peer_key", f"no public key known for {peer_name!r}")
         return (
             derive_pair_key(
                 state.private_pem,
@@ -131,7 +134,7 @@ def _methods(state: AgentState) -> dict:
         )
 
     def _signed(envelope: dict) -> dict:
-        """Подписать конверт доказательства ключом агента, если ключ есть."""
+        """Sign the evidence envelope with the agent key, if there is one."""
         if state.private_pem is None or not state.kid:
             return envelope
         return sign_envelope(envelope, state.private_pem, state.kid)
@@ -179,7 +182,7 @@ def _methods(state: AgentState) -> dict:
         return result
 
     def psi_holder_keys(params: dict) -> dict:
-        """Держатель публикует открытую часть ключа для этой сессии."""
+        """The holder publishes the public part of the key for this session."""
         session_id = params.get("session_id")
         if not session_id:
             raise MatchRejected("missing_pair_key", "session_id is required")
@@ -198,7 +201,7 @@ def _methods(state: AgentState) -> dict:
         }
 
     def psi_commit(params: dict) -> dict:
-        """Заявитель ослепляет свои признаки и отправляет держателю только их."""
+        """The applicant blinds its features and sends the holder only those."""
         session_id = params.get("session_id")
         peer_name = params.get("peer_name")
         if not session_id or not peer_name:
@@ -220,7 +223,7 @@ def _methods(state: AgentState) -> dict:
         }
 
     def psi_sign(params: dict) -> dict:
-        """Держатель подписывает присланное и отдаёт подписи над своими признаками."""
+        """The holder signs what was sent and hands out signatures over its own features."""
         session_id = params.get("session_id")
         blinded = params.get("blinded")
         if not session_id or not blinded:
@@ -242,15 +245,15 @@ def _methods(state: AgentState) -> dict:
         }
 
     def psi_finish(params: dict) -> dict:
-        """Заявитель снимает ослепление и получает только совпадения по своим признакам."""
+        """The applicant unblinds and obtains only the matches among its own features."""
         session_id = params.get("session_id")
         if not session_id or session_id not in state.psi_blinds:
             raise MatchRejected("missing_pair_key", "no pending blinding for this session")
         if not params.get("signed") or params.get("holder_tokens") is None:
             raise MatchRejected("missing_peer_key", "signed and holder_tokens are required")
         if params.get("floor_basis_points") is None:
-            # Порог обязан быть объявлен вызывающим: без него нечем отличить
-            # хорошее совпадение от заполненного места.
+            # The floor must be declared by the caller: without it there is nothing
+            # to tell a good match from a filler.
             raise MatchRejected("missing_floor", "floor_basis_points is required")
         own, factors = state.psi_blinds[session_id]
         signed = [int(v, 16) for v in params["signed"]]
@@ -278,7 +281,7 @@ def _methods(state: AgentState) -> dict:
         return result
 
     def psi_record(params: dict) -> dict:
-        """Держатель записывает совпадения, найденные заявителем, и отдаёт свой конверт."""
+        """The holder records the matches the applicant found and hands out its envelope."""
         session_id = params.get("session_id")
         matched = params.get("matched")
         if not session_id or matched is None:
@@ -298,7 +301,7 @@ def _methods(state: AgentState) -> dict:
         return result
 
     def _evidence(operation: str, parameters: dict, result: dict, *, provider: str) -> dict:
-        """Конверт для операций реестра и хранения: они тоже утверждения о мире."""
+        """An envelope for registry and retention operations: they are claims about the world too."""
         envelope = Evidence(
             provider={"id": f"arli-{provider}", "name": f"ARLI {provider}", "version": "1"},
             operation=operation,
@@ -358,8 +361,9 @@ def _methods(state: AgentState) -> dict:
             issuer_evidence=params.get("issuer_evidence"),
             state=str(params.get("state", "active")),
         )
-        # Отказ по утверждению возвращается кодом, а не ошибкой: вызывающему нужна причина,
-        # а не «внутренняя ошибка», иначе он не отличит плохое утверждение от сбоя движка.
+        # A claim rejection is returned as a code, not an error: the caller needs a
+        # reason, not an "internal error", otherwise it cannot tell a bad claim from
+        # an engine failure.
         from arli_engine.core.claims import ClaimRejected
 
         try:
@@ -491,19 +495,20 @@ def _methods(state: AgentState) -> dict:
         if state.name not in peers:
             raise ValueError("an agent may only hold its own seat in a negotiation")
         other = [p for p in peers if p != state.name][0]
-        # Порядок сторон задаёт инициатора: первый ход всегда у peers[0],
-        # поэтому журналы обеих сторон совпадают.
+        # The order of the parties sets the initiator: the first turn is always
+        # peers[0], so the logs of both sides match.
         seats = (peers[0], peers[1])
 
-        # Годность пары проверяется до открытия и до первого хода. Отказ здесь
-        # не молчит: он возвращается кодом из закрытого перечня и с конвертом,
-        # поэтому у стороны остаётся след, почему пара не открыта.
+        # Pair eligibility is checked before opening and before the first turn. A
+        # refusal here does not stay silent: it is returned as a code from the closed
+        # list together with an envelope, so the side keeps a trace of why the pair
+        # was not opened.
         network = params.get("network")
         intents = params.get("intents") or []
         if network is not None and len(intents) == 2:
-            # Намерения приходят по порядку сторон: первое относится к peers[0].
-            # Владелец намерения и место в переговорах это разные понятия, поэтому
-            # совпадение владельцев выразимо и обязано отклоняться как same_owner.
+            # Intents arrive in the order of the parties: the first belongs to peers[0].
+            # The owner of an intent and a seat in a negotiation are different notions,
+            # so equal owners are expressible and must be rejected as same_owner.
             a, b = [
                 IntentStanding(
                     intent_id=item["intent_id"],
@@ -516,8 +521,8 @@ def _methods(state: AgentState) -> dict:
                 )
                 for item in intents
             ]
-            # Сеть объявляет, допускает ли она синтетические намерения. По умолчанию
-            # сеть человеческая: синтетическое намерение в неё не входит.
+            # The network declares whether it admits synthetic intents. By default the
+            # network is human-facing: a synthetic intent does not enter it.
             code = decide_opening(
                 a, b, network,
                 admits_synthetic=bool(params.get("admits_synthetic", False)),
@@ -565,8 +570,8 @@ def _methods(state: AgentState) -> dict:
         if negotiation_id not in state.negotiations:
             raise KeyError(f"unknown negotiation: {negotiation_id}")
         seat = params.get("seat")
-        # Агент действует только за своё место: попытка сыграть чужое отклоняется
-        # кодом из закрытого перечня, а не свободным текстом.
+        # The agent acts only for its own seat: an attempt to play another's is
+        # rejected with a code from the closed list, not free text.
         if not isinstance(seat, str) or seat != state.name:
             raise NegotiationRejected(
                 "not_a_seat", f"this agent holds seat {state.name}, not {seat!r}"
@@ -621,7 +626,7 @@ def _methods(state: AgentState) -> dict:
 
 def make_handler(state: AgentState):
     methods = _methods(state)
-    # Поверхность одна на все привязки: расхождение с общим перечнем ломает старт.
+    # One surface for every binding: a mismatch with the shared list breaks startup.
     missing = [m for m in METHOD_NAMES if m not in methods]
     extra = [m for m in methods if m not in METHOD_NAMES]
     if missing or extra:
@@ -630,7 +635,7 @@ def make_handler(state: AgentState):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
-        def log_message(self, *args, **kwargs):  # тишина в тестах
+        def log_message(self, *args, **kwargs):  # silence in tests
             return
 
         def _send(self, code: int, payload: dict) -> None:
@@ -670,8 +675,21 @@ def make_handler(state: AgentState):
                 self._send(200, _rpc_ok(req_id, handler(request.get("params") or {})))
             except NegotiationError as exc:
                 self._send(200, _rpc_err(req_id, -32001, f"grammar: {exc}"))
+            except MatchRejected as exc:
+                # A matching refusal carries its own code; it is not an internal failure.
+                self._send(200, _rpc_err(req_id, -32002, f"{exc.code}: {exc.detail}"))
             except (ValueError, KeyError) as exc:
-                self._send(200, _rpc_err(req_id, -32602, str(exc)))
+                message = str(exc)
+                # A missing field is a refusal about the call, and it must carry a code like any
+                # other refusal: a caller has to tell it apart from a failure of the engine.
+                already_coded = any(code in message for code in CALL_REJECTIONS)
+                if not already_coded and (
+                    re.search(r"\b(is|are) required\b", message) or "missing required" in message
+                ):
+                    message = f"missing_field: {message}"
+                elif isinstance(exc, KeyError):
+                    message = f"missing_field: unknown key {message}"
+                self._send(200, _rpc_err(req_id, -32602, message))
             except Exception as exc:  # noqa: BLE001
                 self._send(200, _rpc_err(req_id, -32603, f"internal: {exc}"))
 
@@ -679,7 +697,7 @@ def make_handler(state: AgentState):
 
 
 def start_agent(state: AgentState, port: int) -> tuple[ThreadingHTTPServer, threading.Thread]:
-    """Поднять агента в фоне, вернуть сервер и поток."""
+    """Start the agent in the background, returning the server and the thread."""
     server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(state))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

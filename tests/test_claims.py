@@ -1,8 +1,9 @@
-"""Уровни доверия: утверждение без основания не принимается, а слабое не выдаётся за сильное.
+"""Trust levels: a claim without a basis is not accepted, and a weak one is not passed off as strong.
 
-Главное здесь: движок проводит чужое утверждение и проверяет подпись выдающего. Кому выдавать
-подтверждения, решает юрист, и в коде этого нет. Поэтому тесты проверяют механику: подпись,
-срок, состояние, и то, что уровень нельзя поднять без конверта выдающего.
+The main point here: the engine relays someone else's claim and verifies the issuer's
+signature. Who is allowed to issue attestations is a question for a lawyer, and it is not
+in the code. So the tests check the mechanics: signature, expiry, state, and the fact that
+a level cannot be raised without the issuer's envelope.
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from arli_engine.core.signing import KeyPair
 
 
 def _issued_envelope(issuer_key: KeyPair, *, feature: str = "skill:design", when=None) -> dict:
-    """Собственный конверт выдающего: кто, когда, что проверено."""
+    """The issuer's own envelope: who, when, what was checked."""
     body = {
         "provider": {"id": "checking-body", "name": "Checking body", "version": "1"},
         "operation": "feature_check",
@@ -54,7 +55,7 @@ def test_a_declared_claim_needs_no_issuer_and_verifies():
     claim = FeatureClaim(feature="skill:design", checked_at=now_utc())
     ok, reasons = registry.verify_issuer_envelope(claim)
     assert ok is True and reasons == []
-    claim.validate()  # самозахваченный уровень не требует выдающего
+    claim.validate()  # a self-asserted level does not require an issuer
 
 
 def test_a_claim_above_declared_requires_an_issuer_and_its_envelope():

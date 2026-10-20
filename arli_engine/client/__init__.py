@@ -1,4 +1,4 @@
-"""Обёртка для внешних клиентов на Python: тот же слой, четвёртый способ дотянуться."""
+"""Wrapper for external Python clients: the same layer, a fourth way to reach it."""
 
 from arli_engine.client.agent import (
     AgentClient,

@@ -1,9 +1,9 @@
-"""Подпись карточки агента по JWS (RFC 7515, alg ES256).
+"""Signing of an agent card with JWS (RFC 7515, alg ES256).
 
-Подпись отвечает ровно на один вопрос: карточка не подменена и пришла от
-того, за кого себя выдаёт ключ. Она НЕ подтверждает, что за агентом стоит
-живой уникальный человек. Эта граница записана в LIMITATIONS и попадает
-в каждый конверт доказательства.
+A signature answers exactly one question: the card was not swapped out and it
+came from whoever the key claims to be. It does NOT confirm that a live unique
+human stands behind the agent. This boundary is recorded in LIMITATIONS and goes
+into every evidence envelope.
 """
 
 from __future__ import annotations
@@ -64,13 +64,13 @@ class KeyPair:
 
 
 def signing_payload(card: dict) -> bytes:
-    """Канонический вид карточки без поля подписей."""
+    """The canonical form of the card without the signatures field."""
     body = {k: v for k, v in card.items() if k != SIGNATURE_EXCLUDED_FIELD}
     return canonicalize(body)
 
 
 def public_jwk(public_pem: bytes, kid: str = "") -> dict:
-    """Открытый ключ в виде JWK, чтобы карточку можно было проверить без внешнего канала."""
+    """The public key as a JWK, so the card can be verified without an out-of-band channel."""
     key = serialization.load_pem_public_key(public_pem)
     if not isinstance(key, ec.EllipticCurvePublicKey):
         raise ValueError("public key must be an elliptic curve key for ES256")
@@ -97,10 +97,11 @@ def jwk_to_public_key(jwk: dict) -> ec.EllipticCurvePublicKey:
 
 
 def sign_card(card: dict, private_pem: bytes, kid: str) -> dict:
-    """Вернуть копию карточки с добавленной подписью JWS.
+    """Return a copy of the card with a JWS signature added.
 
-    Открытый ключ кладётся в защищённый заголовок (параметр jwk, RFC 7515 §4.1.3),
-    поэтому чужая сторона может проверить карточку, не получая ключ отдельно.
+    The public key is placed in the protected header (the jwk parameter, RFC
+    7515 section 4.1.3), so another party can verify the card without receiving
+    the key separately.
     """
     key = serialization.load_pem_private_key(private_pem, password=None)
     if not isinstance(key, ec.EllipticCurvePrivateKey):
@@ -136,10 +137,11 @@ def _verify_with_key(card: dict, key: ec.EllipticCurvePublicKey, protected: str,
 
 
 def verify_card_self(card: dict) -> tuple[bool, list[str]]:
-    """Проверить карточку по ключу из её же заголовка.
+    """Verify the card with the key from its own header.
 
-    Это то, что может сделать любая чужая сторона: ключ приходит вместе с карточкой.
-    Проверка по заранее известному ключу остаётся отдельной функцией verify_card.
+    This is what any other party can do: the key arrives together with the card.
+    Verification against a key known in advance stays in the separate function
+    verify_card.
     """
     signatures = card.get(SIGNATURE_EXCLUDED_FIELD) or []
     if not signatures:
@@ -165,7 +167,7 @@ def verify_card_self(card: dict) -> tuple[bool, list[str]]:
 
 
 def verify_card(card: dict, public_pem: bytes) -> tuple[bool, list[str]]:
-    """Проверить подпись. Возвращает (результат, причины отказа)."""
+    """Verify the signature. Returns (result, reasons for refusal)."""
     signatures = card.get(SIGNATURE_EXCLUDED_FIELD) or []
     if not signatures:
         return False, ["card carries no signature"]

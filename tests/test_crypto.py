@@ -1,7 +1,7 @@
-"""Согласование ключа пары, привязка отпечатка и подпись конверта.
+"""Pair key agreement, commitment binding and envelope signature.
 
-Каждая проверка здесь соответствует угрозе из раздела 3 плана: T2 (третья
-сторона), T12 (повтор в другой сессии), T6 (подмена конверта).
+Each check here corresponds to a threat from section 3 of the plan: T2 (a third party),
+T12 (replay in another session), T6 (envelope tampering).
 """
 
 from __future__ import annotations
@@ -41,8 +41,8 @@ def test_pair_key_is_derived_identically_by_both_sides_and_differs_for_a_third()
                              agent_a="agent-b", agent_b="agent-a")
     k_ac = derive_pair_key(a.private_pem, c.public_pem, session_id="s1",
                            agent_a="agent-a", agent_b="agent-c")
-    assert k_ab_a == k_ab_b, "стороны обязаны прийти к одному ключу"
-    assert k_ab_a != k_ac, "третья сторона обязана получить другой ключ"
+    assert k_ab_a == k_ab_b, "the sides must arrive at one key"
+    assert k_ab_a != k_ac, "a third party must get a different key"
     assert len(k_ab_a) == 64
 
 
@@ -52,7 +52,7 @@ def test_pair_key_changes_with_the_session():
                             agent_a="agent-a", agent_b="agent-b")
     second = derive_pair_key(a.private_pem, b.public_pem, session_id="s2",
                              agent_a="agent-a", agent_b="agent-b")
-    assert first != second, "ключ обязан зависеть от сессии, иначе повтор возможен"
+    assert first != second, "the key must depend on the session, otherwise a replay is possible"
 
 
 def test_pair_key_requires_a_session_and_two_agents():
@@ -100,7 +100,7 @@ def test_envelope_signature_verifies_and_tampering_is_caught():
 
 
 def test_signature_does_not_change_the_evidence_id():
-    """Подпись живёт рядом с телом, поэтому идентификатор остаётся воспроизводимым."""
+    """The signature lives next to the body, so the identifier stays reproducible."""
     a = KeyPair.generate()
     unsigned = _envelope()
     signed = sign_envelope(unsigned, a.private_pem, "agent-a-key-1")

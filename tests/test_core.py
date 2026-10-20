@@ -7,7 +7,7 @@ from arli_engine.core.match import FeatureSet, local_match
 from arli_engine.core.signing import KeyPair, sign_card, verify_card
 
 
-# --- каноникализация ---
+# --- canonicalization ---
 
 def test_canonical_is_deterministic_and_sorted():
     a = canonical_json({"b": 1, "a": [2, 3], "c": {"z": True, "y": None}})
@@ -21,7 +21,7 @@ def test_canonical_rejects_floats():
         canonicalize({"overlap": 0.5})
 
 
-# --- подпись карточки ---
+# --- card signature ---
 
 def _card(**overrides):
     card = {"name": "x", "description": "d", "version": "0.1.0", "signatures": []}
@@ -50,13 +50,13 @@ def test_unsinged_card_and_wrong_key_fail():
     assert not ok and reasons
 
 
-# --- возможности ---
+# --- capabilities ---
 
 def test_effects_fail_closed_for_undeclared_keys():
     op = Operation(name="a", description="d", effects={"may_access_network": False})
     declared = op.declared_effects()
     assert declared["may_access_network"] is False
-    assert declared["requires_root"] is True  # необъявленное считается возможным
+    assert declared["requires_root"] is True  # an undeclared effect is assumed possible
     assert set(declared) == set(EFFECT_KEYS)
     assert op.to_json()["declared_effect_keys"] == ["may_access_network"]
 
@@ -77,7 +77,7 @@ def test_effects_reject_unknown_key_and_require_reason():
     assert manifest["open"] is True and manifest["fail_closed"] is True
 
 
-# --- доказательство ---
+# --- evidence ---
 
 def test_evidence_id_recomputes_and_completeness_records_exclusions():
     env = Evidence(
@@ -107,10 +107,10 @@ def test_evidence_rejects_unknown_levels():
                  confidence="observed", authority="trust-me")
 
 
-# --- локальный матчинг ---
+# --- local matching ---
 
 PAIR = "agent-a|agent-b"
-PAIR_KEY = "11" * 32  # детерминированный ключ пары для тестов ядра
+PAIR_KEY = "11" * 32  # a deterministic pair key for core tests
 
 
 def _match(own_features, foreign_features, key=PAIR_KEY, session_id="s1"):
@@ -136,7 +136,7 @@ def test_local_match_finds_overlap_and_hides_own_unmatched_features():
     assert outcome.matched_features == ["city:sf", "skill:design"]
     assert outcome.overlap_basis_points == 6667
     assert set(outcome.matched_features).issubset(set(own))
-    # признаков противной стороны в результате нет, кроме тех, что есть у нас
+    # there are no other-side features in the result, except those we also hold
     assert not set(outcome.matched_features) - set(own)
     assert outcome.evidence.verify_id()
     assert outcome.evidence.completeness.status == "policy_filtered"
@@ -149,10 +149,10 @@ def test_local_match_no_overlap_returns_zero():
 
 
 def test_commitments_are_bound_to_the_session_and_the_pair():
-    """Смена сессии разводит отпечатки, а одна сессия их сводит.
+    """A change of session splits commitments, while one session draws them together.
 
-    Первое закрывает повтор в другой сессии, второе обязательно: если метка пары
-    или сессия не совпадут у сторон, сопоставление не сработает вовсе.
+    The first closes a replay in another session, the second is mandatory: if the pair
+    label or the session do not match between the sides, matching will not work at all.
     """
     own = FeatureSet(["a", "b"])
     other = FeatureSet(["a", "b"])
@@ -165,23 +165,23 @@ def test_commitments_are_bound_to_the_session_and_the_pair():
     assert not other_session & other_pair
 
 
-# --- переговоры и согласие ---
+# --- negotiation and consent ---
 
 def test_grammar_enforced():
     from arli_engine.core.negotiate import Negotiation, NegotiationError
 
     neg = Negotiation(seats=("a", "b"))
     with pytest.raises(NegotiationError):
-        neg.turn("b", "propose", "")  # первый ход у инициатора
+        neg.turn("b", "propose", "")  # the first turn belongs to the initiator
     with pytest.raises(NegotiationError):
-        neg.turn("a", "counter", "")  # counter не может быть первым
+        neg.turn("a", "counter", "")  # counter cannot be first
 
     first = neg.turn("a", "propose", "hi")
     assert first["outcome"] is None
-    accepted = neg.turn("b", "accept", "ok")  # accept сразу после propose противной стороны
+    accepted = neg.turn("b", "accept", "ok")  # accept right after the other side's propose
     assert accepted["outcome"] == "agreed"
     with pytest.raises(NegotiationError):
-        neg.turn("a", "decline", "")  # переговоры уже закрыты
+        neg.turn("a", "decline", "")  # the negotiation is already closed
 
 
 def test_counter_cannot_be_accepted_and_proposal_blocks_proposal():
@@ -190,10 +190,10 @@ def test_counter_cannot_be_accepted_and_proposal_blocks_proposal():
     neg = Negotiation(seats=("a", "b"))
     neg.turn("a", "propose", "one")
     with pytest.raises(NegotiationError):
-        neg.turn("b", "propose", "two")  # предложение поверх стоящего предложения запрещено
+        neg.turn("b", "propose", "two")  # a proposal over a standing proposal is forbidden
     neg.turn("b", "counter", "why?")
     with pytest.raises(NegotiationError):
-        neg.turn("a", "accept", "")  # counter нельзя принять
+        neg.turn("a", "accept", "")  # counter cannot be accepted
     neg.turn("a", "propose", "because")
     assert neg.turn("b", "accept", "ok")["outcome"] == "agreed"
 
@@ -207,7 +207,7 @@ def test_turn_limit_leaves_negotiation_undecided():
         action = "propose" if i % 2 == 0 else "counter"
         neg.turn(seat, action, f"t{i}")
     assert len(neg.turns) == MAX_TURNS
-    assert neg.outcome is None  # предел это не отказ
+    assert neg.outcome is None  # the limit is not a refusal
     with pytest.raises(NegotiationError):
         neg.turn("a", "propose", "more")
 
@@ -218,14 +218,14 @@ def test_consent_is_separate_from_agreement():
     neg = Negotiation(seats=("a", "b"))
     opportunity = Opportunity(actors=("a", "b"), negotiation=neg)
     with pytest.raises(NegotiationError):
-        opportunity.decide("a", True)  # люди решают только после согласия агентов
+        opportunity.decide("a", True)  # people decide only after the agents agree
 
     neg.turn("a", "propose", "x")
     neg.turn("b", "accept", "y")
     assert opportunity.status == "pending"
     assert opportunity.decide("a", True) == "pending"
     with pytest.raises(NegotiationError):
-        opportunity.decide("a", True)  # повторное решение
+        opportunity.decide("a", True)  # a repeated decision
     assert opportunity.decide("b", True) == "accepted"
 
 

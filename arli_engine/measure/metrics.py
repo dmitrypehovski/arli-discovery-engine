@@ -1,20 +1,20 @@
-"""Измеритель: числа из конвертов, а не из счётчика, который можно поправить руками.
+"""The measurer: numbers from envelopes, not from a counter that can be edited by hand.
 
-Зачем это отдельным слоем. Обещание «у каждого вывода есть проверяемое доказательство» можно
-подтвердить только по конвертам. Счётчик, который растёт при каждом выводе, ничего не
-подтверждает: он подтверждает, что кто-то вызвал метод.
+Why this is a separate layer. The promise "every conclusion has verifiable evidence" can
+only be confirmed from envelopes. A counter that increments on every conclusion confirms
+nothing: it confirms that someone called a method.
 
-Два правила, из которых здесь всё вытекает.
+Two rules from which everything here follows.
 
-Первое: конверт без верной подписи доказательством не считается. Иначе покрытие
-доказательствами измеряло бы наличие поля, а не проверяемость.
+First: an envelope without a valid signature does not count as evidence. Otherwise
+evidence coverage would measure the presence of a field, not verifiability.
 
-Второе: неизмеренная величина сообщается как неизмеренная, с причиной. Ноль вместо
-«не знаем» это худший вид вранья, потому что выглядит как результат. Поэтому у каждой
-величины есть состояние: измерено или нет, и во втором случае причина.
+Second: an unmeasured quantity is reported as unmeasured, with a reason. Zero instead
+of "we don't know" is the worst kind of lie, because it looks like a result. So every
+quantity has a state: measured or not, and in the latter case a reason.
 
-Третье, отдельно: числа пилота берутся только с согласившихся людей. Этот слой считает числа
-из того, что ему дали. Он не заменяет пилот, он его инструмент.
+Third, separately: pilot numbers are taken only from people who consented. This layer
+counts numbers from what it is given. It does not replace the pilot, it is its tool.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ MEASURE_REJECTIONS = (
 
 
 class MeasureRejected(RuntimeError):
-    """Величину измерить нельзя. Код из закрытого перечня MEASURE_REJECTIONS."""
+    """A quantity cannot be measured. The code is from the closed list MEASURE_REJECTIONS."""
 
     def __init__(self, code: str, detail: str = "") -> None:
         if code not in MEASURE_REJECTIONS:
@@ -52,7 +52,7 @@ class MeasureRejected(RuntimeError):
         super().__init__(f"{code}: {detail}" if detail else code)
 
 
-# Все коды отказов движка: по ним считается полнота причин.
+# All engine refusal codes: reason completeness is counted over them.
 KNOWN_REFUSAL_CODES: tuple[str, ...] = (
     tuple(REJECTIONS)
     + tuple(OPENING_REJECTIONS)
@@ -92,10 +92,11 @@ def not_measured(name: str, *, basis: str, reason: str) -> Metric:
 
 
 def envelope_is_evidence(envelope: dict, public_pem: bytes | None) -> bool:
-    """Доказательство это конверт с пересчитываемым идентификатором и верной подписью.
+    """Evidence is an envelope with a recomputable id and a valid signature.
 
-    Подпись проверяется открытым ключом того, кто конверт выдал. Если ключа нет, конверт
-    доказательством не считается: подпись без ключа это украшение, а не проверка.
+    The signature is verified with the public key of whoever issued the envelope. If
+    there is no key, the envelope does not count as evidence: a signature without a key
+    is decoration, not verification.
     """
     if not isinstance(envelope, dict) or public_pem is None:
         return False
@@ -103,7 +104,7 @@ def envelope_is_evidence(envelope: dict, public_pem: bytes | None) -> bool:
         return False
     try:
         parsed = Evidence.from_json(envelope)
-    except Exception:  # noqa: BLE001 — чужой конверт может быть любой формы
+    except Exception:  # noqa: BLE001 — a foreign envelope can be of any shape
         return False
     if not parsed.verify_id():
         return False
@@ -111,15 +112,15 @@ def envelope_is_evidence(envelope: dict, public_pem: bytes | None) -> bool:
     return bool(verified)
 
 
-# --- величины ---
+# --- quantities ---
 
 def evidence_coverage(
     envelopes: Iterable[dict], public_keys: dict[str, bytes] | None = None
 ) -> Metric:
-    """Доля выводов и отказов, у которых есть проверяемый конверт.
+    """The share of conclusions and refusals that carry a verifiable envelope.
 
-    Ключи передаются словарём: имя выдающего к публичному ключу. Конверт от выдающего без
-    ключа считается непроверенным, и величина об этом честно сообщает в основании.
+    Keys are passed as a dict: issuer name to public key. An envelope from an issuer
+    without a key counts as unverified, and the quantity honestly says so in its basis.
     """
     items = list(envelopes)
     keys = public_keys or {}
@@ -135,7 +136,7 @@ def evidence_coverage(
 
 
 def refusal_code_completeness(refusals: Iterable[dict]) -> Metric:
-    """Доля отказов, у которых код из закрытого перечня, а не свободный текст."""
+    """The share of refusals that carry a code from a closed list, not free text."""
     items = list(refusals)
     basis = "refusals carrying a code from a closed list"
     if not items:
@@ -149,10 +150,10 @@ def refusal_code_completeness(refusals: Iterable[dict]) -> Metric:
 
 
 def closed_intents_share(intents: Iterable[dict]) -> Metric:
-    """Доля намерений, закрытых находкой: закрытые к поданным.
+    """The share of intents closed by a find: closed over submitted.
 
-    Сравнивать эту долю с чужой воронкой можно только на живых данных: синтетика для этого
-    не годится, и величина об этом говорит прямо.
+    This share can be compared with someone else's funnel only on live data: synthetic
+    data will not do, and the quantity says so plainly.
     """
     items = list(intents)
     basis = "intents closed by a find over intents submitted"
@@ -163,7 +164,7 @@ def closed_intents_share(intents: Iterable[dict]) -> Metric:
 
 
 def matches_above_floor(matches: Iterable[dict]) -> Metric:
-    """Доля находок, прошедших объявленный порог. Ниже порога находки не возвращаются."""
+    """The share of finds that passed the declared floor. Findings below the floor are not returned."""
     items = list(matches)
     basis = "finds that passed the declared floor over finds returned"
     if not items:
@@ -173,7 +174,7 @@ def matches_above_floor(matches: Iterable[dict]) -> Metric:
 
 
 def time_to_decision_median(decisions: Iterable[dict]) -> Metric:
-    """Медиана времени от находки до решения человека, в секундах."""
+    """The median time from find to the human decision, in seconds."""
     items = list(decisions)
     basis = "median seconds from find to the human decision"
     stamps = [item.get("seconds_to_decision") for item in items if isinstance(item, dict)]
@@ -186,7 +187,7 @@ def time_to_decision_median(decisions: Iterable[dict]) -> Metric:
 
 
 def false_positive_share(labels: Iterable[dict]) -> Metric:
-    """Доля находок, помеченных человеком как мусорные. Без пометок величина неизмерена."""
+    """The share of finds a person labelled junk. Without labels the quantity is unmeasured."""
     items = list(labels)
     basis = "finds labelled junk by the person over labelled finds"
     if not items:
@@ -200,7 +201,7 @@ def false_positive_share(labels: Iterable[dict]) -> Metric:
 
 
 def network_health(participants: Iterable[dict]) -> Metric:
-    """Доля участников с завершённым намерением на конец наблюдения."""
+    """The share of participants with a completed intent at the end of the observation."""
     items = list(participants)
     basis = "participants with a completed intent at the end of the observation"
     if not items:
@@ -209,10 +210,10 @@ def network_health(participants: Iterable[dict]) -> Metric:
     return measured("network_health", complete / len(items), unit="share", basis=basis)
 
 
-# --- сборка отчёта ---
+# --- report assembly ---
 
 def compute_all(record: dict[str, Any]) -> list[Metric]:
-    """Посчитать все величины из одной записи наблюдения."""
+    """Compute all quantities from a single observation record."""
     keys = {
         str(name): pem if isinstance(pem, bytes) else str(pem).encode()
         for name, pem in (record.get("public_keys") or {}).items()

@@ -1,16 +1,17 @@
-"""Привязка MCP: та же поверхность движка в виде инструментов для модели.
+"""MCP binding: the same engine surface as tools for a model.
 
-Зачем вторая привязка, если уже есть A2A. Мир разделён: агенты разговаривают по A2A,
-а среда выполнения модели зовёт инструменты по MCP. Клиент, умеющий только MCP, иначе
-не дотянется до движка вовсе, и мы теряем ровно тех, кто мог бы прийти первыми.
+Why a second binding when A2A already exists. The world is split: agents talk over
+A2A, while a model runtime calls tools over MCP. A client that speaks only MCP
+otherwise cannot reach the engine at all, and we lose exactly those who might have
+come first.
 
-Главное свойство, которое здесь защищается: поверхность одна. Привязка не добавляет
-и не прячет методов. Список инструментов выводится из общего перечня, и набор проверок
-сверяет, что списки обеих привязок совпадают.
+The key property protected here: one surface. The binding adds and hides no methods.
+The tool list is derived from the shared list, and the conformance suite checks that
+the lists of both bindings match.
 
-Отказы не подменяются: код причины, который движок вернул для метода, попадает в текст
-инструмента как есть. Иначе внешний клиент увидит «ошибку» вместо причины и не сможет
-отличить «нет совпадений» от «пол не объявлен».
+Refusals are not replaced: the reason code the engine returned for a method goes into
+the tool text as is. Otherwise an external client would see an "error" instead of a
+reason and could not tell "no matches" from "no floor declared".
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ import sys
 from typing import Callable
 
 from arli_engine.adapters.a2a.server import AgentState, _methods
+from arli_engine.core.match import MatchRejected
 from arli_engine.core.negotiate import NegotiationError
 from arli_engine.core.surface import (
     METHOD_NAMES,
@@ -31,7 +33,7 @@ from arli_engine.core.surface import (
 
 PROTOCOL_VERSION = "2024-11-05"
 
-# Методы, которые меняют состояние, помечаются честно: вызывающий должен видеть след.
+# Methods that change state are marked honestly: the caller must see the trace.
 _MUTATING_NOTE = "This call changes state on the agent."
 
 
@@ -47,7 +49,7 @@ def determine_description(method: str) -> str:
 
 
 def build_tools() -> list[dict]:
-    """Список инструментов. Ровно по одному на метод, без добавок и без пропусков."""
+    """The tool list. Exactly one per method, no additions and no omissions."""
     tools = []
     for method in METHOD_NAMES:
         required = required_fields(method)
@@ -78,20 +80,20 @@ def _error_text(message: str) -> dict:
 
 
 class McpServer:
-    """Сервер MCP поверх общего перечня методов. Транспорт не знает о движке ничего."""
+    """An MCP server over the shared method list. The transport knows nothing about the engine."""
 
     def __init__(self, state: AgentState, *, name: str | None = None, version: str = "1.0.0") -> None:
         self.state = state
         self.methods: dict[str, Callable[[dict], dict]] = _methods(state)
         self.name = name or f"{state.name}-mcp"
         self.version = version
-        # Привязка обязана совпадать с перечнем: расхождение это дефект, а не стиль.
+        # The binding must match the list: a mismatch is a defect, not a style.
         missing = [m for m in METHOD_NAMES if m not in self.methods]
         extra = [m for m in self.methods if m not in METHOD_NAMES]
         if missing or extra:
             raise RuntimeError(f"surface mismatch: missing={missing} extra={extra}")
 
-    # --- обработка сообщений ---
+    # --- message handling ---
     def handle(self, message: dict) -> dict | None:
         method = message.get("method")
         req_id = message.get("id")
@@ -149,21 +151,24 @@ class McpServer:
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
-                "result": _error_text(f"{name}: missing required fields {missing}"),
+                "result": _error_text(f"missing_field: {name} requires {missing}"),
             }
         try:
             result = self.methods[method](arguments)
         except NegotiationError as exc:
             return {"jsonrpc": "2.0", "id": req_id, "result": _error_text(f"grammar: {exc}")}
+        except MatchRejected as exc:
+            # A matching refusal carries its own code and is not an internal failure.
+            return {"jsonrpc": "2.0", "id": req_id, "result": _error_text(f"{exc.code}: {exc.detail}")}
         except (ValueError, KeyError) as exc:
             return {"jsonrpc": "2.0", "id": req_id, "result": _error_text(str(exc))}
         except Exception as exc:  # noqa: BLE001
             return {"jsonrpc": "2.0", "id": req_id, "result": _error_text(f"internal: {exc}")}
         return {"jsonrpc": "2.0", "id": req_id, "result": _text(result)}
 
-    # --- транспорт ---
+    # --- transport ---
     def serve_streams(self, stdin=None, stdout=None) -> None:
-        """Построчный JSON-RPC: так работает штатный потоковый транспорт MCP."""
+        """Line-delimited JSON-RPC: this is how the standard MCP streaming transport works."""
         stdin = stdin or sys.stdin
         stdout = stdout or sys.stdout
         for line in stdin:
@@ -188,12 +193,12 @@ class McpServer:
 
 
 def tool_result_payload(response: dict) -> dict:
-    """Развернуть содержимое ответа инструмента обратно в результат движка."""
+    """Unwrap the tool response content back into the engine result."""
     return json.loads(response["result"]["content"][0]["text"])
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Запуск привязки как отдельного процесса: python -m arli_engine.adapters.mcp.server."""
+    """Run the binding as a separate process: python -m arli_engine.adapters.mcp.server."""
     from arli_engine.adapters.a2a.cards import build_card
     from arli_engine.core.capability import EFFECT_KEYS, Operation
 

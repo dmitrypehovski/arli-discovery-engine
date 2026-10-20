@@ -1,16 +1,17 @@
-"""Реестр ключей: ротация и отзыв, причём отзыв личности отдельно от смены ключа.
+"""Key registry: rotation and revocation, with principal revocation separate from key change.
 
-Зачем это нужно ровно так, а не проще: у Index в коде поля отзыва нет вообще, а смена
-ключа у них просто делает карточку недействительной. Значит личность там не отзывается
-никогда, и после утечки поддельная карточка живёт со старым ключом до ручной чистки.
+Why it has to work exactly like this and not more simply: Index has no revocation
+field at all in the code, and rotating a key there just makes the card invalid. So a
+principal is never revoked there, and after a leak a forged card lives on with the old
+key until a manual cleanup.
 
-Здесь две разные записи:
+There are two separate records here:
 
-- запись ключа: когда заведён, когда действует, когда отозван и почему;
-- запись личности: отозвана ли она, когда и почему.
+- a key record: when it was created, when it is valid, when it was revoked and why;
+- a principal record: whether it was revoked, when and why.
 
-Отзыв личности закрывает дорогу новым ключам под тем же идентификатором до повторного
-подтверждения. Без этого отзыв был бы украшением.
+Principal revocation blocks new keys under the same identifier until a fresh
+confirmation. Without that, revocation would be decoration.
 """
 
 from __future__ import annotations
@@ -18,8 +19,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-# Причины отзыва ключа. Закрытый перечень: запись отзыва либо несёт один из этих
-# кодов, либо не создаётся вовсе.
+# Key revocation reasons. A closed list: a revocation record either carries one of
+# these codes or is not created at all.
 KEY_REVOCATION_REASONS = ("rotated", "compromised", "principal_request", "policy")
 
 REGISTRY_REJECTIONS = (
@@ -38,7 +39,7 @@ def now_utc() -> datetime:
 
 
 class RegistryRejected(RuntimeError):
-    """Операция реестра отклонена. Код из закрытого перечня REGISTRY_REJECTIONS."""
+    """A registry operation was rejected. The code is from the closed list REGISTRY_REJECTIONS."""
 
     def __init__(self, code: str, detail: str = "") -> None:
         if code not in REGISTRY_REJECTIONS:
@@ -73,7 +74,7 @@ class KeyRecord:
 
 @dataclass
 class PrincipalRevocation:
-    """Отзыв личности: отдельная запись, а не побочный эффект смены ключа."""
+    """Principal revocation: a separate record, not a side effect of a key change."""
 
     principal_id: str
     revoked_at: datetime
@@ -90,7 +91,7 @@ class Registry:
     keys: dict[str, KeyRecord] = field(default_factory=dict)
     principals: dict[str, PrincipalRevocation] = field(default_factory=dict)
 
-    # --- ключи ---
+    # --- keys ---
     def register(
         self,
         kid: str,
@@ -128,7 +129,7 @@ class Registry:
         reason: str = "rotated",
         at: datetime | None = None,
     ) -> tuple[KeyRecord, KeyRecord]:
-        """Сменить ключ: старый отзывается, новый заводится. Личность при этом цела."""
+        """Rotate a key: the old one is revoked, the new one is registered. The principal is untouched."""
         old = self._require_key(kid)
         if reason not in KEY_REVOCATION_REASONS:
             raise RegistryRejected("unknown_revocation_reason", f"reason={reason!r}")
@@ -152,7 +153,7 @@ class Registry:
             raise RegistryRejected("unknown_key", f"key {kid!r} is not registered")
         return record
 
-    # --- личности ---
+    # --- principals ---
     def revoke_principal(self, principal_id: str, reason: str, *, at: datetime | None = None) -> PrincipalRevocation:
         if reason not in KEY_REVOCATION_REASONS:
             raise RegistryRejected("unknown_revocation_reason", f"reason={reason!r}")
@@ -163,16 +164,16 @@ class Registry:
         return record
 
     def confirm_principal(self, principal_id: str, *, at: datetime | None = None) -> PrincipalRevocation:
-        """Повторное подтверждение снимает отзыв: это отдельное действие, не автоматика."""
+        """A fresh confirmation lifts the revocation: this is a separate action, not automation."""
         record = self.principals.get(principal_id)
         if record is None:
             raise RegistryRejected("principal_not_confirmed", f"{principal_id} has no revocation record")
         record.confirmed_again_at = at or now_utc()
         return record
 
-    # --- проверки ---
+    # --- checks ---
     def check(self, kid: str, *, at: datetime | None = None) -> tuple[bool, list[str]]:
-        """Действителен ли ключ сейчас. Возвращает результат и причины отказа."""
+        """Whether the key is valid now. Returns the result and the reasons for refusal."""
         moment = at or now_utc()
         record = self.keys.get(kid)
         if record is None:
