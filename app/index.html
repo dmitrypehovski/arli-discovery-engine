@@ -49,6 +49,7 @@ input[type=number],select{max-width:190px}
 textarea:focus,input:focus,select:focus{outline:2px solid var(--green-deep);outline-offset:1px}
 .row{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-top:16px}
 button{font-family:var(--font);font-weight:600;font-size:14.5px;border-radius:9px;cursor:pointer;border:1px solid transparent;padding:12px 22px}
+.btn{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:14.5px;border-radius:9px;padding:12px 22px;border:1px solid transparent}
 .btn-p{background:var(--green-deep);color:#fff}
 .btn-p:hover{background:var(--green)}
 .btn-o{background:transparent;color:var(--ink);border-color:var(--rule-strong)}
@@ -95,17 +96,30 @@ ul.plain li::before{content:"";position:absolute;left:0;top:9px;width:7px;height
 footer{border-top:1px solid var(--rule);margin-top:40px;padding:26px 0 52px;color:var(--ink-faint);font-size:13px}
 code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:1px solid var(--rule);border-radius:5px;padding:1px 5px}
 .hidden{display:none}
+.fig{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:18px 16px;margin:18px 0}
+.fig figcaption{color:var(--ink-soft);font-size:13.5px;margin-top:8px}
+.audience{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.audience span{font-family:var(--mono);font-size:12px;background:var(--card);border:1px solid var(--rule);border-radius:999px;padding:6px 12px;color:var(--ink-soft)}
+.walk{display:grid;gap:12px;grid-template-columns:1fr}
+@media(min-width:820px){.walk{grid-template-columns:repeat(5,1fr)}}
+.walk div{background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:14px}
+.walk b{display:block;font-family:var(--display);font-size:15px;font-weight:800;margin-bottom:4px}
+.walk span{font-size:13.5px;color:var(--ink-soft)}
+.walk .step-no{font-family:var(--mono);font-size:11.5px;color:var(--green-deep);display:block;margin-bottom:6px}
+.vs td:nth-child(2){color:var(--ink-soft)}
+.vs td:nth-child(3){color:var(--green-deep);font-weight:500}
 </style>
 </head>
 <body>
 <nav>
   <a href="/" class="logo">ARLI<span>.</span></a>
   <div class="links">
-    <a href="/discovery">Discovery engine</a>
-    <a href="#room">The room</a>
-    <a href="#cases">Use cases</a>
+    <a href="#how">How it works</a>
+    <a href="#who">Who it is for</a>
+    <a href="/engine">Engine</a>
+    <a href="/demo/">One exchange</a>
     <a href="/spec/">Specification</a>
-    <a href="/studio/" class="cta">Studio</a>
+    <a href="#scan" class="cta">Scan the room</a>
   </div>
 </nav>
 
@@ -114,12 +128,78 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
     <div class="kicker">$ arli match scan --room 8 --floor 3000</div>
     <h1>Match against the room <span class="dim">without publishing your list.</span></h1>
     <p class="sub">Put in what matters to you, scan a room of counterparty agents, and get back who
-    overlaps with you above your floor. Your list never leaves your side and theirs never leaves
-    theirs: every row below is the result of a full exchange with a live agent on this machine.</p>
+    overlaps with you above the floor you set. Your list never leaves your side and theirs never
+    leaves theirs: every row below is the result of a full exchange with a live agent on this machine.</p>
+    <div class="audience">
+      <span>agencies &amp; studios</span><span>freelancers &amp; specialists</span><span>buyers &amp; procurement</span>
+      <span>marketplaces</span><span>funds &amp; M&amp;A</span><span>grants &amp; public programmes</span>
+      <span>research sites</span><span>agent platforms</span>
+    </div>
+    <div class="row" style="margin-top:26px">
+      <a href="#scan" class="btn btn-p">Scan the room now</a>
+      <a href="#how" class="btn btn-o">How it works</a>
+      <a href="/demo/" class="btn btn-o">Watch one exchange</a>
+    </div>
   </div>
 </header>
 
 <section>
+  <div class="container">
+    <div class="fig">
+      <svg viewBox="0 0 900 300" width="100%" role="img" aria-label="Two sides hold their lists privately, only blinded values cross the wire, and only the shared items are revealed">
+        <rect x="20" y="40" width="230" height="200" rx="14" fill="#eef7e8" stroke="#d3dfc7"/>
+        <text x="40" y="72" font-family="JetBrains Mono, monospace" font-size="13" fill="#125828">YOUR AGENT</text>
+        <text x="40" y="102" font-size="14" fill="#16220f">need:infra</text>
+        <text x="40" y="126" font-size="14" fill="#16220f">industry:fintech</text>
+        <text x="40" y="150" font-size="14" fill="#16220f">city:sf</text>
+        <text x="40" y="174" font-size="14" fill="#16220f">stage:series-b</text>
+        <text x="40" y="198" font-size="14" fill="#84977a">budget:under-250k</text>
+        <text x="40" y="222" font-size="12" fill="#55684a">stays local, always</text>
+
+        <rect x="650" y="40" width="230" height="200" rx="14" fill="#eef7e8" stroke="#d3dfc7"/>
+        <text x="670" y="72" font-family="JetBrains Mono, monospace" font-size="13" fill="#125828">THEIR AGENT</text>
+        <text x="670" y="102" font-size="14" fill="#16220f">offer:infra</text>
+        <text x="670" y="126" font-size="14" fill="#16220f">compliance:soc2</text>
+        <text x="670" y="150" font-size="14" fill="#16220f">capacity:3-teams</text>
+        <text x="670" y="174" font-size="14" fill="#16220f">industry:fintech</text>
+        <text x="670" y="198" font-size="14" fill="#84977a">city:sf</text>
+        <text x="670" y="222" font-size="12" fill="#55684a">stays local, always</text>
+
+        <line x1="250" y1="140" x2="650" y2="140" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="6 5"/>
+        <rect x="330" y="118" width="240" height="44" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
+        <text x="450" y="138" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#125828">blinded numbers only</text>
+        <text x="450" y="154" text-anchor="middle" font-size="11.5" fill="#55684a">no feature ever crosses</text>
+
+        <text x="450" y="70" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#84977a">1 · open the pair</text>
+        <text x="450" y="212" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#84977a">2 · two people consent</text>
+        <text x="450" y="240" text-anchor="middle" font-size="13" fill="#16220f">3 · you learn the intersection:</text>
+        <text x="450" y="260" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#1f7a3a">industry:fintech · city:sf</text>
+        <text x="450" y="282" text-anchor="middle" font-size="12" fill="#55684a">they learn only how many values you sent</text>
+      </svg>
+      <figcaption>One scan is one such exchange per counterparty. Both lists stay inside their own
+      agents, the wire carries blinded numbers, and only the shared items come back to you.</figcaption>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="container">
+    <div class="sec-head">
+      <h2 class="sec">What happens in one scan</h2>
+      <p>Five moves, in this order, every time. Nothing outside them is allowed, and a refusal comes
+      back as a code from a published list rather than as silence.</p>
+    </div>
+    <div class="walk">
+      <div><span class="step-no">01</span><b>You declare</b><span>What you hold, privately, and whether you are buying or offering. This never leaves your side.</span></div>
+      <div><span class="step-no">02</span><b>The pair opens</b><span>Only if the intents face each other. Two buyers are not a pair and are refused by code, not scored.</span></div>
+      <div><span class="step-no">03</span><b>Blind exchange</b><span>The other side publishes a session key and signs values it cannot read. You compare without either list being visible.</span></div>
+      <div><span class="step-no">04</span><b>Your floor decides</b><span>Below the overlap you declared, nothing comes back. The match happened; you chose not to see it.</span></div>
+      <div><span class="step-no">05</span><b>Both people consent</b><span>Agents agreeing opens nothing. Each side's person answers separately, and both answers are recorded.</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="scan">
   <div class="container">
     <div class="panel">
       <h2><span class="n">01</span>Your agent</h2>
@@ -214,6 +294,49 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
   </div>
 </section>
 
+<section id="vs">
+  <div class="container">
+    <div class="sec-head">
+      <h2 class="sec">Against publishing a catalogue</h2>
+      <p>The usual way to be found is to publish what you do into a catalogue someone else owns.
+      Here is what changes when the list stays home.</p>
+    </div>
+    <div class="fig">
+      <table class="vs">
+        <thead><tr><th></th><th>Public catalogue or index</th><th>ARLI Match</th></tr></thead>
+        <tbody>
+          <tr><td>Who holds your list</td><td>The catalogue operator</td><td>Your own agent, only</td></tr>
+          <tr><td>What a counterparty sees</td><td>Your whole profile, searchable</td><td>Only the items you share with them, above your floor</td></tr>
+          <tr><td>What competitors can do</td><td>Read your list, scrape it, outbid you</td><td>Nothing: they learn counts, not values</td></tr>
+          <tr><td>Cost of being found</td><td>Listing fees, placement, subscriptions</td><td>One exchange per counterparty, no listing</td></tr>
+          <tr><td>Can you prove what was agreed</td><td>No</td><td>Yes: a signed receipt at every step</td></tr>
+          <tr><td>Who approves the introduction</td><td>Whoever runs the platform</td><td>Both principals, separately, on the record</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="who">
+  <div class="container">
+    <div class="sec-head">
+      <h2 class="sec">Who this is for, and what they get</h2>
+      <p>Anywhere the list is the asset and the introduction is the product.</p>
+    </div>
+    <div class="agents">
+      <div class="agent"><div class="who">AGENCIES AND STUDIOS</div><h3>Find work without showing your client book</h3><p>Your roster, rates and pipeline stay home. You learn which buyers overlap with what you actually do, and you see only the ones past your floor.</p><div class="meta"><span class="chip mute">no public profile</span><span class="chip ok">rate card private</span></div></div>
+      <div class="agent"><div class="who">SPECIALISTS AND FREELANCERS</div><h3>Be findable without a searchable CV</h3><p>Hold your skills and availability in your own agent. Companies hold the role they need. Overlap is measured; neither side posts a dossier.</p><div class="meta"><span class="chip mute">no CV dump</span><span class="chip ok">you set the floor</span></div></div>
+      <div class="agent"><div class="who">BUYERS AND PROCUREMENT</div><h3>Shortlist suppliers without leaking your plan</h3><p>Your requirements, budget band and timeline never enter a public index. Suppliers match on capability, region and compliance marks instead.</p><div class="meta"><span class="chip mute">brief private</span><span class="chip amber">sealed shortlist</span></div></div>
+      <div class="agent"><div class="who">MARKETPLACES AND ROUTERS</div><h3>Route work without publishing your catalogue</h3><p>Send demand to the sellers who fit, while each seller's catalogue stays inside its agent. No operator holds the whole supply side.</p><div class="meta"><span class="chip ok">catalogue stays inside</span><span class="chip mute">routing only</span></div></div>
+      <div class="agent"><div class="who">FUNDS AND M&amp;A</div><h3>Scout without disclosing the thesis</h3><p>An acquirer can look for specific capabilities without announcing the hunt. A target can signal openness without putting itself up for sale.</p><div class="meta"><span class="chip mute">thesis private</span><span class="chip ok">auditable approach</span></div></div>
+      <div class="agent"><div class="who">GRANTS AND PUBLIC PROGRAMMES</div><h3>Assemble consortia with unpublished applicants</h3><p>Match on capability, region and programme marks. Applicant names and scoring never leave the office.</p><div class="meta"><span class="chip amber">public body</span><span class="chip ok">no applicant list</span></div></div>
+      <div class="agent"><div class="who">CLINICAL AND RESEARCH SITES</div><h3>Find sites without exposing populations</h3><p>A sponsor needs a patient profile; a site will not publish its population. Above a declared floor, with both principals consenting, on the record.</p><div class="meta"><span class="chip mute">population hidden</span><span class="chip ok">consent recorded</span></div></div>
+      <div class="agent"><div class="who">AGENT PLATFORMS</div><h3>Let agents transact before the humans wake</h3><p>A signed card says who each agent is, the grammar bounds the talk, receipts make it auditable, and consent still belongs to the people.</p><div class="meta"><span class="chip ok">signed cards</span><span class="chip mute">bounded talk</span></div></div>
+      <div class="agent"><div class="who">ANY REGULATED FLOW</div><h3>Show afterwards what was agreed, and on what basis</h3><p>Every answer carries an envelope: parameters, result, what was dropped, and the limits in writing. A number counted from receipts can be audited by someone else.</p><div class="meta"><span class="chip ok">replayable</span><span class="chip mute">limits stated</span></div></div>
+    </div>
+  </div>
+</section>
+
 <section id="room">
   <div class="container">
     <div class="panel">
@@ -265,7 +388,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
 <section>
   <div class="container">
     <div class="honest">
-      <h2>What this does not do</h2>
+      <h2>What this does not do, and what is not built yet</h2>
       <ul class="plain">
         <li>The room here is synthetic. These are engine agents raised by this server with declared
         capability strings, not real companies, and no real deal is behind any row.</li>
@@ -277,7 +400,22 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
         <li>Nothing is proven about the humans behind the agents. A card proves which key published
         an agent.</li>
         <li>Issuing verified statements about other people's features is not implemented, deliberately.</li>
+        <li>No accounts, no payments, no live counterparties yet. This is the working service on real
+        infrastructure; the first real room is the next step, and it needs real participants.</li>
       </ul>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:6px">
+  <div class="container">
+    <div class="panel">
+      <h2>Go deeper</h2>
+      <div class="agents">
+        <div class="agent"><h3><a href="/engine">The engine explained</a></h3><p>What A2A leaves out, the five moves, the closed rejection codes, and the proof that two independent implementations pass the same thirty checks.</p></div>
+        <div class="agent"><h3><a href="/demo/">One exchange, call by call</a></h3><p>Nine calls between two live agents with every request and response printed as it was sent.</p></div>
+        <div class="agent"><h3><a href="/spec/">The specification</a></h3><p>The normative text in English with numbered clauses, open under Apache-2.0, with a reference implementation and a second one in Rust.</p></div>
+      </div>
     </div>
   </div>
 </section>
