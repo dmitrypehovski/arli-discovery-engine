@@ -361,3 +361,29 @@ def test_the_page_offers_a_direct_exchange_without_a_room() -> None:
         "both refusals a person meets have to be in the section"
     )
     assert section.count("<svg") == 1, "one figure carries the picture"
+
+
+def test_a_real_room_shows_no_example_agents(monkeypatch) -> None:
+    """A participant must never scan a room and find fictional companies in it.
+
+    The demonstration room is filled with examples on purpose. The moment a real room is switched on, the
+    examples have to go: a match count against made-up companies is a false number, and a participant who
+    finds them has been told something untrue. Both the room and the scan are checked here, because a
+    room that hides them while the scan still counts them is worse than either.
+    """
+    monkeypatch.setenv("ARLI_MATCH_ROOM_MODE", "real")
+    assert service.room_mode() == "real"
+    assert service.shows_examples() is False
+    assert not [agent for agent in service.room_view() if agent.get("sample")], (
+        "no example agent may appear in a real room"
+    )
+    outcome = service.scan_room(["need:warehouse"], 1000, "demand")
+    # The property, not a count: other tests in this file add agents to the same store, so a count here
+    # would be a test of their order rather than of the room.
+    assert not [row for row in outcome["rows"] if row.get("sample")], (
+        "a real room's search must not cover example agents at all"
+    )
+
+    monkeypatch.setenv("ARLI_MATCH_ROOM_MODE", "demo")
+    assert service.shows_examples() is True
+    assert [agent for agent in service.room_view() if agent.get("sample")], "the demo room keeps its examples"

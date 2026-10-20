@@ -209,12 +209,33 @@ def stored_agents(include_features: bool = False) -> list[dict]:
     return agents
 
 
+ROOM_MODE_DEMO = "demo"
+ROOM_MODE_REAL = "real"
+ROOM_MODE_ENV = "ARLI_MATCH_ROOM_MODE"
+
+
+def room_mode() -> str:
+    """Which room this is.
+
+    A demonstration room is filled with example agents, because an empty room explains nothing. A real
+    room must not be: a participant who scans it and finds eight fictional companies has been told
+    something untrue, and their match count is fiction too. The default stays `demo` so nothing changes
+    until the first real room is switched on deliberately.
+    """
+    return ROOM_MODE_REAL if os.environ.get(ROOM_MODE_ENV, "").strip().lower() == ROOM_MODE_REAL else ROOM_MODE_DEMO
+
+
+def shows_examples() -> bool:
+    return room_mode() == ROOM_MODE_DEMO
+
+
 def room_view() -> list[dict]:
     """Everyone in the room: starters, agents registered here, and agents connected from elsewhere.
 
     Never a feature list, and never a remote agent's address: an address is an invitation to probe.
     """
-    samples = [{**public_view(agent), "stored": False, "sample": True} for agent in ROSTER]
+    samples = ([{**public_view(agent), "stored": False, "sample": True} for agent in ROSTER]
+               if shows_examples() else [])
     stored = [{key: value for key, value in agent.items() if key != "features"}
               for agent in stored_agents(include_features=True)]
     return samples + stored + remote_agents(include_endpoint=False)
@@ -328,7 +349,7 @@ def looks_like_own_agent(result: dict, my_features: list[str]) -> bool:
 def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
     """One exchange per agent in the room, samples and registered agents alike."""
     entries = []
-    for agent in ROSTER:
+    for agent in (ROSTER if shows_examples() else []):
         entries.append({"id": agent["id"], "name": agent["name"], "kind": agent["kind"],
                         "city": agent["city"], "headline": agent["headline"],
                         "claim_level": agent["claim_level"],
@@ -510,7 +531,7 @@ class Handler(BaseHandler):
             with connect() as connection:
                 registered = connection.execute("SELECT COUNT(*) AS n FROM agents WHERE active = 1").fetchone()["n"]
             self._json(200, {"ok": True, "engine": "arli-discovery", "app": "arli-match",
-                             "sample_agents": len(ROSTER), "registered_agents": registered,
+                             "sample_agents": (len(ROSTER) if shows_examples() else 0), "room_mode": room_mode(), "registered_agents": registered,
                              "connected_agents": len(remote_agents()),
                              "database": str(DB_PATH), "network": "network-eu-design"})
             return
