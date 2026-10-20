@@ -253,3 +253,21 @@ def test_an_agent_that_answers_again_is_back_in_the_room() -> None:
         for server in servers:
             server.shutdown()
             server.server_close()
+
+
+def test_the_one_line_is_on_the_page_twice_and_needs_no_flags() -> None:
+    """The owner's decision, protected: one line, no arguments to fill in, in the header and in full.
+
+    `curl ... | sh` cannot read the keyboard, so the installer asks on the terminal and the page must
+    not present a line with placeholders a person has to edit. A register form was removed on purpose
+    at the same time; it must not creep back in.
+    """
+    page = (Path(__file__).resolve().parent.parent / "app" / "home.html").read_text(encoding="utf-8")
+    assert page.count('id="oneLineTop"') == 1 and page.count('id="oneLine"') == 1
+    assert 'id="copyOneLineTop"' in page and 'id="copyOneLine"' in page
+    line = page[page.index('id="oneLine"') : page.index('id="oneLine"') + 200]
+    assert "--features" not in line and "--name" not in line.split("</pre>")[0], (
+        "the line a visitor copies must not carry placeholders"
+    )
+    assert 'id="register"' not in page, "the register form was removed on purpose"
+    assert "wireCopy('copyOneLine'" in page and "wireCopy('copyOneLineTop'" in page

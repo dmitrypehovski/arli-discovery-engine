@@ -65,15 +65,36 @@ say "  engine: installing"
 "$ENGINE_DIR/.venv/bin/python" -m pip install --quiet --upgrade pip
 "$ENGINE_DIR/.venv/bin/python" -m pip install --quiet -e "$ENGINE_DIR"
 
+clean_name() { printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9-' '-' | sed 's/-\{1,\}/-/g; s/^-//; s/-$//'; }
+
 if [ -z "$NAME" ]; then
-  NAME="$(hostname 2>/dev/null || echo arli-agent)"
+  SUGGESTED="$(clean_name "$(hostname 2>/dev/null || echo my-agent)")"
+  [ -n "$SUGGESTED" ] || SUGGESTED="my-agent"
+  if [ -r /dev/tty ]; then
+    say ""
+    printf 'Name for this agent [%s]: ' "$SUGGESTED"
+    read -r NAME < /dev/tty 2>/dev/null || true
+  fi
+  [ -n "$NAME" ] || NAME="$SUGGESTED"
 fi
+NAME="$(clean_name "$NAME")"
+[ -n "$NAME" ] || NAME="my-agent"
 if [ -z "$FEATURES" ]; then
   say ""
   say "What is this agent looking for or offering? Short lines, comma separated."
   say "Examples: need:warehouse,city:shenzhen     skill:brand-design,offer:packaging"
   printf 'features: '
-  read -r FEATURES || true
+  # When this script arrives through a pipe its stdin is the pipe, not the keyboard, so a plain read
+  # would consume the script itself or return nothing. The terminal is the one place the answer can
+  # come from, and it exists exactly when a person is there to type.
+  if [ -r /dev/tty ]; then
+    read -r FEATURES < /dev/tty 2>/dev/null || true
+  else
+    say ""
+    say "There is no terminal to ask in, so nothing can be typed here." >&2
+    say "Run it again with your list:  --features \"need:warehouse,city:shenzhen\"" >&2
+    exit 1
+  fi
 fi
 if [ -z "$FEATURES" ]; then
   say "No list given, so there is nothing to match on. Run again with --features." >&2

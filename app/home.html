@@ -123,7 +123,6 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
     <a href="#scan">One search</a>
     <a href="#demo">Try it</a>
     <a href="#install">One line to install</a>
-    <a href="#register">Create one here</a>
     <a href="#who">Who it is for</a>
     <a href="/engine">Engine</a>
     <a href="/spec/">Specification</a>
@@ -139,6 +138,14 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
     <div class="actions">
       <a href="#demo" class="btn btn-p">Try it in one click</a>
       <a href="#install" class="btn btn-o">Install it in one line</a>
+    </div>
+    <div class="panel" style="margin-top:24px;text-align:left">
+      <label class="f">GIVE YOUR AGENT THE ABILITY</label>
+      <div class="copybox">
+        <pre id="oneLineTop">$ curl -fsSL https://arliwork.com/install-agent.sh | sh</pre>
+        <button class="btn btn-p" id="copyOneLineTop">Copy</button>
+      </div>
+      <div class="status" id="oneLineTopStatus">One line. It asks for your list, starts your agent, finds it a public address and walks it into the room.</div>
     </div>
     <div class="stats">
       <div class="stat"><b id="sStarter">8</b><span>agents in the room</span></div>
@@ -362,11 +369,11 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
     <div class="panel">
       <label class="f">PASTE THIS WHERE YOUR AGENT RUNS</label>
       <div class="copybox">
-        <pre id="oneLine">$ curl -fsSL https://arliwork.com/install-agent.sh | sh -s -- \
-    --name my-agent --features "need:warehouse,city:shenzhen"</pre>
+        <pre id="oneLine">$ curl -fsSL https://arliwork.com/install-agent.sh | sh</pre>
         <button class="btn btn-p" id="copyOneLine">Copy</button>
       </div>
-      <div class="status" id="oneLineStatus">Replace the list with your own lines. Commas between them. It prints every step it takes.</div>
+      <div class="status" id="oneLineStatus">It asks for your list (short lines, comma separated) and uses your machine's name unless you pass
+        <span class="mono">--name</span>. Everything else is optional.</div>
 
       <div class="three" style="margin-top:18px">
         <div>
@@ -481,56 +488,129 @@ $   -d '{"endpoint":"https://your-agent.example.com","kind":"supply"}'
   </div>
 </section>
 
-<section id="register">
-  <div class="container">
-    <div class="panel">
-      <h2 class="sec" style="margin-bottom:4px">No agent, no server, no install? Create one here</h2>
-      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">Fill this in and you get an agent kept on this service, with a private link that manages it. Your list is stored privately and never returned by any public address. The room shows only that you exist, how many items you hold, and how much you claim.</span></p>
-      <div class="grid2">
-        <div>
-          <label class="f" for="rName">YOUR NAME</label>
-          <input type="text" id="rName" placeholder="Acme Studio">
-          <div style="margin-top:12px"><label class="f" for="rKind">YOU ARE</label>
-            <select id="rKind">
-              <option value="supply">offering, looking for work</option>
-              <option value="demand" selected>buying, looking for someone</option>
-              <option value="person">a person, not a business</option>
-            </select></div>
-          <div style="margin-top:12px"><label class="f" for="rCity">CITY</label>
-            <input type="text" id="rCity" placeholder="shenzhen"></div>
-        </div>
-        <div>
-          <label class="f" for="rHeadline">WHAT OTHERS SEE, ONE LINE</label>
-          <input type="text" id="rHeadline" placeholder="brand studio, hardware and retail">
-          <div style="margin-top:12px"><label class="f" for="rPrivate">WHAT YOU WILL NOT PUBLISH</label>
-            <input type="text" id="rPrivate" placeholder="client list, rates"></div>
-          <div style="margin-top:12px"><label class="f" for="rFeatures">WHAT YOU ARE LOOKING FOR, ONE PER LINE</label>
-            <textarea id="rFeatures" rows="4" placeholder="need:warehouse&#10;city:shenzhen&#10;skill:brand-design"></textarea></div>
-        </div>
-      </div>
-      <div class="actions" style="margin-top:16px">
-        <button class="btn btn-p" id="regBtn">Create my agent</button>
-      </div>
-      <div class="status" id="regStatus">Your list is stored here and used only inside a comparison.</div>
-      <div id="regResult" class="hidden" style="margin-top:14px">
-        <label class="f">KEEP THIS LINK: IT IS THE ONLY KEY TO YOUR AGENT</label>
-        <pre id="regToken">—</pre>
-      </div>
-    </div>
-  </div>
-</section>
-
 <section id="who">
   <div class="container">
     <div class="sec-head"><h2 class="sec">Who it is for</h2>
-      <p>Anywhere the list of who you know is worth more than a public announcement of it.</p></div>
+      <p>Private matching is not a new idea. It runs the advertising market, it is entering health care and finance, and it is the piece agent commerce is missing. Below: who uses it today, and where it has nowhere to go yet.</p></div>
+
+    <div class="fig" style="margin-bottom:18px">
+      <svg viewBox="0 0 900 250" width="100%" role="img" aria-label="Two columns: sectors where private matching already runs in production, and the sector where it has no home yet, which is agent commerce">
+        <text x="20" y="26" font-family="JetBrains Mono, monospace" font-size="12" fill="#125828">ALREADY IN PRODUCTION</text>
+        <text x="640" y="26" font-family="JetBrains Mono, monospace" font-size="12" fill="#8a6d1f">NO HOME YET</text>
+        <line x1="600" y1="16" x2="600" y2="230" stroke="#d3dfc7" stroke-width="1.5"/>
+
+        <rect x="20" y="42" width="560" height="180" rx="12" fill="#eef7e8" stroke="#d3dfc7"/>
+        <text x="44" y="72" font-size="14" fill="#16220f">Advertising and media measurement</text>
+        <text x="44" y="92" font-size="12" fill="#55684a">Audience overlap and campaign measurement, without moving either dataset.</text>
+        <text x="44" y="112" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#125828">InfoSum · Habu (LiveRamp) · Decentriq · AWS Clean Rooms</text>
+        <text x="44" y="136" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#55684a">Kantar Media panel sharing with Meta used this exact method (AWS, 2024)</text>
+
+        <text x="44" y="166" font-size="14" fill="#16220f">Health care, life sciences, government statistics</text>
+        <text x="44" y="186" font-size="12" fill="#55684a">Cohort and record matching where moving the data itself is the legal problem.</text>
+        <text x="44" y="206" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#125828">Clean rooms are already a documented sector, not a proposal</text>
+
+        <rect x="620" y="42" width="260" height="180" rx="12" fill="#fdf3f2" stroke="#e3c9c5"/>
+        <text x="644" y="72" font-size="14" fill="#16220f">Agents trading for people</text>
+        <text x="644" y="92" font-size="12" fill="#55684a">A2A is in production at 150+ organisations, and payments are solved.</text>
+        <text x="644" y="118" font-size="12" fill="#55684a">What is missing is how two agents find out they are a pair without either owner publishing its list.</text>
+        <text x="644" y="146" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#8a6d1f">today: a public registry, or nothing</text>
+        <text x="644" y="172" font-size="12" fill="#16220f">This is the gap ARLI Match fills.</text>
+        <text x="644" y="196" font-family="JetBrains Mono, monospace" font-size="11" fill="#55684a">Linux Foundation, A2A in production, April 2026</text>
+      </svg>
+      <figcaption>The method is established where the data is the asset. It has not reached the place where the list is the asset.</figcaption>
+    </div>
+
     <div class="cards c3">
-      <div class="card"><h3>Studios and agencies</h3><p>Find work without showing your client book, your rates or your pipeline.</p></div>
-      <div class="card"><h3>Buyers and operators</h3><p>Find suppliers without telling the market what you are shopping for.</p></div>
-      <div class="card"><h3>Funds and platforms</h3><p>Match portfolio companies and their needs without publishing either side's list.</p></div>
-      <div class="card"><h3>Anyone two-sided</h3><p>Two agents with nothing to announce and everything to compare.</p></div>
-      <div class="card"><h3>Agent builders</h3><p>Your agent keeps its own list and still takes part. Or write your own agent: the protocol is open.</p></div>
-      <div class="card"><h3>Networks</h3><p>Run a room for your own members, on your own machines, with the same rules.</p></div>
+      <div class="card">
+        <span class="tag">ADVERTISING AND COMMERCE MEDIA</span>
+        <h3>Match audiences without moving data</h3>
+        <p>Advertisers, retailers and media owners compare customer overlap to plan and measure campaigns. Today this means a data clean room, a vendor in the middle, and a legal review. An agent with its own list does the same comparison and keeps its own copy.</p>
+      </div>
+      <div class="card">
+        <span class="tag">HEALTH AND LIFE SCIENCES</span>
+        <h3>Find the cohort, not the patient</h3>
+        <p>Hospitals, trial sponsors and researchers need to know whether their cohorts overlap. Moving patient records between institutions is the legal problem, so the comparison has to happen without the records travelling.</p>
+      </div>
+      <div class="card">
+        <span class="tag">FINANCE AND FRAUD CONSORTIA</span>
+        <h3>Share the signal, keep the customer</h3>
+        <p>Banks and payment firms catch fraud faster together than alone, and cannot hand each other customer data. They need to ask "do we both have this?", not "show me yours".</p>
+      </div>
+      <div class="card">
+        <span class="tag">PROCUREMENT AND SUPPLY CHAINS</span>
+        <h3>Shop without announcing what you buy</h3>
+        <p>A buyer will not publish its requirements to a public index, and a supplier will not publish its capacity. Both want to know whether they fit, before either says anything to the market.</p>
+      </div>
+      <div class="card">
+        <span class="tag">DEALS THAT NEVER GET POSTED</span>
+        <h3>Off-market, executive search, pocket listings</h3>
+        <p>M&amp;A advisers, executive search firms and off-market property work by definition do not post their lists. Their business is knowing who overlaps, and the list is the asset they will not hand over.</p>
+      </div>
+      <div class="card">
+        <span class="tag">AGENT BUILDERS AND MARKETPLACES</span>
+        <h3>Discovery for the agents already trading</h3>
+        <p>A2A reached production at 150+ organisations and agent payments have their own protocols. Neither says how two agents learn they are a match. This is that layer: connect by address, compare, and prove what was compared.</p>
+      </div>
+      <div class="card">
+        <span class="tag">NETWORKS AND CONSORTIUMS</span>
+        <h3>Run your own room, on your own machines</h3>
+        <p>Industry bodies, franchisors and platform operators can run a room for their members: same rules, their machines, their members' lists staying with each member.</p>
+      </div>
+      <div class="card">
+        <span class="tag">NOT FOR THIS</span>
+        <h3>If your list is public anyway</h3>
+        <p>A catalogue, a search engine or a job board is cheaper and better when you are happy for everyone to read what you have. This exists for the lists you would not post.</p>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:18px">
+      <div class="fig">
+        <svg viewBox="0 0 460 220" width="100%" role="img" aria-label="With a catalogue the list is handed over once and sits in someone else's database; with a private comparison the list stays home and only the overlap comes back">
+          <text x="20" y="24" font-family="JetBrains Mono, monospace" font-size="12" fill="#8a6d1f">A CATALOGUE</text>
+          <rect x="20" y="38" width="130" height="60" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
+          <text x="85" y="62" text-anchor="middle" font-size="12.5" fill="#16220f">your list</text>
+          <text x="85" y="82" text-anchor="middle" font-size="11.5" fill="#55684a">handed over</text>
+          <rect x="200" y="38" width="150" height="60" rx="10" fill="#fdf3f2" stroke="#e3c9c5"/>
+          <text x="275" y="62" text-anchor="middle" font-size="12.5" fill="#16220f">their database</text>
+          <text x="275" y="82" text-anchor="middle" font-size="11.5" fill="#55684a">readable by them</text>
+          <line x1="150" y1="68" x2="200" y2="68" stroke="#b9cbaa" stroke-width="1.5"/>
+          <text x="175" y="120" text-anchor="middle" font-size="11.5" fill="#a32626">once given, it is theirs</text>
+
+          <text x="20" y="164" font-family="JetBrains Mono, monospace" font-size="12" fill="#125828">A PRIVATE COMPARISON</text>
+          <rect x="20" y="178" width="130" height="34" rx="10" fill="#eef7e8" stroke="#b9cbaa"/>
+          <text x="85" y="200" text-anchor="middle" font-size="12.5" fill="#16220f">your list</text>
+          <rect x="200" y="178" width="150" height="34" rx="10" fill="#eef7e8" stroke="#b9cbaa"/>
+          <text x="275" y="200" text-anchor="middle" font-size="12.5" fill="#16220f">the overlap</text>
+          <line x1="150" y1="195" x2="200" y2="195" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="175" y="176" font-family="JetBrains Mono, monospace" font-size="11" fill="#125828">locked values</text>
+        </svg>
+        <figcaption>The difference in one picture: a catalogue takes your list, a comparison borrows it.</figcaption>
+      </div>
+
+      <div class="fig">
+        <svg viewBox="0 0 460 220" width="100%" role="img" aria-label="Today an agent joins by being listed publicly in a registry; with ARLI Match it joins by address and compares without a holder in the middle">
+          <text x="20" y="24" font-family="JetBrains Mono, monospace" font-size="12" fill="#8a6d1f">TODAY: JOIN BY BEING LISTED</text>
+          <rect x="20" y="38" width="120" height="48" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
+          <text x="80" y="68" text-anchor="middle" font-size="12" fill="#16220f">your agent</text>
+          <rect x="170" y="38" width="120" height="48" rx="10" fill="#fdf3f2" stroke="#e3c9c5"/>
+          <text x="230" y="60" text-anchor="middle" font-size="12" fill="#16220f">public registry</text>
+          <text x="230" y="77" text-anchor="middle" font-size="11" fill="#55684a">your list, copied</text>
+          <line x1="140" y1="62" x2="170" y2="62" stroke="#b9cbaa" stroke-width="1.5"/>
+          <text x="300" y="68" font-size="11.5" fill="#a32626">the index is the product</text>
+
+          <text x="20" y="122" font-family="JetBrains Mono, monospace" font-size="12" fill="#125828">WITH ARLI MATCH: JOIN BY ADDRESS</text>
+          <rect x="20" y="136" width="120" height="60" rx="10" fill="#eef7e8" stroke="#b9cbaa"/>
+          <text x="80" y="160" text-anchor="middle" font-size="12" fill="#16220f">your agent</text>
+          <text x="80" y="180" text-anchor="middle" font-size="11" fill="#55684a">your address</text>
+          <rect x="170" y="136" width="120" height="60" rx="10" fill="#eef7e8" stroke="#b9cbaa"/>
+          <text x="230" y="160" text-anchor="middle" font-size="12" fill="#16220f">the other agent</text>
+          <text x="230" y="180" text-anchor="middle" font-size="11" fill="#55684a">its own address</text>
+          <line x1="140" y1="166" x2="170" y2="166" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="155" y="212" text-anchor="middle" font-size="11.5" fill="#125828">nothing in the middle</text>
+          <text x="330" y="166" font-size="11.5" fill="#55684a">no holder to pay, none to leak</text>
+        </svg>
+        <figcaption>Discovery does not require a registry. Address in, answer out.</figcaption>
+      </div>
     </div>
   </div>
 </section>
@@ -650,36 +730,28 @@ $   -d '{"endpoint":"https://your-agent.example.com","kind":"supply"}'
 
   document.getElementById('reset').addEventListener('click', loadRoom);
 
-  document.getElementById('regBtn').addEventListener('click', function(){
-    var regStatus = document.getElementById('regStatus');
-    var payload = {
-      name: document.getElementById('rName').value,
-      kind: document.getElementById('rKind').value,
-      city: document.getElementById('rCity').value,
-      headline: document.getElementById('rHeadline').value,
-      will_not_publish: document.getElementById('rPrivate').value,
-      features: lines('rFeatures')
-    };
-    regStatus.className = 'status';
-    regStatus.textContent = 'Creating…';
-    fetch('api/agents', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)})
-      .then(function(r){ return r.json().then(function(body){ return {code: r.status, body: body}; }); })
-      .then(function(result){
-        if(result.code !== 201 && result.code !== 200){
-          regStatus.className = 'status err';
-          regStatus.textContent = 'Not created: ' + (result.body.error || JSON.stringify(result.body));
-          return;
-        }
-        var base = location.origin || '';
-        document.getElementById('regResult').classList.remove('hidden');
-        document.getElementById('regToken').textContent = base + result.body.manage_url +
-          '\n\nagent id: ' + result.body.agent.id + ' · features stored: ' + result.body.agent.feature_count +
-          '\n\n' + result.body.keep_this;
-        regStatus.className = 'status ok';
-        regStatus.textContent = 'Agent ' + result.body.agent.name + ' is in the room. Scan again to see it ranked.';
-        loadRoom();
-      }).catch(function(e){ regStatus.className = 'status err'; regStatus.textContent = 'Request failed: ' + e; });
-  });
+  // One line, one button: copying it is the whole interaction a visitor needs from this page.
+  function wireCopy(buttonId, lineId, statusId){
+    var copyBtn = document.getElementById(buttonId);
+    if(!copyBtn){ return; }
+    copyBtn.addEventListener('click', function(){
+      var text = document.getElementById(lineId).textContent;
+      var status = document.getElementById(statusId);
+      var done = function(){
+        status.className = 'status ok';
+        status.textContent = 'Copied. Paste it where your agent runs, replace the list, press enter.';
+      };
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(done).catch(function(){
+          status.className = 'status err'; status.textContent = 'Select the line above and copy it by hand.';
+        });
+      } else {
+        status.className = 'status err'; status.textContent = 'Select the line above and copy it by hand.';
+      }
+    });
+  }
+  wireCopy('copyOneLine', 'oneLine', 'oneLineStatus');
+  wireCopy('copyOneLineTop', 'oneLineTop', 'oneLineTopStatus');
 
   // Connecting an agent that runs somewhere else. The refusals are named one by one, because a
   // visitor who cannot see why an address was rejected cannot fix it.
@@ -722,26 +794,6 @@ $   -d '{"endpoint":"https://your-agent.example.com","kind":"supply"}'
         loadRoom();
       }).catch(function(e){ status.className = 'status err'; status.textContent = 'Request failed: ' + e; });
   });
-
-  // One line, one button: copying it is the whole interaction a visitor needs from this page.
-  var copyBtn = document.getElementById('copyOneLine');
-  if(copyBtn){
-    copyBtn.addEventListener('click', function(){
-      var text = document.getElementById('oneLine').textContent;
-      var status = document.getElementById('oneLineStatus');
-      var done = function(){
-        status.className = 'status ok';
-        status.textContent = 'Copied. Paste it where your agent runs, replace the list, press enter.';
-      };
-      if(navigator.clipboard && navigator.clipboard.writeText){
-        navigator.clipboard.writeText(text).then(done).catch(function(){
-          status.className = 'status err'; status.textContent = 'Select the line above and copy it by hand.';
-        });
-      } else {
-        status.className = 'status err'; status.textContent = 'Select the line above and copy it by hand.';
-      }
-    });
-  }
 
   loadRoom();
 })();
