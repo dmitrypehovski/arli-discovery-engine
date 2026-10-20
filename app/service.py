@@ -24,7 +24,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from arli_engine.core.surface import CALL_REJECTIONS as CALL_REFUSAL_CODES
+from arli_engine.core.intake import Taxonomy, read_request  # noqa: E402
+from arli_engine.core.surface import CALL_REJECTIONS as CALL_REFUSAL_CODES  # noqa: E402
 
 from app.network import (  # noqa: E402
     ConnectRefused, allow_private_addresses, normalize_endpoint, run_remote_exchange,
@@ -433,6 +434,66 @@ def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
     }
 
 
+TAXONOMY_PATH_ENV = "ARLI_MATCH_TAXONOMY"
+DEFAULT_TAXONOMY_PATH = "/llm-gateway/skill_taxonomy_v2.json"
+
+
+def taxonomy() -> Taxonomy:
+    """The published taxonomy, loaded once, from a file the deployment names.
+
+    The production file is the company's licensed data and does not live in this repository, so the path is
+    configuration and its absence is not an error: without it the intake works on the small built-in set,
+    and says which set it used in every answer.
+    """
+    path = os.environ.get(TAXONOMY_PATH_ENV, DEFAULT_TAXONOMY_PATH)
+    if path and Path(path).is_file():
+        return Taxonomy.from_file(path)
+    return Taxonomy.built_in()
+
+
+def intake(payload: dict) -> dict:
+    """A person writes what they need; they get an agent and can search immediately.
+
+    This is the door for somebody who has no agent, no server and no vocabulary. What comes back is the
+    reading of their words, everything the reading could not place, and the agent that was created from it.
+    Nothing is invented: if no feature could be placed, no agent is created and they are asked to say it
+    another way, because an agent with an empty list would match nothing and look like a working search.
+    """
+    text = str(payload.get("text") or "").strip()
+    if len(text) < 3:
+        raise ValueError("write what you need in your own words, a few words at least")
+    read = read_request(text, taxonomy=taxonomy(), kind=str(payload.get("kind") or "") or None)
+    if not read["features"]:
+        return {
+            "created": False,
+            "read": read,
+            "note": "Nothing in that could be placed, so no agent was created: an agent with an empty "
+                    "list would match nothing and look like a search that found nothing.",
+        }
+
+    name = str(payload.get("name") or "").strip() or text.split("\n")[0][:60]
+    agent, token = create_agent({
+        "name": name,
+        "kind": read["kind"] or "demand",
+        "city": read["city"],
+        "headline": text[:140],
+        "claim_level": "declared",
+        "will_not_publish": "the list this reading produced",
+        "features": read["features"],
+    })
+    return {
+        "created": True,
+        "agent": agent,
+        "token": token,
+        "manage_url": f"/account?token={token}",
+        "read": read,
+        "keep_this": "The token is the only key to this agent. It is not stored anywhere readable and is "
+                     "never shown again.",
+        "note": "The agent exists now, hosted here, and its list is the reading of your words. Give it an "
+                "address of your own later and it moves, keeping its identity.",
+    }
+
+
 def entry_for(agent_id: str) -> dict | None:
     for agent in ROSTER:
         if agent["id"] == agent_id:
@@ -539,7 +600,7 @@ class Handler(BaseHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = self.path.split("?")[0]
-        if path not in ("/api/agents", "/api/scan", "/api/negotiate", "/api/connect") and not (
+        if path not in ("/api/agents", "/api/scan", "/api/negotiate", "/api/connect", "/api/intake") and not (
             path.startswith("/api/agents/") and len(path) > len("/api/agents/")
         ):
             super().do_POST()
@@ -567,6 +628,13 @@ class Handler(BaseHandler):
                              "in a readable form and is never shown again.",
                 "manage_url": f"/account?token={token}",
             })
+            return
+
+        if path == "/api/intake":
+            try:
+                self._json(200, intake(payload))
+            except ValueError as error:
+                self._json(400, {"error": str(error)})
             return
 
         if path == "/api/connect":

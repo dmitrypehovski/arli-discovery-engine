@@ -149,11 +149,18 @@ def bucket_of(feature: str) -> str | None:
     return None
 
 
-def profile_of(features: list[str]) -> dict[str, int]:
-    """What an agent publishes: bucket to how many of its items land in that bucket. Never the items."""
+def profile_of(features: list[str], bucket_of=None) -> dict[str, int]:
+    """What an agent publishes: bucket to how many of its items land in that bucket. Never the items.
+
+    The resolver is injectable because the bucket space is not always the fixture: the platform resolves an
+    item to its taxonomy category, so an agent built from a written request lands in the same index as every
+    other agent. A feature no resolver can place does not enter the profile, and a search therefore does not
+    offer it, which the text has to say rather than pretend otherwise.
+    """
+    resolve = bucket_of or globals()["bucket_of"]
     profile: dict[str, int] = {}
     for feature in features:
-        bucket = bucket_of(feature)
+        bucket = resolve(feature)
         if bucket:
             profile[bucket] = profile.get(bucket, 0) + 1
     return profile
