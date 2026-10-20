@@ -68,6 +68,30 @@ so two seekers comparing notes can tell they hold the same item (they could alre
 own lists, but saying it is not optional); and an epoch must expire, and a revoked agent's epoch must stop
 being served.
 
+### Measured at scale, not argued
+
+The index was built at four sizes, up to a million agents, and the numbers answer the question that was
+asked first: can this hold when the network is not a room but a million agents.
+
+| agents | index build | a search spends selecting | agents sharing a bucket | offered |
+|---|---|---|---|---|
+| 1,000 | 0.021 s | 0.3 ms | 166 | 50 |
+| 10,000 | 0.313 s | 2.2 ms | 1,603 | 50 |
+| 100,000 | 1.767 s | 14.8 ms | 15,957 | 50 |
+| 1,000,000 | 16.5 s | 145 ms | 159,650 | 50 |
+
+Two things read off that table. Building a million-agent index takes sixteen seconds, so it is a job that
+runs once and then updates incrementally, not something a search waits for. And selection stays in
+milliseconds: 145 ms to choose from a million, against 0.3 ms from a thousand. A search does not slow down
+with the network; the exchanges it runs do not multiply either, because they are bounded by the candidate
+limit.
+
+The uncomfortable number is in the last column. In a million agents, 159,650 of them share a bucket with the
+seeker, and fifty are offered. At a thousand agents it was 166 sharing and fifty offered, so the ratio was
+bearable; at a million the search is choosing a hundredth of a percent. That is not a leak, it is a budget,
+and the honest presentation of it is a product decision with a price on it: broaden the candidate count,
+narrow the buckets, or tell the user plainly that they saw fifty of a hundred and fifty-nine thousand.
+
 ## The same model, seen from the person with no agent
 
 The three ways to exist are one record:
@@ -87,6 +111,35 @@ That is the job the taxonomy was always going to do, and it is why it is worth h
 The upgrade path is the unification: an ephemeral agent becomes hosted, a hosted agent becomes connected,
 and the identity travels. Same key, same records, same place in the index. Nobody starts again.
 
+### How the two questions become one system
+
+The person with an agent and the person without one are the same record at two moments, and that is the
+whole answer to putting this together. One intake, one profile, one index, three doors.
+
+1. **Describe what you need, in your own words.** That is the only thing everybody can do, and it is the
+   door for the person who has no agent. The intake turns the words into the vocabulary of the network:
+   goods stay goods, city, industry and capacity stay attributes, and the taxonomy of 31 by 335 is what
+   suggests which buckets are meant. The words are kept for the person, the tokens are kept for the
+   comparison. Nothing else is asked for at this step.
+2. **You get an agent, hosted or your own.** Hosted means we keep the identity, the vault and an address,
+   and the person gets a working member of the network in one step, with the vault encrypted under a key we
+   do not hold so the sentence "we cannot read your list" stays true. Connected means they run their own
+   agent at their own address and hand nothing over, which is what this repository already ships. Same
+   records either way, and moving between the two carries the identity across.
+3. **Search works the same for both.** The seeker's own items map to buckets, the index returns candidates,
+   and real private exchanges run with those candidates. Whether the counterparty is hosted by us or
+   connected from somewhere else is invisible at that point, which is the property that makes one network
+   out of two populations instead of two products.
+4. **A try, before either.** Someone who wants to see the thing work holds a handful of items against a
+   pool of consenting peers and gets a real result in about a minute. The pool has to hold something real
+   we can deliver, or the demonstration is a fiction and the person finds out later.
+
+The taxonomy is what makes step one possible, and that is its job in this design: not decoration on a
+website, but the shared vocabulary that lets a person who has never touched an agent say what they want in
+words a machine can compare. Thirty-one categories and three hundred and thirty-five subcategories is
+enough to place almost any business, and small enough that two sides told the same slug will use the same
+one.
+
 ## What has to be in the text, and what is product
 
 Normative text: the bucket profile and what it reveals; that an index may rank candidates without holding
@@ -96,6 +149,21 @@ Product, not normative: how many candidates a search tries, the budget per searc
 the pricing, and whether a room is demonstration or real, which is now a switch in the service.
 
 ## Order of work, smallest first
+
+1. ~~Bucket profile and prefilter over the existing room~~ done, measured on a thousand agents: fifty
+   exchanges in 38 seconds instead of a thousand in 857, identical matches.
+2. ~~The epoch token table, measured the same way~~ done: 1572 ms to 800 ms at thirty two items, and the
+   finding that the token table, not the key, is what is worth caching.
+3. ~~The index measured at a million agents~~ done, and it found the number that matters: at a million, a
+   search offers fifty candidates out of a hundred and fifty-nine thousand sharing a bucket.
+4. Intake: their words to buckets, a hosted vault whose key we do not hold, and a try mode against a pool
+   that holds something real we can actually deliver. This is the door for the person with no agent and it
+   is the one still to build.
+5. The text gains the clauses, the version moves, both implementations follow. Clauses 4.16 and 4.17 are
+   in at 1.5.0 in both wording editions, the second implementation carries the epoch, and the bucket
+   profile still needs its clause.
+
+
 
 1. Bucket profile and prefilter over the existing room, with a measurement that answers one question with
    numbers: with 1,000 agents, how many exchanges are attempted with and without the prefilter, how long
