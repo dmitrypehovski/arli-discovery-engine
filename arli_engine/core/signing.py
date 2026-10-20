@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, utils
 
 from arli_engine.core.canonical import canonicalize
 
@@ -117,9 +117,15 @@ def sign_card(card: dict, private_pem: bytes, kid: str) -> dict:
 
     der = key.sign(signing_input, ec.ECDSA(hashes.SHA256()))
 
+    # JWS ES256 defines the signature value as the raw R||S pair, 64 bytes, not the DER form.
+    # Ours was DER until a second implementation pointed this out: a third party verifying the
+    # card by the JWS rules would have rejected it while our own verifier accepted it.
+    r, s_value = utils.decode_dss_signature(der)
+    raw = r.to_bytes(32, "big") + s_value.to_bytes(32, "big")
+
     signed = dict(card)
     signed[SIGNATURE_EXCLUDED_FIELD] = [
-        {"protected": protected, "signature": b64u(der)}
+        {"protected": protected, "signature": b64u(raw)}
     ]
     return signed
 
@@ -127,8 +133,21 @@ def sign_card(card: dict, private_pem: bytes, kid: str) -> dict:
 def _verify_with_key(card: dict, key: ec.EllipticCurvePublicKey, protected: str, signature: str) -> tuple[bool, list[str]]:
     payload = b64u(signing_payload(card))
     signing_input = f"{protected}.{payload}".encode("ascii")
+    raw = b64u_decode(signature)
+    if len(raw) == 64:
+        # The JWS form: R||S, 64 bytes, converted to DER only because the library wants DER.
+        der = utils.encode_dss_signature(
+            int.from_bytes(raw[:32], "big"), int.from_bytes(raw[32:], "big")
+        )
+    elif raw[:1] == b"\x30":
+        return False, [
+            "signature is DER: ES256 defines the value as the raw R||S pair, so this card "
+            "would be rejected by a verifier that follows the JWS rules"
+        ]
+    else:
+        return False, [f"signature is {len(raw)} bytes: ES256 needs 64"]
     try:
-        key.verify(b64u_decode(signature), signing_input, ec.ECDSA(hashes.SHA256()))
+        key.verify(der, signing_input, ec.ECDSA(hashes.SHA256()))
     except InvalidSignature:
         return False, ["signature does not match the card content"]
     except Exception as exc:  # noqa: BLE001
@@ -188,16 +207,9 @@ def verify_card(card: dict, public_pem: bytes) -> tuple[bool, list[str]]:
     if header.get("alg") != "ES256":
         return False, [f"unsupported alg: {header.get('alg')!r}"]
 
-    payload = b64u(signing_payload(card))
-    signing_input = f"{protected}.{payload}".encode("ascii")
-
     key = serialization.load_pem_public_key(public_pem)
     if not isinstance(key, ec.EllipticCurvePublicKey):
         return False, ["public key is not an elliptic curve key for ES256"]
-    try:
-        key.verify(b64u_decode(signature), signing_input, ec.ECDSA(hashes.SHA256()))
-    except InvalidSignature:
-        return False, ["signature does not match the card content"]
-    except Exception as exc:  # noqa: BLE001
-        return False, [f"signature could not be verified: {exc}"]
-    return True, []
+    # One verification path for cards, whether the key came from the header or from outside:
+    # two paths is how the DER form survived in one of them for so long.
+    return _verify_with_key(card, key, protected, signature)
