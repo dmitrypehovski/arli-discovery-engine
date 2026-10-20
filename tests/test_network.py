@@ -121,7 +121,7 @@ def test_connecting_requires_a_declared_type() -> None:
 
         result = service.connect_agent({"endpoint": endpoint, "kind": "supply", "city": "berlin"})
         assert result["connected"] is True
-        assert result["checks"] == {"card_verified": True, "extension_answers": True}
+        assert result["checks"] == {"card_verified": True, "extension_answers": True, "address_signed_our_nonce": True}
         listed = service.remote_agents()
         assert any(agent["name"] == "typed" for agent in listed)
         assert all("endpoint" not in agent for agent in listed), (

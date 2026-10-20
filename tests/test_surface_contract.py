@@ -19,6 +19,8 @@ from arli_engine.core.surface import CALL_REJECTIONS, METHOD_NAMES, required_fie
 
 # Values for the declared fields, so a call is well formed rather than empty.
 VALUES = {
+    "nonce": "probe-nonce-long-enough",
+    "purpose": "probe",
     "proof": {},
     "card": {},
     "negotiation_id": "contract-probe",

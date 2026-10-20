@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.network import (  # noqa: E402
     ConnectRefused, allow_private_addresses, normalize_endpoint, run_remote_exchange,
-    verify_endpoint,
+    verify_endpoint, verify_signed_nonce,
 )
 from app.server import DEFAULT_FLOOR, DEFAULT_MINE, ROSTER, Handler as BaseHandler, public_view  # noqa: E402
 from demo.exchange import run_exchange  # noqa: E402
@@ -83,12 +83,13 @@ def init() -> None:
 
 
 def connect_agent(payload: dict) -> dict:
-    """Connect somebody else's agent: verify its card, then check that it answers our extension.
+    """Connect somebody else's agent: verify its card, then require the address to sign our nonce.
 
     What this proves and what it does not. The card's signature proves the key published this agent,
-    and the probe proves the address serves an implementation of this text right now. It does not
-    prove that the address is run by the key's owner: a proxy would pass both checks, and a signing
-    method in the extension would close that. Say so instead of implying more.
+    and the signature over a nonce this service chose proves the same key answers at that address
+    right now. It does not prove the address is run by the key's owner: a proxy that forwards the
+    signing passes too, and it then holds a live path to the agent, which is the trust a relay has.
+    Say so instead of implying more.
     """
     endpoint = normalize_endpoint(str(payload.get("endpoint") or ""),
                                   allow_private=allow_private_addresses())
@@ -97,17 +98,27 @@ def connect_agent(payload: dict) -> dict:
         raise ConnectRefused("kind_required", "declare the agent's type: demand, supply or person")
 
     verified = verify_endpoint(endpoint)
+    # One call does two jobs: it proves the extension answers, and it proves the address holds the
+    # key the card names, because the nonce is ours and the bytes are signed exactly as sent.
+    nonce = secrets.token_urlsafe(24)
     try:
         Client = __import__("arli_engine.client", fromlist=["AgentClient"]).AgentClient
         with Client(endpoint) as client:
-            capabilities = client.get_capabilities()
+            answer = client.call("arli/identity/sign", {"nonce": nonce, "purpose": "connect"})
     except Exception as error:  # noqa: BLE001
         raise ConnectRefused(
             "agent_not_answering",
-            f"{endpoint} served a card but did not answer the extension: {type(error).__name__}",
+            f"{endpoint} served a card but did not answer the identity method: "
+            f"{type(error).__name__}",
         ) from error
-    if not isinstance(capabilities, dict) or not capabilities:
-        raise ConnectRefused("agent_not_answering", f"{endpoint} answered with nothing usable")
+    if not isinstance(answer, dict) or not answer.get("signature"):
+        raise ConnectRefused("agent_not_answering", f"{endpoint} answered without a signature")
+    if not verify_signed_nonce(verified["jwk"], nonce, str(answer["signature"])):
+        raise ConnectRefused(
+            "address_key_mismatch",
+            f"{endpoint} answered, but its signature over our nonce does not verify with the key "
+            f"from its card: the address is not serving that key",
+        )
 
     agent_id = verified["name"] or endpoint
     with connect() as connection:
@@ -125,9 +136,11 @@ def connect_agent(payload: dict) -> dict:
         "name": verified["name"],
         "kind": kind,
         "endpoint": endpoint,
-        "checks": {"card_verified": True, "extension_answers": True},
-        "note": "Connected from its own address. Its feature list stays there; matching calls its own "
-                "endpoints. Ownership of the address is not proven: a proxy would pass these two checks.",
+        "checks": {"card_verified": True, "extension_answers": True, "address_signed_our_nonce": True},
+        "note": "Connected from its own address. The card verified, the identity method answered, and "
+                "the address signed a nonce this service chose, so the key the card names is reachable "
+                "there. A proxy that forwards that signing passes too: it then holds a live path to "
+                "the agent, which is the trust a relay has.",
     }
 
 

@@ -41,7 +41,7 @@ from arli_engine.core.claims import (
     FeatureClaim,
 )
 from arli_engine.core.registry import Registry
-from arli_engine.core.signing import verify_card_self
+from arli_engine.core.signing import sign_bytes, verify_card_self
 from arli_engine.core.surface import CALL_REJECTIONS, METHOD_NAMES
 from arli_engine.core.retention import Retention
 from arli_engine.core.negotiate import (
@@ -61,6 +61,8 @@ OPENING_LIMITATIONS = [
 
 CARD_PATH = "/.well-known/agent-card.json"
 CAPS_PATH = "/.well-known/arli-capabilities.json"
+MIN_NONCE_CHARS = 16
+IDENTITY_WINDOW_SECONDS = 60
 RPC_PATH = "/a2a/rpc"
 
 
@@ -85,6 +87,10 @@ class AgentState:
     # key and the peer's public key. The pair key never travels over the wire.
     private_pem: bytes | None = None
     kid: str = ""
+    # The identity method must not become a signing oracle: one signed nonce per
+    # address and purpose per minute, and the asking party's address is what bounds it.
+    peer: str = ""
+    identity_requests: dict[tuple[str, str], float] = field(default_factory=dict)
     peer_keys: dict[str, bytes] = field(default_factory=dict)
     # Closed-intersection state: the holder's keys per session, the applicant's
     # blindings and the recorded results. Big numbers travel as hex strings, otherwise
@@ -634,6 +640,45 @@ def _methods(state: AgentState) -> dict:
         result["evidence"] = _signed(result["evidence"])
         return result
 
+    def identity_sign(params: dict) -> dict:
+        """Sign a nonce chosen by the asker, so an address can prove it holds the key.
+
+        The bytes are signed exactly as sent, and the answer names the key, which is what lets a
+        party holding a card require the address to sign with the same key. One signed nonce per
+        address and purpose per minute, because otherwise this is a signing oracle.
+        """
+        import time as _time
+
+        nonce = params.get("nonce")
+        if not isinstance(nonce, str) or len(nonce) < MIN_NONCE_CHARS:
+            raise ValueError(
+                f"nonce_too_short: a nonce of at least {MIN_NONCE_CHARS} characters is required"
+            )
+        purpose = params.get("purpose")
+        if not isinstance(purpose, str) or not purpose.strip():
+            raise ValueError("purpose_required: name what the signature is for")
+        if not state.private_pem:
+            raise ValueError("internal: this agent has no private key to sign with")
+
+        window = (state.peer, purpose.strip().lower())
+        now = _time.time()
+        last = state.identity_requests.get(window)
+        if last is not None and now - last < IDENTITY_WINDOW_SECONDS:
+            raise ValueError(
+                f"rate_limited: one signed nonce per address and purpose per "
+                f"{IDENTITY_WINDOW_SECONDS}s"
+            )
+        state.identity_requests[window] = now
+
+        signature = sign_bytes(state.private_pem, state.kid or state.name, nonce.encode("utf-8"))
+        return {
+            "signature": signature["value"],
+            "kid": signature["kid"],
+            "alg": signature["alg"],
+            "purpose": purpose.strip(),
+            "signed_bytes": len(nonce.encode("utf-8")),
+        }
+
     def opportunity_decide(params: dict) -> dict:
         negotiation_id = params.get("negotiation_id")
         if negotiation_id not in state.opportunities:
@@ -673,6 +718,7 @@ def _methods(state: AgentState) -> dict:
         "arli/negotiation/open": negotiation_open,
         "arli/negotiation/turn": negotiation_turn,
         "arli/negotiation/witness": negotiation_witness,
+        "arli/identity/sign": identity_sign,
         "arli/opportunity/decide": opportunity_decide,
     }
 
@@ -724,6 +770,7 @@ def make_handler(state: AgentState):
             if handler is None:
                 self._send(404, _rpc_err(req_id, -32601, f"unknown method: {method}"))
                 return
+            state.peer = self.client_address[0] if self.client_address else ""
             try:
                 self._send(200, _rpc_ok(req_id, handler(request.get("params") or {})))
             except NegotiationError as exc:

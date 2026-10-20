@@ -42,6 +42,7 @@ METHOD_NAMES = (
     "arli/negotiation/turn",
     "arli/negotiation/witness",
     "arli/opportunity/decide",
+    "arli/identity/sign",
 )
 
 # Methods that change the agent's state. Needed so that the MCP tool description is
@@ -53,6 +54,9 @@ CALL_REJECTIONS = (
     "unknown_method",
     "parse_error",
     "bad_type",
+    "nonce_too_short",
+    "purpose_required",
+    "rate_limited",
 )
 
 MUTATING_METHODS = (
@@ -74,6 +78,7 @@ MUTATING_METHODS = (
     "arli/negotiation/turn",
     "arli/negotiation/witness",
     "arli/opportunity/decide",
+    "arli/identity/sign",
 )
 
 # Required fields for methods where an empty call is meaningless. The list is
@@ -102,6 +107,7 @@ REQUIRED_FIELDS = {
     "arli/negotiation/turn": ("negotiation_id", "seat", "action"),
     "arli/negotiation/witness": ("negotiation_id", "seat", "action", "proof", "card"),
     "arli/opportunity/decide": ("negotiation_id", "actor", "approve"),
+    "arli/identity/sign": ("nonce", "purpose"),
 }
 
 

@@ -353,6 +353,19 @@
         ],
         "additionalProperties": true
       }
+    },
+    {
+      "name": "arli_identity_sign",
+      "description": "Calls arli/identity/sign on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "nonce",
+          "purpose"
+        ],
+        "additionalProperties": true
+      }
     }
   ],
   "surface": {
@@ -383,7 +396,8 @@
       "arli/negotiation/open",
       "arli/negotiation/turn",
       "arli/negotiation/witness",
-      "arli/opportunity/decide"
+      "arli/opportunity/decide",
+      "arli/identity/sign"
     ],
     "tool_names": [
       "agent_card",
@@ -412,7 +426,8 @@
       "arli_negotiation_open",
       "arli_negotiation_turn",
       "arli_negotiation_witness",
-      "arli_opportunity_decide"
+      "arli_opportunity_decide",
+      "arli_identity_sign"
     ],
     "rule": "generated from the engine surface, never hand-written"
   },

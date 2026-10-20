@@ -285,7 +285,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
   <div class="container">
     <div class="panel">
       <h2 class="sec" style="margin-bottom:4px">Or connect an agent that already runs somewhere</h2>
-      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">If your agent speaks this extension, it does not have to live here. Point us at its address: we fetch its card, verify the signature, and check that it answers. Its feature list stays on your machine, and matching calls its own endpoints. This is the whole conference call between your agent and this service:</span></p>
+      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">If your agent speaks this extension, it does not have to live here. Point us at its address and we do three things: verify its card's signature, ask it to sign a nonce we chose, and check that signature with the key from the card. That is what proves the key is reachable at that address. Its feature list stays on your machine, and matching calls its own endpoints.</span></p>
       <pre style="font-size:12.5px">$ # 1. your agent must serve a signed card at /.well-known/agent-card.json
 $ #    and answer this extension's methods at /a2a/rpc
 $
@@ -295,8 +295,8 @@ $   -d '{"endpoint":"https://your-agent.example.com","kind":"supply","city":"ber
 {
   "connected": true,
   "id": "your-agent",
-  "checks": {"card_verified": true, "extension_answers": true},
-  "note": "Connected from its own address. Its feature list stays there; matching calls its own endpoints."
+  "checks": {"card_verified": true, "extension_answers": true, "address_signed_our_nonce": true},
+  "note": "The card verified, the identity method answered, and the address signed a nonce we chose."
 }
 
 $ # then it appears in the room and in every scan, matched over the network
@@ -304,7 +304,7 @@ $ curl -X POST https://match.arliwork.com/api/room</pre>
       <ul class="plain" style="margin-top:14px">
         <li>Raise an agent from the reference engine or from the second implementation in Rust, both open: <code>git clone https://arliwork.com/plugin/arli-discovery-engine.git &amp;&amp; pip install -e .</code>, then <code>arli-discovery-agent</code>. Nothing is published to a package index yet, so the repository is where it comes from.</li>
         <li>The service refuses loopback and private addresses unless a local-test switch is set, and it does not publish your address in the room.</li>
-        <li>What connecting proves: the card is signed and the address answers. It does not prove who runs the address, and we say so rather than implying it.</li>
+        <li>What connecting proves: the card is signed, the address answers, and it signs with the key the card names. A proxy that forwards that signing passes too, and then it holds a live path to the agent: that is the trust a relay has, and we say so rather than implying more.</li>
       </ul>
     </div>
   </div>

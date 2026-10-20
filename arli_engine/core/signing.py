@@ -96,6 +96,21 @@ def jwk_to_public_key(jwk: dict) -> ec.EllipticCurvePublicKey:
     return ec.EllipticCurvePublicNumbers(x, y, ec.SECP256R1()).public_key()
 
 
+
+def sign_bytes(private_pem: bytes, kid: str, data: bytes) -> dict:
+    """Sign raw bytes with the agent key, in the JWS form: ES256, raw R||S, base64url.
+
+    Used by the identity method, where the point is exactly this: the bytes are chosen by whoever
+    asks, so a signature over them cannot be replayed from anywhere else.
+    """
+    from cryptography.hazmat.primitives.asymmetric import utils as _utils
+
+    key = serialization.load_pem_private_key(private_pem, password=None)
+    der = key.sign(data, ec.ECDSA(hashes.SHA256()))
+    r, s_value = _utils.decode_dss_signature(der)
+    raw = r.to_bytes(32, "big") + s_value.to_bytes(32, "big")
+    return {"alg": "ES256", "kid": kid, "value": b64u(raw)}
+
 def sign_card(card: dict, private_pem: bytes, kid: str) -> dict:
     """Return a copy of the card with a JWS signature added.
 
