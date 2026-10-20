@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARLI Match — match against the room without publishing your list</title>
+<meta name="description" content="A room of agents, one scan, and a ranked board of who overlaps with you above the floor you set. Your list never leaves your side; theirs never leaves theirs. Every row is produced by a live exchange with the ARLI discovery engine.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --paper:#f3f7ee;--tint:#e8f0df;--card:#ffffff;
+  --ink:#16220f;--ink-soft:#55684a;--ink-faint:#84977a;
+  --rule:#d3dfc7;--rule-strong:#b9cbaa;--grid:rgba(31,122,58,.055);
+  --green:#1f7a3a;--green-deep:#125828;--green-wash:#eef7e8;
+  --amber:#8a6d1f;--red:#a32626;--red-wash:#fdf3f2;
+  --font:'Instrument Sans',system-ui,sans-serif;
+  --display:'Bricolage Grotesque','Instrument Sans',system-ui,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+}
+html{background:var(--paper);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.62}
+body{min-height:100vh;background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:28px 28px}
+a{color:inherit;text-decoration:none}
+.container{max-width:1120px;margin:0 auto;padding:0 24px}
+nav{position:sticky;top:0;z-index:100;height:58px;backdrop-filter:blur(14px);background:rgba(243,247,238,.86);border-bottom:1px solid var(--rule);display:flex;align-items:center;padding:0 24px}
+nav .logo{font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:-.5px}
+nav .logo span{color:var(--green)}
+nav .links{margin-left:auto;display:flex;gap:18px;align-items:center}
+nav .links a{font-size:13.5px;color:var(--ink-soft)}
+nav .links a:hover{color:var(--ink)}
+nav .links a.cta{color:#fff;background:var(--green-deep);padding:8px 16px;border-radius:8px;font-weight:600}
+header.top{padding:60px 0 26px}
+.kicker{font-family:var(--mono);font-size:13px;color:var(--green-deep);margin-bottom:18px}
+h1{font-family:var(--display);font-size:clamp(32px,4.6vw,54px);font-weight:800;letter-spacing:-1.9px;line-height:1.05;margin-bottom:18px}
+h1 .dim{color:var(--ink-faint)}
+p.sub{font-size:17.5px;color:var(--ink-soft);max-width:700px}
+section{padding:34px 0}
+.panel{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:22px}
+.panel h2{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:-.6px;margin-bottom:6px;display:flex;align-items:baseline;gap:10px}
+.panel h2 .n{font-family:var(--mono);font-size:12px;color:var(--ink-faint);font-weight:500}
+.panel p.hint{color:var(--ink-soft);font-size:14.5px;margin-bottom:16px}
+.grid2{display:grid;gap:16px}
+@media(min-width:860px){.grid2{grid-template-columns:1.35fr 1fr}}
+label.f{display:block;font-size:12.5px;font-family:var(--mono);color:var(--ink-soft);margin-bottom:6px}
+textarea,input[type=number],select{width:100%;font-family:var(--mono);font-size:13px;color:var(--ink);background:var(--green-wash);border:1px solid var(--rule);border-radius:10px;padding:11px 12px;line-height:1.7}
+input[type=number],select{max-width:190px}
+textarea:focus,input:focus,select:focus{outline:2px solid var(--green-deep);outline-offset:1px}
+.row{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-top:16px}
+button{font-family:var(--font);font-weight:600;font-size:14.5px;border-radius:9px;cursor:pointer;border:1px solid transparent;padding:12px 22px}
+.btn-p{background:var(--green-deep);color:#fff}
+.btn-p:hover{background:var(--green)}
+.btn-o{background:transparent;color:var(--ink);border-color:var(--rule-strong)}
+.btn-o:hover{border-color:var(--green)}
+button[disabled]{opacity:.55;cursor:progress}
+.status{font-family:var(--mono);font-size:13px;color:var(--ink-soft);margin-top:14px;min-height:20px}
+.status.err{color:var(--red)}
+.numbers{display:grid;gap:12px;grid-template-columns:1fr}
+@media(min-width:700px){.numbers{grid-template-columns:repeat(4,1fr)}}
+.num{background:var(--green-wash);border:1px solid var(--rule);border-radius:12px;padding:12px 14px}
+.num b{display:block;font-family:var(--display);font-size:24px;font-weight:800;letter-spacing:-.8px;line-height:1.15}
+.num span{font-family:var(--mono);font-size:12px;color:var(--ink-soft)}
+table{width:100%;border-collapse:collapse;font-size:14.5px}
+th,td{text-align:left;border-bottom:1px solid var(--rule);padding:11px 8px;vertical-align:top}
+th{font-family:var(--mono);font-size:12px;color:var(--ink-soft);font-weight:500}
+.bar{height:8px;background:var(--tint);border-radius:4px;overflow:hidden;min-width:70px}
+.bar i{display:block;height:100%;background:var(--green)}
+.chip{font-family:var(--mono);font-size:12px;border-radius:999px;padding:3px 10px;display:inline-block}
+.chip.ok{background:#e7f5ea;border:1px solid #b7dcc0;color:#125828}
+.chip.warn{background:var(--red-wash);border:1px solid #eedcd9;color:var(--red)}
+.chip.mute{background:var(--tint);border:1px solid var(--rule);color:var(--ink-soft)}
+.chip.amber{background:#fdf6e3;border:1px solid #e8d9a8;color:var(--amber)}
+.agents{display:grid;gap:14px}
+@media(min-width:760px){.agents{grid-template-columns:1fr 1fr}}
+@media(min-width:1100px){.agents{grid-template-columns:repeat(3,1fr)}}
+.agent{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:18px}
+.agent .who{font-family:var(--mono);font-size:11.5px;color:var(--green-deep);margin-bottom:6px}
+.agent h3{font-family:var(--display);font-size:16.5px;font-weight:800;letter-spacing:-.4px;margin-bottom:6px}
+.agent p{font-size:14px;color:var(--ink-soft)}
+.agent .meta{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
+pre{font-family:var(--mono);font-size:12px;line-height:1.6;background:var(--green-wash);border:1px solid var(--rule);border-radius:9px;padding:10px 12px;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
+.stepline{border-top:1px solid var(--rule);padding:14px 0 12px;display:grid;gap:6px}
+.stepline:first-child{border-top:none}
+.stepline .head{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.stepline .head b{font-size:15.5px}
+.stepline .who{font-family:var(--mono);font-size:11.5px;color:#fff;background:var(--green);border-radius:5px;padding:2px 7px}
+.stepline .who.both{background:var(--amber)}
+.stepline .note{color:var(--ink-soft);font-size:14.5px}
+ul.plain{list-style:none;display:grid;gap:10px}
+ul.plain li{position:relative;padding-left:18px;color:var(--ink-soft);font-size:15.5px}
+ul.plain li::before{content:"";position:absolute;left:0;top:9px;width:7px;height:7px;background:var(--green);border-radius:2px}
+.honest{background:var(--green-wash);border:1px solid var(--rule);border-radius:14px;padding:22px}
+.honest h2{font-family:var(--display);font-size:19px;font-weight:800;margin-bottom:12px}
+footer{border-top:1px solid var(--rule);margin-top:40px;padding:26px 0 52px;color:var(--ink-faint);font-size:13px}
+code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:1px solid var(--rule);border-radius:5px;padding:1px 5px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="logo">ARLI<span>.</span></a>
+  <div class="links">
+    <a href="/discovery">Discovery engine</a>
+    <a href="#room">The room</a>
+    <a href="#cases">Use cases</a>
+    <a href="/spec/">Specification</a>
+    <a href="/studio/" class="cta">Studio</a>
+  </div>
+</nav>
+
+<header class="top">
+  <div class="container">
+    <div class="kicker">$ arli match scan --room 8 --floor 3000</div>
+    <h1>Match against the room <span class="dim">without publishing your list.</span></h1>
+    <p class="sub">Put in what matters to you, scan a room of counterparty agents, and get back who
+    overlaps with you above your floor. Your list never leaves your side and theirs never leaves
+    theirs: every row below is the result of a full exchange with a live agent on this machine.</p>
+  </div>
+</header>
+
+<section>
+  <div class="container">
+    <div class="panel">
+      <h2><span class="n">01</span>Your agent</h2>
+      <p class="hint">One feature per line, <code>topic:value</code>. You declare whether you are
+      buying or offering, because a pair of two buyers or two sellers is not a pair and the engine
+      refuses it with a code.</p>
+      <div class="grid2">
+        <div>
+          <label class="f" for="mine">WHAT YOU HOLD, PRIVATELY</label>
+          <textarea id="mine" rows="7"></textarea>
+        </div>
+        <div>
+          <label class="f" for="kind">YOU ARE</label>
+          <select id="kind">
+            <option value="demand" selected>demand — you need, you buy</option>
+            <option value="supply">supply — you offer, you sell</option>
+            <option value="person">person — you are looking, as an individual</option>
+          </select>
+          <div style="margin-top:14px">
+            <label class="f" for="floor">FLOOR, BASIS POINTS</label>
+            <input type="number" id="floor" value="3000" min="0" max="10000" step="500">
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn-p" id="scan">Scan the room</button>
+        <button class="btn-o" id="reset">Reset</button>
+      </div>
+      <div class="status" id="status">Ready.</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="panel">
+      <h2><span class="n">02</span>The board</h2>
+      <p class="hint">Ranked by overlap. A row above your floor is a live counterparty with a signed
+      envelope behind it; a row below the floor is still a match, just one you chose not to see.</p>
+      <div class="numbers" style="margin-bottom:18px">
+        <div class="num"><b id="kChecked">—</b><span>agents in the room</span></div>
+        <div class="num"><b id="kAbove">—</b><span>above your floor</span></div>
+        <div class="num"><b id="kNotPair">—</b><span>not a pair, refused by code</span></div>
+        <div class="num"><b id="kClean">—</b><span>plain features on the wire</span></div>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Counterparty</th><th>Type</th><th>City</th><th>Overlap</th><th>Floor</th><th></th></tr></thead>
+          <tbody id="board"><tr><td colspan="6" class="hint">Scan to fill this in.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="detail" class="hidden">
+  <div class="container">
+    <div class="panel">
+      <h2><span class="n">03</span>One pair, in full</h2>
+      <p class="hint" id="detailHint">—</p>
+      <div class="numbers" style="margin-bottom:18px">
+        <div class="num"><b id="dMatched">—</b><span>shared features returned to you</span></div>
+        <div class="num"><b id="dBasis">—</b><span>overlap, basis points</span></div>
+        <div class="num"><b id="dAgreed">—</b><span>agents agreed</span></div>
+        <div class="num"><b id="dLeak">—</b><span>plain features on the wire</span></div>
+      </div>
+      <div class="grid2">
+        <div>
+          <label class="f">WHAT YOU LEARN</label>
+          <pre id="dMineLearn">—</pre>
+        </div>
+        <div>
+          <label class="f">WHAT THE OTHER SIDE LEARNS</label>
+          <pre id="dTheirsLearn">—</pre>
+        </div>
+      </div>
+      <div style="margin-top:18px">
+        <label class="f">THE EXCHANGE AS IT HAPPENED</label>
+        <div id="dSteps"><p class="hint">—</p></div>
+      </div>
+      <div style="margin-top:18px">
+        <label class="f">EVIDENCE LEFT BEHIND</label>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Step</th><th>Operation</th><th>Envelope</th><th>Signed by</th></tr></thead>
+            <tbody id="dEvidence"><tr><td colspan="4" class="hint">—</td></tr></tbody>
+          </table>
+        </div>
+        <div id="dLimits"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="room">
+  <div class="container">
+    <div class="panel">
+      <h2><span class="n">04</span>The room</h2>
+      <p class="hint" id="roomNote">—</p>
+      <div class="agents" id="agents"></div>
+    </div>
+  </div>
+</section>
+
+<section id="cases">
+  <div class="container">
+    <h2 style="font-family:var(--display);font-size:clamp(25px,3.4vw,36px);font-weight:800;letter-spacing:-1.2px;margin-bottom:10px">Where a private match is worth money</h2>
+    <p class="sub" style="margin-bottom:24px">Ten situations where the list is the asset and the
+    introduction is the product. Each one is the same protocol with a different vocabulary.</p>
+    <div class="agents">
+      <div class="agent"><div class="who">01 · M&amp;A SCOUTING</div><h3>Buyers and targets</h3><p>A
+      buyer will not publish which capabilities it is hunting, and a founder will not announce that
+      it is open to a sale. They learn they overlap on sector, stage and region, and nothing else.</p></div>
+      <div class="agent"><div class="who">02 · TALENT</div><h3>Hiring without a public CV dump</h3><p>Candidates
+      hold their own skill set in their agent; companies hold the role they need. Overlap is found
+      without either side posting a searchable profile.</p></div>
+      <div class="agent"><div class="who">03 · SUPPLY CHAINS</div><h3>Buyers and suppliers</h3><p>Match on
+      capability, region and compliance marks. Prices, volumes and lanes never enter the exchange.</p></div>
+      <div class="agent"><div class="who">04 · GRANTS</div><h3>Funded consortia</h3><p>A programme needs
+      partners with specific capabilities and cannot publish which applicants are short. Overlap is
+      measured, the applicants stay unnamed.</p></div>
+      <div class="agent"><div class="who">05 · MARKETPLACES</div><h3>Routing without a catalogue</h3><p>Send
+      work to the right seller without publishing what every seller can do. The catalogue stays in
+      each seller's agent.</p></div>
+      <div class="agent"><div class="who">06 · PARTNERING</div><h3>Two companies before the first call</h3><p>Answer
+      "is this worth a quarter of someone's time" without either side revealing its portfolio.</p></div>
+      <div class="agent"><div class="who">07 · HEALTH AND CLINICAL</div><h3>Trials and sites</h3><p>A sponsor
+      needs sites with a patient profile; a site will not publish its population. Above a declared
+      floor only, and both sides' principals consent.</p></div>
+      <div class="agent"><div class="who">08 · FINANCE</div><h3>Allocating to specialised funds</h3><p>An
+      allocator scans managers for mandate overlap without either side disclosing the book.</p></div>
+      <div class="agent"><div class="who">09 · PUBLIC SECTOR</div><h3>Procurement with sealed bids</h3><p>Bidders
+      learn whether they are a fit before bidding, without publishing their proposed price or
+      approach.</p></div>
+      <div class="agent"><div class="who">10 · AGENT ECONOMY</div><h3>Agents that transact alone</h3><p>Two
+      agents must decide whether to engage before their principals are awake. The card says who they
+      are, the grammar bounds the talk, the envelopes make it auditable, and consent still belongs
+      to the humans.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="honest">
+      <h2>What this does not do</h2>
+      <ul class="plain">
+        <li>The room here is synthetic. These are engine agents raised by this server with declared
+        capability strings, not real companies, and no real deal is behind any row.</li>
+        <li>Matching is exact on declared strings. Two sides meet on the strings they share, so the
+        vocabulary you choose is the vocabulary you match on.</li>
+        <li>The other side learns how many features you submitted, not which ones.</li>
+        <li>Online probing of a single guess is not closed. Any set intersection answers for the
+        elements you submit, which is why one exchange per session and a feature cap exist.</li>
+        <li>Nothing is proven about the humans behind the agents. A card proves which key published
+        an agent.</li>
+        <li>Issuing verified statements about other people's features is not implemented, deliberately.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    Running on the ARLI discovery engine: <code>match.arliwork.com</code> · engine and checks
+    <code>github.com/dmitrypehovski/arli-discovery-engine</code> · specification
+    <code>arliwork.com/spec/</code> · second implementation in Rust
+    <code>github.com/dmitrypehovski/arli-discovery-rs</code>. Written by an AI agent at ARLI.
+  </div>
+</footer>
+
+<script>
+(function(){
+  var status = document.getElementById('status');
+  var scanBtn = document.getElementById('scan');
+  var roster = [];
+
+  function lines(id){ return document.getElementById(id).value.split('\n').map(function(s){return s.trim()}).filter(Boolean); }
+  function esc(s){ return String(s === null || s === undefined ? '' : s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+
+  function load(){
+    fetch('api/roster').then(function(r){ return r.json() }).then(function(d){
+      roster = d.agents;
+      document.getElementById('mine').value = d.default_mine.join('\n');
+      document.getElementById('floor').value = d.default_floor_basis_points;
+      document.getElementById('kind').value = d.default_mine_kind || 'demand';
+      document.getElementById('roomNote').textContent = d.note;
+      document.getElementById('agents').innerHTML = roster.map(function(a){
+        return '<div class="agent"><div class="who">' + esc(a.kind.toUpperCase()) + ' · ' + esc(a.city.toUpperCase()) + '</div>' +
+          '<h3>' + esc(a.name) + '</h3><p>' + esc(a.headline) + '</p>' +
+          '<div class="meta"><span class="chip mute">' + a.feature_count + ' private features</span>' +
+          '<span class="chip amber">' + esc(a.claim_level) + '</span></div>' +
+          '<p style="margin-top:10px;font-size:13px"><b>Will not publish:</b> ' + esc(a.will_not_publish) + '</p></div>';
+      }).join('');
+      status.textContent = 'Room loaded: ' + roster.length + ' agents.';
+    }).catch(function(e){ status.textContent = 'Could not load the room: ' + e; status.className = 'status err'; });
+  }
+
+  function renderBoard(d){
+    document.getElementById('kChecked').textContent = d.agents_checked;
+    document.getElementById('kAbove').textContent = d.above_floor;
+    document.getElementById('kNotPair').textContent = d.not_comparable;
+    document.getElementById('kClean').textContent = d.wires_clean ? 'none' : 'some';
+
+    document.getElementById('board').innerHTML = d.rows.map(function(row){
+      var overlap = row.opened
+        ? '<div style="display:flex;gap:8px;align-items:center"><span class="bar"><i style="width:' + Math.round((row.overlap_basis_points || 0) / 100) + '%"></i></span><span class="chip mute">' + (row.overlap_basis_points || 0) + ' bps</span></div>'
+        : '<span class="chip warn">not a pair</span> <span class="chip mute">' + esc(row.rejection || '') + '</span>';
+      var floor = row.opened
+        ? (row.passed_floor ? '<span class="chip ok">above floor</span>' : '<span class="chip mute">below floor</span>')
+        : '<span class="chip mute">—</span>';
+      var action = row.opened
+        ? '<button class="btn-o" data-agent="' + esc(row.id) + '" style="padding:8px 14px;font-size:13.5px">Open in full</button>'
+        : '<span class="chip mute">nothing to open</span>';
+      var matched = (row.matched_features && row.matched_features.length)
+        ? '<div style="font-family:var(--mono);font-size:12px;color:var(--ink-soft);margin-top:6px">' + row.matched_features.map(esc).join(' · ') + '</div>'
+        : '';
+      return '<tr><td><b>' + esc(row.name) + '</b><div style="color:var(--ink-soft);font-size:13.5px">' + esc(row.headline) + '</div>' +
+        '<div class="meta" style="margin-top:6px"><span class="chip amber">' + esc(row.claim_level) + '</span></div>' + matched + '</td>' +
+        '<td>' + esc(row.kind) + '</td><td>' + esc(row.city) + '</td><td>' + overlap + '</td><td>' + floor + '</td><td>' + action + '</td></tr>';
+    }).join('');
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-agent]'), function(btn){
+      btn.addEventListener('click', function(){ openFull(btn.getAttribute('data-agent')); });
+    });
+  }
+
+  function openFull(agentId){
+    var panel = document.getElementById('detail');
+    panel.classList.remove('hidden');
+    panel.scrollIntoView({behavior:'smooth'});
+    document.getElementById('detailHint').textContent = 'Running one exchange with ' + agentId + '…';
+    fetch('api/negotiate', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({agent_id: agentId, my_features: lines('mine'),
+                            floor_basis_points: parseInt(document.getElementById('floor').value, 10),
+                            my_kind: document.getElementById('kind').value})
+    }).then(function(r){ return r.json() }).then(function(d){
+      if(d.error){ document.getElementById('detailHint').textContent = 'Failed: ' + d.error; return; }
+      var a = d.agent;
+      document.getElementById('detailHint').textContent = a.name + ' · ' + a.kind + ' · ' + a.city + ' · declares ' + a.claim_level + ' · will not publish: ' + a.will_not_publish;
+      document.getElementById('dMatched').textContent = (d.matched_features || []).length;
+      document.getElementById('dBasis').textContent = d.overlap_basis_points === null ? '—' : d.overlap_basis_points;
+      document.getElementById('dAgreed').textContent = d.agreed ? 'yes' : 'no';
+      document.getElementById('dLeak').textContent = d.leak_check.clean ? 'none' : d.leaked_features.length;
+      document.getElementById('dMineLearn').textContent =
+        'shared features: ' + ((d.matched_features || []).length ? d.matched_features.join(', ') : 'none returned') + '\n' +
+        'overlap: ' + (d.overlap_basis_points === null ? 'not compared' : d.overlap_basis_points + ' basis points') + '\n' +
+        'their list: not learned, and not learnable offline';
+      document.getElementById('dTheirsLearn').textContent =
+        'how many values you submitted: ' + d.leak_check.features_on_each_side[0] + '\n' +
+        'the values themselves: not learned\n' +
+        'their own overlap: ' + ((d.matched_features || []).length ? d.matched_features.length + ' shared features' : 'none above the floor');
+      document.getElementById('dSteps').innerHTML = d.steps.map(function(s, i){
+        var who = s.actor === 'both' ? 'both' : s.actor;
+        return '<div class="stepline"><div class="head"><span class="chip mute">' + String(i + 1).padStart(2, '0') + '</span><b>' + esc(s.name) + '</b>' +
+          '<span class="who ' + (s.actor === 'both' ? 'both' : '') + '">' + esc(who) + '</span></div>' +
+          '<div class="note">' + esc(s.note) + '</div><pre>sent: ' + esc(s.request) + '\nback: ' + esc(s.response) + '</pre></div>';
+      }).join('');
+      var rows = [];
+      Object.keys(d.evidence || {}).forEach(function(name){
+        var e = d.evidence[name];
+        rows.push('<tr><td>' + esc(name) + '</td><td><code>' + esc(e.operation) + '</code></td><td><code>' + esc(e.evidence_id.slice(0, 22)) + '…</code></td><td>' + esc(e.signature_alg) + ' · <code>' + esc(e.kid) + '</code></td></tr>');
+      });
+      document.getElementById('dEvidence').innerHTML = rows.length ? rows.join('') : '<tr><td colspan="4" class="hint">no envelopes: the pair never opened</td></tr>';
+      var limits = [];
+      Object.keys(d.evidence || {}).forEach(function(name){
+        d.evidence[name].limitations.forEach(function(t){ limits.push('<li>' + esc(t) + '</li>'); });
+      });
+      document.getElementById('dLimits').innerHTML = limits.length
+        ? '<label class="f" style="margin-top:14px">WHAT THE ENVELOPES SAY THEY DO NOT COVER</label><ul class="plain">' + limits.join('') + '</ul>' : '';
+    }).catch(function(e){ document.getElementById('detailHint').textContent = 'Failed: ' + e; });
+  }
+
+  scanBtn.addEventListener('click', function(){
+    scanBtn.disabled = true;
+    status.className = 'status';
+    status.textContent = 'Scanning ' + roster.length + ' agents. Each row is a full exchange with a live agent, and each generates a 2048-bit key, so this takes several seconds.';
+    fetch('api/board', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({my_features: lines('mine'),
+                            floor_basis_points: parseInt(document.getElementById('floor').value, 10),
+                            my_kind: document.getElementById('kind').value})
+    }).then(function(r){ return r.json() }).then(function(d){
+      scanBtn.disabled = false;
+      if(d.error){ status.textContent = 'Refused or failed: ' + d.error; status.className = 'status err'; return; }
+      renderBoard(d);
+      status.textContent = 'Scanned ' + d.agents_checked + ' agents. ' + d.above_floor + ' above your floor, ' + d.not_comparable + ' refused as not a pair, and no plain feature on any wire.';
+    }).catch(function(e){
+      scanBtn.disabled = false;
+      status.textContent = 'Request failed: ' + e; status.className = 'status err';
+    });
+  });
+
+  document.getElementById('reset').addEventListener('click', function(){ load(); document.getElementById('detail').classList.add('hidden'); });
+  document.getElementById('kind').addEventListener('change', function(){ status.textContent = 'Type set to ' + document.getElementById('kind').value + '. Scan again to see which rows stay a pair.'; });
+  load();
+})();
+</script>
+</body>
+</html>
