@@ -170,7 +170,8 @@ def verify_signed_nonce(jwk: dict, nonce: str, signature_b64: str) -> bool:
 
 def run_remote_exchange(my_features: list[str], remote_endpoint: str, floor: int, *,
                         remote_id: str, remote_kind: str, my_kind: str = "demand",
-                        local_name: str = "you", network: str = NETWORK) -> dict:
+                        local_name: str = "you", network: str = NETWORK,
+                        peer_client=None) -> dict:
     """One full exchange where the counterparty runs on its own machine, on its own harness.
 
     Our side stays local: the agent that holds our features is raised here for the length of the
@@ -185,8 +186,9 @@ def run_remote_exchange(my_features: list[str], remote_endpoint: str, floor: int
         seat_a, seat_b = local_name, remote_id
         session = f"remote-{abs(hash((remote_endpoint, floor))) % 10**8}"
 
-        with AgentClient(f"http://127.0.0.1:{local_port}") as mine, \
-                AgentClient(remote_endpoint) as theirs:
+        # An agent that holds a poll open is reached through it, and the exchange code does not care which.
+        peer = peer_client if peer_client is not None else AgentClient(remote_endpoint)
+        with AgentClient(f"http://127.0.0.1:{local_port}") as mine, peer as theirs:
             open_params = {
                 "negotiation_id": session, "peers": [seat_a, seat_b], "network": network,
                 "admits_synthetic": False,
@@ -314,7 +316,8 @@ def allow_private_addresses() -> bool:
     return value.strip().lower() in ("1", "true", "yes")
 
 def run_remote_introduction(my_agent_id: str, remote_id: str, remote_endpoint: str, note: str, *,
-                            remote_kind: str = "supply", network: str = NETWORK) -> dict:
+                            remote_kind: str = "supply", network: str = NETWORK,
+                            peer_client=None) -> dict:
     """Take an introduction to an agent we do not host, over the same calls a match already uses.
 
     Why this and not an email: an agent living at somebody else's address has no inbox of ours to write to.
@@ -346,7 +349,8 @@ def run_remote_introduction(my_agent_id: str, remote_id: str, remote_endpoint: s
             ],
         }
         message = {"introduction": note[:400]}
-        with AgentClient(f"http://127.0.0.1:{local_port}") as mine, AgentClient(remote_endpoint) as theirs:
+        peer = peer_client if peer_client is not None else AgentClient(remote_endpoint)
+        with AgentClient(f"http://127.0.0.1:{local_port}") as mine, peer as theirs:
             opened = mine.call("arli/negotiation/open", open_params)
             if not opened.get("opened"):
                 return {"opened": False, "session": session, "rejection": str(opened.get("rejection") or "not_openable")}

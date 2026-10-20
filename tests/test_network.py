@@ -187,11 +187,13 @@ def test_connecting_says_which_refusal_the_agent_gave(monkeypatch) -> None:
     _states, servers = build_pair(0, 0, names=("signer", "peer"))
     try:
         endpoint = f"http://127.0.0.1:{port_of(servers[0])}"
+        # The purpose names the room, so exhausting the window means using the purpose the room will use.
         with AgentClient(endpoint) as client:
             client.call("arli/identity/sign", {"nonce": "a-nonce-long-enough-to-connect-1",
-                                               "purpose": "connect"})
+                                               "purpose": "connect:room-under-test.example.com"})
         with pytest.raises(ConnectRefused) as refusal:
-            connect_agent({"endpoint": endpoint, "kind": "supply"})
+            connect_agent({"endpoint": endpoint, "kind": "supply"},
+                          room="room-under-test.example.com")
         assert refusal.value.code == "rate_limited", refusal.value
     finally:
         for server in servers:

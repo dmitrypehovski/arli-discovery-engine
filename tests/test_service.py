@@ -908,3 +908,71 @@ def test_one_agent_can_belong_to_two_rooms_without_the_second_being_refused(monk
         assert first["connected"] and second["connected"], (first, second)
     finally:
         server.shutdown(); server.server_close()
+
+
+def test_an_agent_with_no_address_registers_by_calling_and_is_still_found(monkeypatch, tmp_path) -> None:
+    """The point of the whole thing: no address, no inbound path, and a search still reaches it."""
+    import threading
+
+    from arli_engine.adapters.a2a.server import start_agent
+    from arli_engine.agent import build_agent
+    from arli_engine.client import AgentClient
+    from arli_engine.core.signing import KeyPair
+
+    monkeypatch.setenv("ARLI_TAXONOMY", "/llm-gateway/skill_taxonomy_v2.json")
+    monkeypatch.setenv("ARLI_DECLARED_AREAS", "manufacturing-and-production")
+    # The wall is the premise of this test, so it is set here rather than inherited from whatever ran before:
+    # with private addresses allowed the room could dial this agent and nothing below would prove anything.
+    monkeypatch.delenv("ARLI_MATCH_ALLOW_PRIVATE", raising=False)
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    getattr(service.taxonomy, "cache_clear", lambda: None)()
+
+    key = KeyPair.generate()
+    state = build_agent("no-address", ["offer:packaging"], "http://127.0.0.1:0", private_pem=key.private_pem)
+    server, _thread = start_agent(state, 0, host="127.0.0.1")
+    endpoint = "http://127.0.0.1:%d" % server.server_address[1]
+    stop = threading.Event()
+
+    def hold_the_poll():
+        with AgentClient(endpoint) as local:
+            while not stop.is_set():
+                call = service.pull_next("no-address", wait_seconds=1)
+                if not call:
+                    continue
+                try:
+                    service.pull_answer("no-address", call["call_id"], local.call(call["method"], call["params"]))
+                except Exception as error:  # noqa: BLE001
+                    service.pull_answer("no-address", call["call_id"], None, error=str(error))
+
+    poller = threading.Thread(target=hold_the_poll, daemon=True)
+    poller.start()
+    try:
+        # The wall first: a room that refuses loopback cannot dial this agent at all.
+        try:
+            service.connect_agent({"endpoint": endpoint, "kind": "supply"})
+            raise AssertionError("a room must not pretend it can reach a private address")
+        except service.ConnectRefused as refused:
+            assert refused.code == "address_not_reachable", refused.code
+
+        with AgentClient(endpoint) as local:
+            card = local.get_card()
+            hello = service.pull_hello(card)
+            signed = local.call("arli/identity/sign", {"nonce": hello["nonce"], "purpose": hello["purpose"]})
+            profile = local.call("arli/profile")
+        answer = service.pull_register({"card": card, "nonce": hello["nonce"],
+                                       "signature": signed["signature"], "kind": "supply", "profile": profile})
+        assert answer["registered"] is True, answer
+        assert answer["checks"]["reachability"].startswith("outbound"), answer["checks"]
+        assert service.remote_agents()[0]["pull"] is True, "the room says how this agent is reachable"
+
+        result = service.scan_room(["need:packaging"], 3000, "demand")
+        rows = [row for row in result["rows"] if row.get("remote")]
+        assert rows, result
+        assert rows[0]["opened"] is True and rows[0]["overlap_basis_points"] == 10000, rows[0]
+        assert rows[0]["wires_clean"] is True, "the poll is still a wire, and it stays clean"
+        assert result["remote_sifted"] == 1, result
+    finally:
+        stop.set()
+        poller.join(timeout=5)
+        server.shutdown()
+        server.server_close()

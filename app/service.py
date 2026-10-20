@@ -20,6 +20,7 @@ import re
 import secrets
 import sqlite3
 import ssl
+import threading
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -81,7 +82,10 @@ def connect() -> sqlite3.Connection:
                connected_at TEXT NOT NULL,
                active INTEGER NOT NULL DEFAULT 1,
                profile TEXT NOT NULL DEFAULT '{}',
-               bucket_space TEXT NOT NULL DEFAULT ''
+               bucket_space TEXT NOT NULL DEFAULT '',
+               mode TEXT NOT NULL DEFAULT 'address',
+               pull_token TEXT NOT NULL DEFAULT '',
+               card TEXT NOT NULL DEFAULT '{}'
            )"""
     )
     # Added after the first rows existed: a remote agent that stops answering has to leave the room,
@@ -172,7 +176,10 @@ def connect() -> sqlite3.Connection:
                                ("last_checked", "TEXT NOT NULL DEFAULT ''"),
                                ("unreachable_reason", "TEXT NOT NULL DEFAULT ''"),
                                ("profile", "TEXT NOT NULL DEFAULT '{}'"),
-                               ("bucket_space", "TEXT NOT NULL DEFAULT ''")):
+                               ("bucket_space", "TEXT NOT NULL DEFAULT ''"),
+                               ("mode", "TEXT NOT NULL DEFAULT 'address'"),
+                               ("pull_token", "TEXT NOT NULL DEFAULT ''"),
+                               ("card", "TEXT NOT NULL DEFAULT '{}'")):
         try:
             connection.execute(f"ALTER TABLE remotes ADD COLUMN {column} {definition}")
         except sqlite3.OperationalError:
@@ -302,6 +309,191 @@ def connect_agent(payload: dict, room: str = "") -> dict:
     }
 
 
+# A room cannot call an agent that sits behind a router it cannot see through. Such an agent calls the room
+# instead: it says hello, signs the room's nonce, and then holds a poll open. A call for it is queued here and
+# answered on the agent's next poll, so the exchange runs without any inbound path to the agent at all.
+PULL_WAIT_SECONDS = 45
+PULL_POLL_SECONDS = 20
+_pull_lock = threading.Lock()
+_pull_queue: dict[str, list[str]] = {}
+_pull_calls: dict[str, dict] = {}
+
+
+class PullTimeout(RuntimeError):
+    """The agent did not answer its poll in time. Named, because it is not a refusal."""
+
+
+def _pull_nonce_store() -> dict:
+    return _PULL_NONCES
+
+
+_PULL_NONCES: dict[str, tuple[str, float]] = {}
+
+
+def _card_subject(card: dict) -> tuple[str, dict]:
+    """Which key and identity this card stands for, read the same way in both halves of registration.
+
+    A card keeps its key in a signature block rather than at the top level, and reading it in two places with
+    different fallbacks is how a nonce gets filed under one name and looked up under another. One reader, one
+    answer.
+    """
+    from app.network import card_key
+
+    jwk, kid = card_key(card)
+    return str(kid or card.get("name") or ""), jwk
+
+
+def pull_hello(card: dict) -> dict:
+    """First half of registering an agent that calls us: prove you hold the card's key, here is our nonce."""
+    from app.network import verify_card_self
+
+    verified, reasons = verify_card_self(card)
+    if not verified:
+        raise ConnectRefused("card_not_verified", "; ".join(reasons) or "signature does not verify")
+    subject, _jwk = _card_subject(card)
+    nonce = secrets.token_hex(16)
+    _PULL_NONCES[subject] = (nonce, time.time())
+    return {"nonce": nonce, "purpose": "pull:register",
+            "answer": "Sign this nonce with the key your card names and post it back with the answer to "
+                      "arli/profile. Nothing else is needed, and no address."}
+
+
+def pull_register(payload: dict) -> dict:
+    """Second half: the signature over our nonce, the profile, and a token for the poll."""
+    from app.network import verify_card_self, verify_signed_nonce
+
+    card = payload.get("card") or {}
+    verified, reasons = verify_card_self(card)
+    if not verified:
+        raise ConnectRefused("card_not_verified", "; ".join(reasons) or "signature does not verify")
+    subject, jwk = _card_subject(card)
+    nonce, issued = _PULL_NONCES.get(subject, ("", 0.0))
+    given = str(payload.get("nonce") or "")
+    if not nonce or given != nonce:
+        raise ConnectRefused("nonce_not_ours", "register with the nonce this room issued to this card")
+    if time.time() - issued > 300:
+        raise ConnectRefused("nonce_expired", "the nonce this room issued is more than five minutes old")
+    if not verify_signed_nonce(jwk, given, str(payload.get("signature") or "")):
+        raise ConnectRefused("address_key_mismatch",
+                             "the signature over our nonce does not verify with the key the card names")
+    profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
+    agent_id = str(card.get("name") or subject or "pull-agent")
+    token = secrets.token_urlsafe(24)
+    with connect() as connection:
+        connection.execute(
+            """INSERT OR REPLACE INTO remotes
+               (id, name, kind, city, headline, endpoint, kid, jwk, connected_at, active,
+                profile, bucket_space, mode, pull_token, card)
+               VALUES (?,?,?,?,?,'',?,?,?,1,?,?,'pull',?,?)""",
+            (agent_id, agent_id, str(payload.get("kind") or "supply").strip() or "supply",
+             str(payload.get("city") or "").strip(), str(payload.get("headline") or "").strip(), subject,
+             json.dumps(jwk), datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+             json.dumps(profile), str(profile.get("bucket_space") or ""), token, json.dumps(card)))
+    return {"registered": True, "id": agent_id, "pull_token": token,
+            "checks": {"card_verified": True, "our_nonce_signed_by_the_card_key": True,
+                       "reachability": "outbound only: this agent calls the room, and the room cannot call it"},
+            "note": "There is no address to test here, and that is the point. The key was proved by what the "
+                    "agent signed, and every exchange with it now travels over the poll it holds open."}
+
+
+def pull_token_of(token: str) -> dict | None:
+    with connect() as connection:
+        row = connection.execute("SELECT * FROM remotes WHERE pull_token = ? AND mode = 'pull' AND active = 1",
+                                 (token,)).fetchone()
+    return dict(row) if row else None
+
+
+def pull_next(agent_id: str, wait_seconds: int = PULL_POLL_SECONDS) -> dict | None:
+    """One pending call for this agent, or None if none arrived before the poll ends."""
+    deadline = time.time() + wait_seconds
+    while time.time() < deadline:
+        with _pull_lock:
+            queued = _pull_queue.get(agent_id) or []
+            if queued:
+                call_id = queued.pop(0)
+                call = _pull_calls.get(call_id)
+                if call is not None and not call["answered"]:
+                    return {"call_id": call_id, "method": call["method"], "params": call["params"]}
+        time.sleep(0.25)
+    return None
+
+
+def pull_answer(agent_id: str, call_id: str, result: dict | None, error: str = "") -> bool:
+    with _pull_lock:
+        call = _pull_calls.get(call_id)
+        if call is None or call["agent_id"] != agent_id or call["answered"]:
+            return False
+        call["result"] = result
+        call["error"] = error
+        call["answered"] = True
+        call["event"].set()
+    return True
+
+
+def peer_client_for(remote: dict):
+    """How to reach this agent: over its address, or over the poll it holds open."""
+    if remote.get("mode") != "pull":
+        return None
+    try:
+        card = json.loads(remote.get("card") or "{}")
+    except json.JSONDecodeError:
+        card = {}
+    return PullClient(remote["id"], card=card if isinstance(card, dict) else {})
+
+
+def pull_call(agent_id: str, method: str, params: dict, timeout: int = PULL_WAIT_SECONDS) -> dict:
+    """Ask an agent that holds a poll open, and wait for its answer."""
+    call_id = secrets.token_hex(10)
+    event = threading.Event()
+    with _pull_lock:
+        _pull_calls[call_id] = {"agent_id": agent_id, "method": method, "params": params,
+                                "answered": False, "result": None, "error": "", "event": event,
+                                "asked_at": time.time()}
+        _pull_queue.setdefault(agent_id, []).append(call_id)
+    if not event.wait(timeout):
+        with _pull_lock:
+            _pull_calls.pop(call_id, None)
+            queued = _pull_queue.get(agent_id) or []
+            if call_id in queued:
+                queued.remove(call_id)
+        raise PullTimeout(f"{agent_id} did not answer within {timeout}s of the poll")
+    with _pull_lock:
+        call = _pull_calls.pop(call_id, {}) or {}
+    if call.get("error"):
+        raise AgentRefused(str(call["error"]))
+    return call.get("result") or {}
+
+
+class PullClient:
+    """The same shape as AgentClient, over the poll instead of over an address.
+
+    The exchange code does not know the difference, which is the point: reachability became a transport detail
+    rather than a property an agent has to own.
+    """
+
+    def __init__(self, agent_id: str, card: dict | None = None, timeout: int = PULL_WAIT_SECONDS) -> None:
+        self.agent_id = agent_id
+        self._card = card or {}
+        self.timeout = timeout
+
+    def get_card(self) -> dict:
+        if self._card:
+            return self._card
+        raise PullTimeout(f"{self.agent_id} has no card on record for this room")
+
+    def call(self, method: str, params: dict | None = None) -> dict:
+        return pull_call(self.agent_id, method, params or {}, timeout=self.timeout)
+
+    def close(self) -> None:
+        return None
+
+    def __enter__(self) -> "PullClient":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
+
 def remote_agents(include_endpoint: bool = False) -> list[dict]:
     with connect() as connection:
         rows = connection.execute("SELECT * FROM remotes WHERE active = 1 ORDER BY connected_at").fetchall()
@@ -310,7 +502,8 @@ def remote_agents(include_endpoint: bool = False) -> list[dict]:
         agent = {"id": row["id"], "name": row["name"], "kind": row["kind"], "city": row["city"],
                  "headline": row["headline"], "claim_level": "declared",
                  "will_not_publish": "whatever its owner keeps at home",
-                 "feature_count": None, "remote": True, "connected_at": row["connected_at"]}
+                 "feature_count": None, "remote": True, "connected_at": row["connected_at"],
+                 "pull": (row["mode"] if "mode" in row.keys() else "address") == "pull"}
         if include_endpoint:
             agent["endpoint"] = row["endpoint"]
             agent["kid"] = row["kid"]
@@ -329,7 +522,10 @@ def remotes_to_check() -> list[dict]:
     return [{"id": row["id"], "name": row["name"], "kind": row["kind"], "city": row["city"],
              "headline": row["headline"], "endpoint": row["endpoint"], "active": row["active"],
              "failures": row["failures"], "profile": row["profile"] if "profile" in row.keys() else "{}",
-             "bucket_space": row["bucket_space"] if "bucket_space" in row.keys() else ""} for row in rows]
+             "bucket_space": row["bucket_space"] if "bucket_space" in row.keys() else "",
+             "mode": row["mode"] if "mode" in row.keys() else "address",
+             "pull_token": row["pull_token"] if "pull_token" in row.keys() else "",
+             "card": row["card"] if "card" in row.keys() else "{}"} for row in rows]
 
 
 def stored_agents(include_features: bool = False) -> list[dict]:
@@ -591,8 +787,15 @@ def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
             result = run_remote_exchange(
                 my_features, remote["endpoint"], floor, remote_id=remote["name"],
                 remote_kind=remote["kind"], my_kind=my_kind,
+                peer_client=peer_client_for(remote),
             )
         except Exception as error:  # noqa: BLE001
+            # Log the shape of the failure as well as its name: a row that says "unreachable" and nothing more
+            # cannot be told apart from a protocol mistake on our own side, which this one turned out to be.
+            import traceback
+
+            print(f"exchange with {remote['id']} failed: {type(error).__name__}: {error}", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
             withdrawn = note_remote_failure(remote["id"], f"{type(error).__name__}: {error}")
             result = {"id": remote["id"], "name": remote["name"], "kind": remote["kind"],
                       "city": remote["city"], "headline": remote["headline"],
@@ -1655,6 +1858,16 @@ class Handler(BaseHandler):
                 "agents": remote_agents(include_endpoint=False),
             })
             return
+        if path == "/api/pull":
+            agent = pull_token_of(str(query.get("pull_token") or "") if isinstance(query, dict) else "")
+            if agent is None:
+                self._json(403, {"error": "pull_token_unknown",
+                                 "detail": "This token is not a live registration here."})
+                return
+            call = pull_next(agent["id"])
+            self._json(200, call) if call else self._json(204, {})
+            return
+
         if path == "/api/health":
             with connect() as connection:
                 registered = connection.execute("SELECT COUNT(*) AS n FROM agents WHERE active = 1").fetchone()["n"]
@@ -1744,6 +1957,7 @@ class Handler(BaseHandler):
     def do_POST(self) -> None:  # noqa: N802
         path = self.path.split("?")[0]
         if path not in ("/api/agents", "/api/scan", "/api/negotiate", "/api/connect", "/api/intake",
+                         "/api/pull/hello", "/api/pull/register", "/api/pull/answer",
                          "/api/app/register", "/api/app/login", "/api/app/logout",
                          "/api/vocabulary", "/api/app/intake", "/api/app/introductions",
                          "/api/app/agreements") and not (
@@ -1919,6 +2133,31 @@ class Handler(BaseHandler):
                 self._json(200, intake(payload))
             except ValueError as error:
                 self._json(400, {"error": str(error)})
+            return
+
+        if path == "/api/pull/hello":
+            try:
+                self._json(200, pull_hello(payload.get("card") or {}))
+            except ConnectRefused as error:
+                self._json(400, {"error": error.code, "detail": error.detail})
+            return
+
+        if path == "/api/pull/register":
+            try:
+                self._json(200, pull_register(payload))
+            except ConnectRefused as error:
+                self._json(400, {"error": error.code, "detail": error.detail})
+            return
+
+        if path == "/api/pull/answer":
+            agent = pull_token_of(str(payload.get("pull_token") or ""))
+            if agent is None:
+                self._json(403, {"error": "pull_token_unknown",
+                                 "detail": "This token is not a live registration here."})
+                return
+            accepted = pull_answer(agent["id"], str(payload.get("call_id") or ""),
+                                   payload.get("result"), str(payload.get("error") or ""))
+            self._json(200 if accepted else 409, {"accepted": accepted})
             return
 
         if path == "/api/connect":

@@ -22,6 +22,7 @@ FEATURES=""
 ADDRESS=""
 AREAS=""
 NO_TUNNEL=0
+NO_PULL=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -31,6 +32,7 @@ while [ $# -gt 0 ]; do
     --address) ADDRESS="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
     --no-tunnel) NO_TUNNEL=1; shift ;;
+    --no-pull) NO_PULL=1; shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -206,6 +208,30 @@ else:
     print(f"  refused: {data.get('error')} {data.get('detail', '')}")
     raise SystemExit(1)
 PY
+elif [ "$NO_PULL" = "0" ]; then
+  # No public address is needed for this at all. The agent signs the room's nonce, registers, and then holds
+  # the connection open, so the room asks its questions through the agent's own call. Reachability stops being
+  # something an owner has to arrange.
+  PULL_LOG="$HOME_DIR/$NAME-pull.log"
+  say ""
+  say "  registration: no public address, so the agent registers by calling the room and holds it open"
+  (
+    cd "$ENGINE_DIR" && "$ENGINE_DIR/.venv/bin/python" -m arli_engine.pull --attach \
+      --room "$ROOM" --port "$PORT"
+  ) > "$PULL_LOG" 2>&1 &
+  PULL_PID=$!
+  i=0
+  while [ $i -lt 15 ]; do
+    if grep -q "registered as" "$PULL_LOG" 2>/dev/null; then break; fi
+    i=$((i + 1))
+    sleep 1
+  done
+  if grep -q "registered as" "$PULL_LOG" 2>/dev/null; then
+    grep -m1 "registered as" "$PULL_LOG" | sed 's/^/  /'
+    say "  it is in the room: $ROOM, reachable through its own call"
+  else
+    say "  registration: not confirmed yet, the log will say: $PULL_LOG"
+  fi
 else
   say ""
   say "Your agent is running at home but has no public address, so the room cannot reach it yet."
@@ -219,4 +245,7 @@ say "Your list stayed on this machine: $HOME_DIR/$NAME.pem is the agent's key."
 say "Keep it running while you want to be found. Stop it with: kill $AGENT_PID"
 if [ -n "$TUNNEL_PID" ]; then
   say "Stop the tunnel with: kill $TUNNEL_PID"
+fi
+if [ -n "$PULL_PID" ]; then
+  say "Stop the registration with: kill $PULL_PID  (the agent keeps running without it)"
 fi
