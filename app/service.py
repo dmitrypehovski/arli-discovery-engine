@@ -490,20 +490,30 @@ def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
     for agent in stored_agents(include_features=True):
         entries.append({**agent, "sample": False})
 
+    # Who holds an agent is not a public fact, so the room carries the capability rather than the owner: an
+    # agent is askable when there is a door for a request, an account here or an address to reach it at. A
+    # registered agent whose maker never claimed it has neither, and a button that can only fail is worse than
+    # no button.
+    with connect() as connection:
+        held = {row["id"] for row in connection.execute(
+            "SELECT id FROM agents WHERE active = 1 AND owner_account <> ''")}
+
     rows = []
     for entry in entries:
+        askable = bool(entry.get("sample") is False and (entry["id"] in held or entry.get("remote")))
         try:
             result = run_exchange(my_features, entry["features"], floor, seeker_name="you",
                                   holder_name=entry["id"], seeker_kind=my_kind,
                                   holder_kind=entry["kind"])
         except Exception as error:  # noqa: BLE001
-            rows.append({"id": entry["id"], "name": entry["name"], "error": f"{type(error).__name__}: {error}"})
+            rows.append({"id": entry["id"], "name": entry["name"], "askable": False,
+                         "error": f"{type(error).__name__}: {error}"})
             continue
         rows.append({
             "id": entry["id"], "name": entry["name"], "kind": entry["kind"], "city": entry["city"],
             "headline": entry["headline"], "claim_level": entry["claim_level"],
             "will_not_publish": entry["will_not_publish"], "feature_count": entry["feature_count"],
-            "sample": entry["sample"],
+            "sample": entry["sample"], "askable": askable,
             "opened": result.get("opened", False), "rejection": result.get("rejection"),
             "overlap_basis_points": result["overlap_basis_points"],
             "overlap_ratio": result["overlap_ratio"],
@@ -1339,6 +1349,54 @@ def agreements_for(account: dict, introduction_id: str) -> dict:
                     "holding the id can check the signatures instead of taking our word for it."}
 
 
+def app_summary(account: dict) -> dict:
+    """The numbers the screen shows, gathered in one call.
+
+    A pipeline screen that fires six requests to draw its own header feels slow on the one page a person opens
+    first, and a number that arrives late is a number nobody trusts. Everything here is a count over rows this
+    account can already see, plus the size of the room, which is public by design.
+    """
+    with connect() as connection:
+        agents = connection.execute(
+            "SELECT COUNT(*) AS n FROM agents WHERE owner_account = ? AND active = 1",
+            (account["id"],)).fetchone()["n"]
+        introductions = connection.execute(
+            "SELECT state, COUNT(*) AS n FROM introductions WHERE from_account = ? OR to_account = ?"
+            " GROUP BY state", (account["id"], account["id"])).fetchall()
+        agreements = connection.execute(
+            """SELECT a.state, COUNT(*) AS n FROM agreements AS a
+               JOIN introductions AS i ON i.id = a.introduction_id
+               WHERE i.from_account = ? OR i.to_account = ? GROUP BY a.state""",
+            (account["id"], account["id"])).fetchall()
+        milestones = connection.execute(
+            """SELECT COUNT(*) AS n FROM agreement_events AS e
+               JOIN agreements AS a ON a.id = e.agreement_id
+               JOIN introductions AS i ON i.id = a.introduction_id
+               WHERE i.from_account = ? OR i.to_account = ?""",
+            (account["id"], account["id"])).fetchone()["n"]
+        registered = connection.execute(
+            "SELECT COUNT(*) AS n FROM agents WHERE active = 1").fetchone()["n"]
+
+    with connect() as connection:
+        waiting_on_you = connection.execute(
+            "SELECT COUNT(*) AS n FROM introductions WHERE to_account = ? AND state = 'requested'",
+            (account["id"],)).fetchone()["n"]
+    introduction_counts = {row["state"]: row["n"] for row in introductions}
+    agreement_counts = {row["state"]: row["n"] for row in agreements}
+    return {
+        "agents": agents,
+        "introductions": {
+            # The one number a person acts on: how many answers are owed by them rather than by the other side.
+            "waiting_on_you": waiting_on_you,
+            **introduction_counts,
+        },
+        "agreements": agreement_counts,
+        "milestones": milestones,
+        "room": {"registered_agents": registered, "examples": len(ROSTER) if shows_examples() else 0,
+                 "connected_agents": len(remote_agents()), "mode": room_mode()},
+    }
+
+
 def entry_for(agent_id: str) -> dict | None:
     for agent in ROSTER:
         if agent["id"] == agent_id:
@@ -1496,6 +1554,13 @@ class Handler(BaseHandler):
                 self._serve_page(page)
             else:
                 self._json(500, {"error": "no app page"})
+            return
+        if path == "/api/app/summary":
+            account = account_by_session(self._cookie_token())
+            if account is None:
+                self._json(401, {"error": "not_signed_in", "detail": "Sign in first."})
+                return
+            self._json(200, app_summary(account))
             return
         if path == "/api/app/me":
             account = account_by_session(self._cookie_token())

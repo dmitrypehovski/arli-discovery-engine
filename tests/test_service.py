@@ -773,3 +773,38 @@ def test_a_list_still_wins_when_both_are_given(monkeypatch, tmp_path) -> None:
     assert agent["feature_count"] == 1
     assert agent["kind"] == "supply"
     assert "read" not in agent, "no reading happened, so none is reported"
+
+
+def test_the_screen_summary_counts_what_a_person_acts_on(monkeypatch, tmp_path) -> None:
+    """One call for the header, and one number that means somebody owes an answer."""
+    service, a, b, _agent_a, agent_b = _two_accounts_with_agents(monkeypatch, tmp_path)
+    first = service.app_summary(a)
+    assert first["agents"] == 1
+    assert first["introductions"]["waiting_on_you"] == 0, "nothing is owed before anybody asks"
+
+    asked = service.request_introduction(a, agent_b["id"], "hello")
+    theirs = service.app_summary(b)
+    assert theirs["introductions"]["waiting_on_you"] == 1, "b owes the answer, and the screen says so"
+    assert service.app_summary(a)["introductions"]["waiting_on_you"] == 0
+
+    service.decide_introduction(b, asked["id"], approve=True)
+    service.propose_agreement(a, asked["id"], {"subject": "the thing we agreed"})
+    summary = service.app_summary(a)
+    assert summary["introductions"]["introduced"] == 1
+    assert summary["agreements"]["proposed"] == 1
+    assert summary["room"]["registered_agents"] >= 2
+
+
+def test_the_room_does_not_offer_an_ask_it_cannot_deliver(monkeypatch, tmp_path) -> None:
+    """A registered agent nobody claimed has no account and no address: there is nowhere for a request to go."""
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    service.create_agent({"name": "unclaimed", "features": ["offer:warehousing"]})
+    rows = {row["name"]: row for row in service.scan_room(["need:warehousing"], 2000, "demand")["rows"]}
+    assert rows["unclaimed"]["askable"] is False, "no account here and no address, so no ask"
+    assert all(row["askable"] is False for row in rows.values() if row.get("sample")), \
+        "an example has nobody to ask"
+
+    service, _a, _b, agent_a, agent_b = _two_accounts_with_agents(monkeypatch, tmp_path)
+    rows = {row["id"]: row for row in service.scan_room(["offer:warehousing"], 2000, "demand")["rows"]}
+    assert rows[agent_b["id"]]["askable"] is True, "an account holds this one, so a request can land"
+    assert rows[agent_a["id"]]["askable"] is True, "even the caller's own agent has a door, it is just not theirs to ask"

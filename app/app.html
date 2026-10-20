@@ -3,16 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My agent — ARLI Match</title>
-<meta name="description" content="Sign in, describe what you need in your own words, get an agent of your own, and search the room. Your list stays private.">
+<title>My deals — ARLI Match</title>
+<meta name="description" content="From a match to a signature: write what you need, get an agent, be introduced, agree on terms, and keep every step. Your list stays private.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --paper:#f3f7ee;--tint:#e8f0df;--card:#ffffff;
-  --ink:#16220f;--ink-soft:#55684a;--ink-faint:#84977a;
+  --paper:#f3f7ee;--tint:#e8f0df;--card:#ffffff;--card-quiet:#fbfdf8;
+  --ink:#16220f;--ink-soft:#55684a;--ink-faint:#6b7f5f;
   --rule:#d3dfc7;--rule-strong:#b9cbaa;--grid:rgba(31,122,58,.055);
   --green:#1f7a3a;--green-deep:#125828;--green-wash:#eef7e8;
   --amber:#8a6d1f;--red:#a32626;--red-wash:#fdf3f2;
@@ -27,41 +27,103 @@ nav{position:sticky;top:0;z-index:50;height:58px;backdrop-filter:blur(14px);back
 nav .logo{font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:-.5px}
 nav .logo span{color:var(--green)}
 nav .right{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:13.5px;color:var(--ink-soft)}
-.container{max-width:900px;margin:0 auto;padding:28px 24px 60px}
-h1{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-.6px;line-height:1.15;margin-bottom:8px}
-h2{font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:-.3px;margin-bottom:10px}
-p.sub{color:var(--ink-soft);font-size:15.5px;max-width:70ch;margin-bottom:16px}
-.card{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:20px;margin-bottom:16px}
-label.f{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-faint);margin:14px 0 6px}
-textarea,input,select{width:100%;padding:11px 12px;border:1px solid var(--rule);border-radius:10px;background:#fff;color:var(--ink);font-family:var(--font);font-size:14.5px}
-textarea:focus,input:focus,select:focus{outline:none;border-color:var(--rule-strong);box-shadow:0 0 0 3px var(--green-wash)}
-textarea{min-height:96px;resize:vertical}
-.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.container{max-width:1040px;margin:0 auto;padding:26px 24px 72px}
+
+/* hero + live numbers */
+.hero{display:grid;grid-template-columns:1.35fr 1fr;gap:26px;align-items:end;margin-bottom:22px}
+@media(max-width:820px){.hero{grid-template-columns:1fr;gap:16px}}
+h1{font-family:var(--display);font-weight:800;font-size:34px;letter-spacing:-.9px;line-height:1.1}
+h1 .dim{color:var(--ink-faint)}
+p.sub{color:var(--ink-soft);font-size:15.5px;max-width:62ch;margin-top:8px}
+.counters{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(max-width:820px){.counters{grid-template-columns:repeat(4,1fr)}}
+.counter{background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:10px 12px}
+.counter b{display:block;font-family:var(--mono);font-size:22px;font-weight:500;line-height:1.15}
+.counter span{font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em}
+.counter.hot{border-color:var(--green);background:var(--green-wash)}
+
+/* the track: four stages, one road */
+.rail{position:relative;margin:8px 0 22px;background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:14px 16px}
+.rail-line{position:absolute;left:26px;right:26px;top:31px;height:2px;background:var(--rule)}
+.rail-fill{position:absolute;left:26px;top:31px;height:2px;background:var(--green);transition:width .5s ease}
+.rail-stops{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stop{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.stop .dot{width:13px;height:13px;border-radius:50%;background:var(--paper);border:2px solid var(--rule-strong);position:relative;z-index:2}
+.stop.on .dot{background:var(--green);border-color:var(--green)}
+.stop .n{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);letter-spacing:.08em}
+.stop .t{font-size:13.5px;font-weight:600}
+.stop .c{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+.stop.on .t{color:var(--green-deep)}
+@media(max-width:640px){.stop .n{display:none}}
+
+/* stage cards */
+.stage{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:18px 20px;margin-bottom:16px;position:relative}
+.stage:before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:var(--rule-strong)}
+.stage.live:before{background:var(--green)}
+.stage-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.stage-num{font-family:var(--mono);font-size:11px;color:var(--ink-faint);letter-spacing:.1em}
+h2{font-family:var(--display);font-weight:800;font-size:20px;letter-spacing:-.3px}
+.stage-note{color:var(--ink-soft);font-size:14px;margin-bottom:12px;max-width:78ch}
+label.f{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-faint);margin:12px 0 6px}
+input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--rule);border-radius:10px;background:#fff;color:var(--ink);font-family:var(--font);font-size:14.5px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--rule-strong);box-shadow:0 0 0 3px var(--green-wash)}
+textarea{min-height:84px;resize:vertical}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
 .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:10px;border:1px solid var(--rule-strong);background:#fff;color:var(--ink);font-family:var(--font);font-size:14.5px;font-weight:600;cursor:pointer}
 .btn:hover{border-color:var(--green-deep);color:var(--green-deep)}
 .btn-p{background:var(--green-deep);border-color:var(--green-deep);color:#fff}
 .btn-p:hover{background:#0d4520;color:#fff}
+.btn-s{padding:7px 12px;font-size:13px}
 .btn:disabled{opacity:.55;cursor:default}
-.status{margin-top:12px;font-size:13.5px;color:var(--ink-soft);font-family:var(--mono);line-height:1.5}
-.status.ok{color:var(--green)}
+.chip{display:inline-block;font-family:var(--mono);font-size:11.5px;padding:3px 8px;border-radius:7px;border:1px solid var(--rule-strong);color:var(--ink-soft);background:#fff}
+.chip.ok{border-color:var(--green);color:var(--green-deep);background:var(--green-wash)}
+.chip.wait{border-color:var(--amber);color:var(--amber)}
+.chip.no{border-color:#e3c9c5;color:var(--red);background:var(--red-wash)}
+.status{margin-top:10px;font-size:13px;color:var(--ink-soft);font-family:var(--mono);line-height:1.5}
+.status.ok{color:var(--green-deep)}
 .status.err{color:var(--red)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+@media(max-width:820px){.grid2{grid-template-columns:1fr}}
 pre.out{white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);line-height:1.55}
-table{width:100%;border-collapse:collapse;font-size:14px}
-th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--rule);vertical-align:top}
-th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint)}
-.chip{display:inline-block;font-family:var(--mono);font-size:11.5px;padding:3px 8px;border-radius:7px;border:1px solid var(--rule-strong);color:var(--ink-soft);background:#fff}
+.mono{font-family:var(--mono);font-size:12.5px}
+
+/* result rows */
+.rows{margin-top:14px;border-top:1px solid var(--rule)}
+.rrow{display:grid;grid-template-columns:1.5fr .7fr .8fr 1.6fr;gap:12px;padding:12px 2px;border-bottom:1px solid var(--rule);align-items:start}
+@media(max-width:820px){.rrow{grid-template-columns:1fr;gap:6px}}
+.rrow .who b{font-size:15px}
+.rrow .small{font-size:12.5px;color:var(--ink-soft)}
+.bar{display:block;width:100%;max-width:130px;height:8px;background:var(--tint);border-radius:5px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--green)}
+.head{display:grid;grid-template-columns:1.5fr .7fr .8fr 1.6fr;gap:12px;padding:6px 2px;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint)}
+@media(max-width:820px){.head{display:none}}
+
+/* deal card */
+.deal{border:1px solid var(--rule);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--card-quiet)}
+.deal-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.deal-title{font-weight:600}
+dl.terms{display:grid;grid-template-columns:150px 1fr;gap:4px 12px;margin:10px 0 0;font-size:14px}
+dl.terms dt{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-faint);padding-top:3px}
+dl.terms dd{color:var(--ink)}
+.stamp{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11.5px;color:var(--green-deep);border:1px solid var(--green);background:var(--green-wash);border-radius:8px;padding:4px 9px}
+.checks{font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);margin-top:8px;line-height:1.6}
+.thread{margin-top:10px;border-top:1px dashed var(--rule-strong);padding-top:8px}
+.msg{font-size:14px;color:var(--ink-soft);margin-bottom:4px}
+.msg b{font-family:var(--mono);font-size:11.5px;color:var(--ink)}
+
+/* timeline */
+.tl{margin-top:12px;position:relative;padding-left:18px}
+.tl:before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:2px;background:var(--rule)}
+.tl .ev{position:relative;padding:0 0 10px 0}
+.tl .ev:before{content:"";position:absolute;left:-17px;top:6px;width:9px;height:9px;border-radius:50%;background:var(--green);border:2px solid var(--card)}
+.tl .ev.issue:before{background:var(--red)}
+.tl .ev.asked:before{background:var(--rule-strong)}
+.honest{border-top:1px solid var(--rule);margin-top:20px;padding-top:14px;font-size:13.5px;color:var(--ink-soft)}
+.honest b{color:var(--ink)}
+.hidden{display:none}
 .tabs{display:flex;gap:8px;margin-bottom:6px}
 .tab{padding:7px 14px;border-radius:9px;border:1px solid var(--rule-strong);background:#fff;cursor:pointer;font-size:13.5px;font-weight:600}
 .tab.on{background:var(--green-wash);border-color:var(--green);color:var(--green-deep)}
-.hidden{display:none}
-.agent{padding:11px 0;border-bottom:1px solid var(--rule);font-size:14px}
-.agent:last-child{border-bottom:none}
-.mono{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
-.note{font-size:13px;color:var(--ink-soft)}
-.bar{display:inline-block;width:90px;height:7px;background:var(--tint);border-radius:4px;overflow:hidden;vertical-align:middle}
-.bar i{display:block;height:100%;background:var(--green)}
 </style>
 </head>
 <body>
@@ -76,34 +138,65 @@ th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:
 </nav>
 
 <div class="container">
+  <!-- signed out -->
   <div id="auth">
     <h1>Get an agent of your own</h1>
     <p class="sub">Sign in first, then write what you need the way you would say it out loud. The page names what it can, tells you what it could not place, and makes you a hosted agent you can search with. An agent with an empty list is never created: it would match nothing and look like a search that found nothing.</p>
-    <div class="card">
+    <div class="stage live">
+      <div class="stage-head"><span class="stage-num">FIRST</span><h2>An account</h2></div>
       <div class="tabs">
         <div class="tab on" id="tabRegister">Create an account</div>
         <div class="tab" id="tabLogin">Sign in</div>
       </div>
-      <label class="f" for="email">Email</label>
-      <input id="email" type="email" autocomplete="email" placeholder="you@company.com">
-      <label class="f" for="password">Password</label>
-      <input id="password" type="password" autocomplete="current-password" placeholder="at least 8 characters">
+      <div class="grid2">
+        <div>
+          <label class="f" for="email">Email</label>
+          <input id="email" type="email" autocomplete="email" placeholder="you@company.com">
+        </div>
+        <div>
+          <label class="f" for="password">Password</label>
+          <input id="password" type="password" autocomplete="current-password" placeholder="at least 8 characters">
+        </div>
+      </div>
       <div class="row">
         <button class="btn btn-p" id="go">Create the account</button>
-        <span class="note" id="authHint">An email and a password, nothing else.</span>
+        <span class="status" id="authHint">An email and a password, nothing else.</span>
       </div>
       <div class="status" id="authStatus"></div>
     </div>
-    <p class="note">Already run your own agent somewhere? Then you do not need an account here: <a href="/#install">one line installs the ability into it</a>.</p>
+    <p class="sub" style="margin-top:14px">Already run your own agent somewhere? Then you do not need an account here: <a href="/#install">one line installs the ability into it</a>.</p>
   </div>
 
+  <!-- signed in: one road, four stages -->
   <div id="app" class="hidden">
-    <h1>My agent</h1>
-    <p class="sub">Three steps, in this order: write what you need, look at what the page made of it, then search. Nothing you write is published; the room sees your agent's identity and never its list.</p>
+    <div class="hero">
+      <div>
+        <h1>Your deal, from a match <span class="dim">to a signature.</span></h1>
+        <p class="sub">Four moves, in this order. Write what you need, take the match to an introduction, sign the terms, then keep the milestones. Nothing you write is published, and nobody sees your list.</p>
+      </div>
+      <div class="counters">
+        <div class="counter hot"><b id="cWaiting">0</b><span>waiting on you</span></div>
+        <div class="counter"><b id="cAgents">0</b><span>your agents</span></div>
+        <div class="counter"><b id="cAgreed">0</b><span>agreed</span></div>
+        <div class="counter"><b id="cRoom">0</b><span>in the room</span></div>
+      </div>
+    </div>
 
-    <div class="card">
-      <h2>1. Write what you need</h2>
-      <label class="f" for="text">In your own words</label>
+    <div class="rail">
+      <div class="rail-line"></div>
+      <div class="rail-fill" id="railFill" style="width:0"></div>
+      <div class="rail-stops">
+        <div class="stop on" id="stop1"><span class="n">01</span><span class="dot"></span><span class="t">Find</span><span class="c" id="s1">0 matches</span></div>
+        <div class="stop" id="stop2"><span class="n">02</span><span class="dot"></span><span class="t">Introduced</span><span class="c" id="s2">0 open</span></div>
+        <div class="stop" id="stop3"><span class="n">03</span><span class="dot"></span><span class="t">Agreed</span><span class="c" id="s3">0 signed</span></div>
+        <div class="stop" id="stop4"><span class="n">04</span><span class="dot"></span><span class="t">Delivered</span><span class="c" id="s4">0 steps</span></div>
+      </div>
+    </div>
+
+    <div class="stage live" id="stage1">
+      <div class="stage-head"><span class="stage-num">01 FIND</span><h2>Write what you need</h2><span class="chip" id="agentChip">no agent yet</span></div>
+      <div class="stage-note">In your own words. The page names what it can, shows you what it could not place, and makes an agent whose list is the reading of your words.</div>
+      <label class="f" for="text">What you need</label>
       <textarea id="text" placeholder="We need warehousing and customs clearance near shenzhen, three teams, gdpr"></textarea>
       <div class="grid2">
         <div>
@@ -120,69 +213,52 @@ th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:
           </select>
         </div>
       </div>
+      <label class="f" for="mine">Your list, one item per line (optional, filled from your words when you read them)</label>
+      <textarea id="mine" placeholder="need:warehousing"></textarea>
       <div class="row">
-        <button class="btn btn-p" id="make">Make my agent</button>
-        <span class="note">Hosted here means we hold this list. Said plainly, and it moves to your own machine later if you want.</span>
+        <button class="btn btn-p" id="make">Read my words and make the agent</button>
+        <button class="btn" id="scan">Search the room</button>
+        <span class="status" id="mineStatus">Hosted here means we hold this list, said plainly.</span>
       </div>
       <div class="status" id="makeStatus"></div>
-      <div id="reading" class="hidden" style="margin-top:16px">
-        <div class="grid2">
-          <div>
-            <label class="f">What the page named</label>
-            <pre class="out" id="named">-</pre>
-            <label class="f">What it could not place</label>
-            <pre class="out" id="unplaced">-</pre>
-          </div>
-          <div>
-            <label class="f">What it asks you back</label>
-            <pre class="out" id="questions">-</pre>
-            <label class="f">Your agent</label>
-            <pre class="out" id="agentOut">-</pre>
-          </div>
+      <div id="reading" class="hidden">
+        <div class="grid2" style="margin-top:10px">
+          <div><label class="f">What the page named</label><pre class="out" id="named">-</pre></div>
+          <div><label class="f">What it could not place</label><pre class="out" id="unplaced">-</pre>
+            <label class="f">What it asks you back</label><pre class="out" id="questions">-</pre></div>
         </div>
       </div>
-    </div>
-
-    <div class="card">
-      <h2>2. Your agents</h2>
-      <div id="agents"><span class="note">Loading…</span></div>
-    </div>
-
-    <div class="card">
-      <h2>3. Search the room</h2>
-      <label class="f" for="mine">Your list, one item per line</label>
-      <textarea id="mine" placeholder="need:warehousing"></textarea>
-      <div class="grid2">
-        <div>
-          <label class="f" for="floor">How much overlap you want, at least</label>
-          <input id="floor" type="number" min="0" max="100" value="40">
-        </div>
-        <div>
-          <label class="f" for="mykind">You are searching as</label>
-          <select id="mykind">
-            <option value="demand" selected>buying, looking for someone</option>
-            <option value="supply">offering, looking for work</option>
-            <option value="person">a person, not a business</option>
-          </select>
-        </div>
-      </div>
-      <div class="row">
-        <button class="btn btn-p" id="scan">Search</button>
-        <span class="note">Each agent in the room is asked privately. Your list never leaves this service on the wire.</span>
+      <div id="results" class="hidden">
+        <div class="head"><span>Agent</span><span>Looks like</span><span>City</span><span>Overlap and shared items</span></div>
+        <div class="rows" id="rows"></div>
       </div>
       <div class="status" id="scanStatus"></div>
-      <div id="results" class="hidden" style="margin-top:14px;overflow-x:auto">
-        <table>
-          <thead><tr><th>Agent</th><th>Looks like</th><th>City</th><th>Overlap</th><th>Shared items</th></tr></thead>
-          <tbody id="rows"></tbody>
-        </table>
-      </div>
     </div>
 
-    <div class="card">
-      <h2>4. Introductions</h2>
-      <p class="note">A match is a number. Two sides still have to agree to be put in touch, and each agrees separately: the contact appears only once both have said yes. Every step leaves an id you can point at afterwards.</p>
-      <div id="intros"><span class="note">Loading…</span></div>
+    <div class="stage" id="stage2">
+      <div class="stage-head"><span class="stage-num">02 INTRODUCED</span><h2>Ask, and be asked</h2><span class="chip" id="introChip">none open</span></div>
+      <div class="stage-note">A match is a number. Each side agrees separately, and the contact opens only once both have said yes. An agent we do not host is asked at its own address, over the protocol, and its own journal records our proposal.</div>
+      <div id="intros"><span class="status">Nothing yet. Search above, then press ask on somebody who is not an example.</span></div>
+    </div>
+
+    <div class="stage" id="stage3">
+      <div class="stage-head"><span class="stage-num">03 AGREED</span><h2>The record</h2><span class="chip" id="agrChip">no record</span></div>
+      <div class="stage-note">Terms in one place, signed by both accounts over the same bytes. Anyone holding the record id can check both signatures: the page recomputes the bytes instead of asking you to trust us. This moves no money and decides nothing legally.</div>
+      <div id="agreements"><span class="status">Loading the record…</span></div>
+    </div>
+
+    <div class="stage" id="stage4">
+      <div class="stage-head"><span class="stage-num">04 DELIVERED</span><h2>What happened next</h2><span class="chip" id="mileChip">nothing yet</span></div>
+      <div class="stage-note">Delivered, accepted, or a problem stated. Each one is a line with its own recorded step, and milestones start only after the terms are agreed.</div>
+      <div id="milestones"><span class="status">Steps come after terms are agreed.</span></div>
+    </div>
+
+    <div class="honest">
+      <b>What this does not do.</b> An example agent in the room has nobody to ask, so the ask button is absent on
+      those rows. A hosted agent's list is held here, and that is said rather than hidden. The room is
+      <span id="roomMode" class="mono">demo</span>, which means part of what you see is illustrative: the
+      <span class="mono">/api/health</span> endpoint says how many agents are real, registered here or connected
+      from their own address. An agreement is a checkable record, not a contract, and it cannot move money.
     </div>
   </div>
 </div>
@@ -190,42 +266,51 @@ th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:
 <script>
 (function(){
   function $(id){ return document.getElementById(id); }
-  function esc(s){ return String(s === null || s === undefined ? '' : s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+  function esc(s){ return String(s === null || s === undefined ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   function setStatus(el, text, cls){ el.className = 'status' + (cls ? ' ' + cls : ''); el.textContent = text; }
   function post(url, payload, method){
     return fetch(url, {method: method || 'POST', headers: {'Content-Type': 'application/json'},
       body: payload === undefined ? undefined : JSON.stringify(payload)})
       .then(function(r){ return r.json().then(function(b){ return {code: r.status, body: b}; }); });
   }
-  var mode = 'register';
+  function kindWord(k){ return k === 'demand' ? 'buying' : (k === 'supply' ? 'offering' : 'a person'); }
+  function money(t){
+    if(t.amount_minor === undefined || t.amount_minor === null){ return ''; }
+    return (t.amount_minor / 100).toFixed(2) + ' ' + t.currency;
+  }
+  var me = '', mode = 'register', stage = 1;
 
-  function showApp(me0){
+  function rail(){
+    var width = stage <= 1 ? 0 : (stage - 1) / 3 * 100;
+    $('railFill').style.width = width + '%';
+    for(var i = 1; i <= 4; i++){
+      $('stop' + i).className = 'stop' + (i <= stage ? ' on' : '');
+      $('stage' + i).className = 'stage' + (i === stage ? ' live' : '');
+    }
+  }
+  function showApp(account){
+    me = (account && account.email) ? account.email : '';
     $('auth').classList.add('hidden');
     $('app').classList.remove('hidden');
-    me = (me0 && me0.email) ? me0.email : '';
     $('who').textContent = me;
     $('signOut').classList.remove('hidden');
-    loadAgents();
-    loadIntros();
+    loadSummary(); loadAgents(); loadIntros();
   }
   function showAuth(){
     $('auth').classList.remove('hidden');
     $('app').classList.add('hidden');
-    $('who').textContent = '';
-    $('signOut').classList.add('hidden');
+    $('who').textContent = ''; $('signOut').classList.add('hidden');
   }
 
+  /* ---------- account ---------- */
   $('tabRegister').addEventListener('click', function(){
     mode = 'register'; $('tabRegister').classList.add('on'); $('tabLogin').classList.remove('on');
-    $('go').textContent = 'Create the account';
-    $('authHint').textContent = 'An email and a password, nothing else.';
+    $('go').textContent = 'Create the account'; $('authHint').textContent = 'An email and a password, nothing else.';
   });
   $('tabLogin').addEventListener('click', function(){
     mode = 'login'; $('tabLogin').classList.add('on'); $('tabRegister').classList.remove('on');
-    $('go').textContent = 'Sign in';
-    $('authHint').textContent = 'Welcome back.';
+    $('go').textContent = 'Sign in'; $('authHint').textContent = 'Welcome back.';
   });
-
   $('go').addEventListener('click', function(){
     var email = $('email').value.trim(), password = $('password').value;
     if(!email || !password){ setStatus($('authStatus'), 'An email and a password are both needed.', 'err'); return; }
@@ -234,17 +319,38 @@ th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:
     post('/api/app/' + mode, {email: email, password: password}).then(function(res){
       $('go').disabled = false;
       if(res.code !== 200){ setStatus($('authStatus'), 'Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? ' — ' + res.body.detail : ''), 'err'); return; }
-      setStatus($('authStatus'), '', '');
-      $('password').value = '';
+      $('password').value = ''; setStatus($('authStatus'), '', '');
       showApp(res.body.account || {});
     }).catch(function(e){ $('go').disabled = false; setStatus($('authStatus'), 'Request failed: ' + e, 'err'); });
   });
-
   $('signOut').addEventListener('click', function(e){
-    e.preventDefault();
-    post('/api/app/logout', {}).then(function(){ showAuth(); });
+    e.preventDefault(); post('/api/app/logout', {}).then(function(){ showAuth(); });
   });
 
+  /* ---------- live numbers ---------- */
+  function loadSummary(){
+    fetch('/api/app/summary').then(function(r){ return r.json(); }).then(function(d){
+      if(d.error){ return; }
+      var intro = d.introductions || {}, agr = d.agreements || {};
+      $('cWaiting').textContent = intro.waiting_on_you || 0;
+      $('cAgents').textContent = d.agents || 0;
+      $('cAgreed').textContent = agr.agreed || 0;
+      $('cRoom').textContent = (d.room && d.room.registered_agents) || 0;
+      $('roomMode').textContent = (d.room && d.room.mode) || 'demo';
+      $('s2').textContent = (intro.requested || 0) + ' open';
+      $('s3').textContent = (agr.agreed || 0) + ' signed';
+      $('s4').textContent = (d.milestones || 0) + ' steps';
+      $('introChip').className = 'chip' + (intro.waiting_on_you ? ' wait' : '');
+      $('introChip').textContent = intro.waiting_on_you ? (intro.waiting_on_you + ' waiting on you') : ((intro.requested || 0) + ' open');
+      $('agrChip').className = 'chip' + (agr.agreed ? ' ok' : '');
+      $('agrChip').textContent = (agr.agreed || 0) + ' agreed';
+      $('mileChip').textContent = (d.milestones || 0) + ' recorded';
+      stage = (d.milestones ? 4 : (agr.agreed ? 3 : ((intro.requested || intro.introduced) ? 2 : 1)));
+      rail();
+    });
+  }
+
+  /* ---------- 01 find ---------- */
   $('make').addEventListener('click', function(){
     var text = $('text').value.trim();
     if(!text){ setStatus($('makeStatus'), 'Write a sentence or two about what you need.', 'err'); return; }
@@ -259,282 +365,323 @@ th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:
       $('named').textContent = read.features.length ? read.features.map(function(f){ return '· ' + f; }).join('\n') : 'nothing';
       $('unplaced').textContent = read.not_understood.length ? read.not_understood.join(', ') : 'nothing was dropped';
       $('questions').textContent = (read.questions || []).length ? read.questions.join('\n\n') : 'nothing: the reading stands on its own';
-      if(!d.created){
-        $('agentOut').textContent = 'no agent created';
-        setStatus($('makeStatus'), 'No agent was created: name the thing you need in one or two words and press again.', 'err');
-        return;
-      }
-      $('agentOut').textContent =
-        'id: ' + d.agent.id + '\nname: ' + d.agent.name + '\nitems: ' + d.agent.feature_count +
-        '\nas: ' + d.agent.kind + '\nmanage and change its list: ' + d.manage_url +
-        '\n\ntaxonomy used: ' + read.taxonomy.source + ' (' + read.taxonomy.entries + ' entries)';
+      if(!d.created){ setStatus($('makeStatus'), 'No agent was created: name the thing you need in one or two words.', 'err'); return; }
+      $('agentChip').className = 'chip ok';
+      $('agentChip').textContent = d.agent.id + ' · ' + d.agent.feature_count + ' items';
+      setStatus($('makeStatus'), 'Your agent exists. Searching the room now.', 'ok');
       $('mine').value = read.features.join('\n');
-      if(read.kind){ $('mykind').value = read.kind; }
-      setStatus($('makeStatus'), 'Your agent exists and is in the room. Press search below.', 'ok');
-      loadAgents();
+      if(read.kind){ $('kind').value = read.kind; }
+      loadAgents(); loadSummary();
+      $('scan').click();
     }).catch(function(e){ $('make').disabled = false; setStatus($('makeStatus'), 'Request failed: ' + e, 'err'); });
   });
 
-  function loadAgents(){
-    fetch('/api/app/agents').then(function(r){ return r.json(); }).then(function(d){
-      if(!d.agents || !d.agents.length){ $('agents').innerHTML = '<span class="note">None yet. The first one appears here the moment you press the button above.</span>'; return; }
-      $('agents').innerHTML = d.agents.map(function(a){
-        return '<div class="agent"><span class="mono">' + esc(a.id) + '</span> · ' + esc(a.name) +
-          '<div class="note">' + a.feature_count + ' items as ' + esc(a.kind) + (a.city ? ' · ' + esc(a.city) : '') +
-          ' · <a href="' + esc(a.manage_url) + '">manage</a> · <a href="#" data-drop="' + esc(a.id) + '">remove from the room</a></div></div>';
-      }).join('');
-      Array.prototype.forEach.call(document.querySelectorAll('[data-drop]'), function(link){
-        link.addEventListener('click', function(e){
-          e.preventDefault();
-          var id = link.getAttribute('data-drop');
-          post('/api/app/agents/' + id, {}, 'DELETE').then(function(){ loadAgents(); });
-        });
-      });
-    });
-  }
-
   $('scan').addEventListener('click', function(){
-    var mine = $('mine').value.split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
-    if(!mine.length){ setStatus($('scanStatus'), 'Your list is empty: an empty list matches nothing.', 'err'); return; }
+    var mine = ($('mine') && $('mine').value ? $('mine').value : $('text').value).split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
+    if(!mine.length){ setStatus($('scanStatus'), 'Nothing to search with yet: read your words first, or write the list yourselves.', 'err'); return; }
     $('scan').disabled = true;
-    setStatus($('scanStatus'), 'Running one private exchange with every agent in the room. It takes a few seconds.');
-    post('/api/scan', {my_features: mine, floor_basis_points: Math.round(parseInt($('floor').value, 10) * 100),
-                       my_kind: $('mykind').value}).then(function(res){
+    setStatus($('scanStatus'), 'One private exchange with every agent in the room. A few seconds.');
+    post('/api/scan', {my_features: mine, floor_basis_points: 3000, my_kind: $('kind').value || 'demand'}).then(function(res){
       $('scan').disabled = false;
       var d = res.body;
       if(res.code !== 200){ setStatus($('scanStatus'), 'Refused or failed: ' + (d.error || 'unknown'), 'err'); return; }
       $('results').classList.remove('hidden');
       $('rows').innerHTML = (d.rows || []).map(function(row){
         var overlap = row.opened
-          ? '<span class="bar"><i style="width:' + Math.round((row.overlap_basis_points || 0)/100) + '%"></i></span> ' + (row.overlap_basis_points || 0)
-          : '<span class="chip">not a pair</span>';
-        return '<tr><td><b>' + esc(row.name) + '</b>' + (row.sample ? ' <span class="chip">example</span>' : ' <span class="chip">registered</span>') +
-          '<div class="note">' + esc(row.headline || '') + '</div></td>' +
-          '<td>' + esc(row.kind === 'demand' ? 'buying' : (row.kind === 'supply' ? 'offering' : 'a person')) + '</td>' +
-          '<td>' + esc(row.city || '') + '</td><td>' + overlap + '</td>' +
-          '<td class="mono">' + ((row.matched_features || []).length ? (row.matched_features || []).map(esc).join(' · ') : 'none above your floor') +
-          '<div style="margin-top:6px">' + (row.sample
-            ? '<span class="chip">example agent: nobody to ask</span>'
-            : '<button class="btn" style="padding:6px 11px;font-size:12.5px" data-ask="' + esc(row.id) + '">Ask for an introduction</button>') +
-          '</div></td></tr>';
+          ? '<span class="bar"><i style="width:' + Math.round((row.overlap_basis_points || 0) / 100) + '%"></i></span>' +
+            '<span class="small">' + (row.overlap_basis_points || 0) + ' of 10000' +
+            ((row.matched_features || []).length ? ' · ' + (row.matched_features || []).map(esc).join(', ') : '') + '</span>'
+          : '<span class="chip no">not a pair: ' + esc(row.rejection || '') + '</span>';
+        var ask = row.askable
+          ? '<button class="btn btn-s" data-ask="' + esc(row.id) + '">Ask for an introduction</button>'
+          : (row.sample ? '<span class="chip">example: nobody to ask</span>'
+                        : '<span class="chip">registered here with no account: nowhere for a request to land</span>');
+        return '<div class="rrow"><div class="who"><b>' + esc(row.name) + '</b>' +
+          (row.sample ? ' <span class="chip">example</span>' : (row.askable ? ' <span class="chip ok">registered</span>' : ' <span class="chip">no door</span>')) +
+          '<div class="small">' + esc(row.headline || '') + '</div></div>' +
+          '<div class="small">' + kindWord(row.kind) + '</div><div class="small">' + esc(row.city || '') + '</div>' +
+          '<div>' + overlap + '<div style="margin-top:6px">' + ask + '</div></div></div>';
       }).join('');
-      Array.prototype.forEach.call(document.querySelectorAll('[data-ask]'), function(button){
-        button.addEventListener('click', function(){
-          var peer = button.getAttribute('data-ask');
-          var note = window.prompt('Say who you are and what you would want from them. This goes to the other side with the request:', '');
-          if(note === null){ return; }
-          post('/api/app/introductions', {peer_id: peer, note: note}).then(function(res){
-            if(res.code !== 200){ window.alert('Not sent: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n\n' + res.body.detail : '')); return; }
-            window.alert('Sent. It appears under Introductions until the other side answers.');
-            loadIntros();
-          });
-        });
-      });
-      setStatus($('scanStatus'), 'Checked ' + d.agents_checked + ' agents, ' + d.above_floor + ' above your floor, ' +
-        d.not_comparable + ' refused as not a pair, no feature on any wire.', 'ok');
+      $('s1').textContent = d.above_floor + ' of ' + d.agents_checked;
+      var detail = (d.your_own_agents_excluded ? ' Your own agents were taken out of your own results (' +
+        d.your_own_agents_excluded + ').' : '');
+      setStatus($('scanStatus'), 'Checked ' + d.agents_checked + ' agents, ' + d.above_floor +
+        ' above your floor, ' + d.not_comparable + ' refused as not a pair, no feature on any wire.' + detail, 'ok');
+      wireAsks();
+      stage = Math.max(stage, 1); rail();
     }).catch(function(e){ $('scan').disabled = false; setStatus($('scanStatus'), 'Request failed: ' + e, 'err'); });
   });
 
-  function introBlock(i){
-    var head = '<div class="agent"><span class="mono">' + esc(i.agent) + '</span> · ' + esc(i.state) +
-      '<div class="note">' + (i.direction === 'incoming' ? 'they ask you' : 'you ask them') +
+  function wireAsks(){
+    Array.prototype.forEach.call(document.querySelectorAll('[data-ask]'), function(b){
+      b.addEventListener('click', function(){
+        var peer = b.getAttribute('data-ask');
+        var note = window.prompt('Say who you are and what you would want from them. This travels with the request:', '');
+        if(note === null){ return; }
+        post('/api/app/introductions', {peer_id: peer, note: note}).then(function(res){
+          if(res.code !== 200){ window.alert('Not sent: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n\n' + res.body.detail : '')); return; }
+          setStatus($('scanStatus'), res.body.over_the_wire
+            ? 'Asked at its own address: its agent answered for its own seat, and its journal recorded our proposal.'
+            : 'Asked. It appears under Introduced until the other side answers.', 'ok');
+          loadIntros(); loadSummary();
+        });
+      });
+    });
+  }
+
+  /* ---------- 02 introduced ---------- */
+  function introCard(i){
+    var html = '<div class="deal"><div class="deal-top"><div class="deal-title">' + esc(i.agent) + '</div>' +
+      '<span class="chip ' + (i.state === 'introduced' ? 'ok' : (i.state === 'requested' ? 'wait' : 'no')) + '">' + esc(i.state) + '</span></div>';
+    html += '<div class="small">' + (i.direction === 'incoming' ? 'they ask you' : 'you ask them') +
       (i.note ? ' · “' + esc(i.note) + '”' : '') + '</div>';
-    var body = '';
     if(i.yours_to_decide){
-      body += '<div style="margin-top:6px"><input placeholder="a line to send with your answer" id="msg-' + esc(i.id) + '">' +
-        '<div class="row" style="margin-top:8px">' +
-        '<button class="btn btn-p" style="padding:6px 11px;font-size:12.5px" data-yes="' + esc(i.id) + '">Agree to the introduction</button>' +
-        '<button class="btn" style="padding:6px 11px;font-size:12.5px" data-no="' + esc(i.id) + '">Decline</button></div></div>';
+      html += '<div style="margin-top:8px"><input placeholder="a line to send with your answer" id="msg-' + esc(i.id) + '"></div>' +
+        '<div class="row"><button class="btn btn-p btn-s" data-yes="' + esc(i.id) + '">Agree to the introduction</button>' +
+        '<button class="btn btn-s" data-no="' + esc(i.id) + '">Decline</button></div>';
     }
     if(i.state === 'introduced' && i.contact){
-      body += '<div class="note" style="margin-top:6px">In touch now. They are <b>' + esc(i.contact.email) + '</b>' +
-        (i.contact.name ? ' · ' + esc(i.contact.name) : '') + (i.contact.city ? ' · ' + esc(i.contact.city) : '') +
-        (i.contact.headline ? '<br>' + esc(i.contact.headline) : '') + '</div>';
-      body += '<div style="margin-top:8px">' + (i.messages || []).map(function(m){
-        return '<div class="note"><span class="mono">' + esc(m.author) + '</span> · ' + esc(m.body) + '</div>'; }).join('') + '</div>';
-      body += '<div style="margin-top:8px"><input placeholder="say something" id="body-' + esc(i.id) + '"></div>' +
-        '<div class="row" style="margin-top:8px"><button class="btn" style="padding:6px 11px;font-size:12.5px" data-send="' + esc(i.id) + '">Send</button></div>';
-      body += '<div id="agr-' + esc(i.id) + '" style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--rule-strong)">' +
-        '<span class="note">Loading the record…</span></div>';
+      html += '<div class="stamp" style="margin-top:8px">in touch now</div>' +
+        '<dl class="terms">' +
+        (i.contact.email ? '<dt>email</dt><dd>' + esc(i.contact.email) + '</dd>' : '') +
+        (i.contact.endpoint ? '<dt>address</dt><dd class="mono">' + esc(i.contact.endpoint) + '</dd>' : '') +
+        (i.contact.name ? '<dt>agent</dt><dd>' + esc(i.contact.name) + '</dd>' : '') +
+        (i.contact.headline ? '<dt>says</dt><dd>' + esc(i.contact.headline) + '</dd>' : '') +
+        (i.negotiation_id ? '<dt>negotiation</dt><dd class="mono">' + esc(i.negotiation_id) + '</dd>' : '') +
+        '</dl>';
+      html += '<div class="thread">' + (i.messages || []).map(function(m){
+        return '<div class="msg"><b>' + esc(m.author) + '</b> ' + esc(m.body) + '</div>'; }).join('') +
+        '</div><div style="margin-top:8px"><input placeholder="say something" id="body-' + esc(i.id) + '"></div>' +
+        '<div class="row"><button class="btn btn-s" data-send="' + esc(i.id) + '">Send</button>' +
+        '<button class="btn btn-p btn-s" data-terms="' + esc(i.id) + '">Put terms on the table</button>' +
+        '<button class="btn btn-s" data-focus="' + esc(i.id) + '">show its record below</button></div>';
     } else if(i.note_on_contact){
-      body += '<div class="note" style="margin-top:6px">' + esc(i.note_on_contact) + '</div>';
+      html += '<div class="small" style="margin-top:6px">' + esc(i.note_on_contact) + '</div>';
     }
-    return head + body + '<div class="note mono" style="margin-top:6px">recorded: ' + (i.evidence_ids || []).slice(-2).map(esc).join(' · ') + '</div></div>';
+    html += '<div class="checks">recorded: ' + (i.evidence_ids || []).slice(-2).map(esc).join(' · ') + '</div></div>';
+    return html;
   }
 
   function loadIntros(){
     fetch('/api/app/introductions').then(function(r){ return r.json(); }).then(function(d){
+      if(d.error){ $('intros').innerHTML = '<span class="status">Sign in first.</span>'; return; }
       var all = (d.incoming || []).concat(d.outgoing || []);
-      if(!all.length){ $('intros').innerHTML = '<span class="note">None yet. Search, then press ask on somebody who is not an example.</span>'; return; }
-      $('intros').innerHTML = all.map(introBlock).join('');
-      Array.prototype.forEach.call(document.querySelectorAll('[data-yes]'), function(b){
-        b.addEventListener('click', function(){
-          var id = b.getAttribute('data-yes'), box = document.getElementById('msg-' + id);
-          post('/api/app/introductions/' + id + '/decide', {decision: 'approve', message: box ? box.value : ''}).then(function(res){
-            if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
-            loadIntros();
-          });
+      if(!all.length){ $('intros').innerHTML = '<span class="status">Nothing yet. Search above, then press ask on somebody who is not an example.</span>'; return; }
+      all.sort(function(a, b){ return (a.state === 'requested' && a.yours_to_decide ? -1 : 0) - (b.state === 'requested' && b.yours_to_decide ? -1 : 0); });
+      $('intros').innerHTML = all.map(introCard).join('');
+      wireIntros();
+      var live = null;
+      for(var i = 0; i < all.length; i++){ if(all[i].state === 'introduced'){ live = all[i].id; break; } }
+      if(!live && all.length){ live = all[all.length - 1].id; }
+      if(live){ renderDeal(live); }
+      else { introPlaceholders(); }
+    });
+  }
+  function introPlaceholders(){
+    $('agreements').innerHTML = '<span class="status">No introduction yet, so there is nothing to agree. ' +
+      'Search above and ask somebody whose row has a door.</span>';
+    $('milestones').innerHTML = '<span class="status">Steps come after terms are agreed.</span>';
+  }
+
+  function wireIntros(){
+    Array.prototype.forEach.call(document.querySelectorAll('[data-yes]'), function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-yes'), box = $('msg-' + id);
+        post('/api/app/introductions/' + id + '/decide', {decision: 'approve', message: box ? box.value : ''}).then(function(res){
+          if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
+          loadIntros(); loadSummary();
         });
       });
-      Array.prototype.forEach.call(document.querySelectorAll('[data-no]'), function(b){
-        b.addEventListener('click', function(){
-          var id = b.getAttribute('data-no');
-          post('/api/app/introductions/' + id + '/decide', {decision: 'decline'}).then(function(){ loadIntros(); });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-no]'), function(b){
+      b.addEventListener('click', function(){
+        post('/api/app/introductions/' + b.getAttribute('data-no') + '/decide', {decision: 'decline'}).then(function(){ loadIntros(); loadSummary(); });
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-send]'), function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-send'), box = $('body-' + id);
+        post('/api/app/introductions/' + id + '/messages', {body: box ? box.value : ''}).then(function(res){
+          if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
+          loadIntros();
         });
       });
-      (d.incoming || []).concat(d.outgoing || []).forEach(function(i){
-        if(i.state === 'introduced'){ loadAgreements(i.id); }
-      });
-      Array.prototype.forEach.call(document.querySelectorAll('[data-send]'), function(b){
-        b.addEventListener('click', function(){
-          var id = b.getAttribute('data-send'), box = document.getElementById('body-' + id);
-          post('/api/app/introductions/' + id + '/messages', {body: box ? box.value : ''}).then(function(res){
-            if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
-            box.value = ''; loadIntros();
-          });
-        });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-focus]'), function(b){
+      b.addEventListener('click', function(){ renderDeal(b.getAttribute('data-focus')); $('stage3').scrollIntoView({block: 'start'}); });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-terms]'), function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-terms');
+        var form = $('terms-' + id);
+        if(form){
+          form.classList.remove('hidden');
+          renderDeal(id);
+          form.scrollIntoView({block: 'center'});
+        }
       });
     });
   }
 
-  var me = '';
-
-  function termsLine(t){
-    var parts = [];
-    if(t.amount_minor !== undefined && t.amount_minor !== null){
-      parts.push((t.amount_minor / 100).toFixed(2) + ' ' + t.currency);
-    }
-    if(t.deliver_by){ parts.push('by ' + t.deliver_by); }
-    if(t.place){ parts.push('at ' + t.place); }
-    return parts.join(' · ');
+  /* ---------- 03 agreed ---------- */
+  function termForm(introId, existing){
+    var t = (existing && existing.terms) || {};
+    return '<div class="' + (existing && existing.state === 'proposed' ? 'hidden' : '') + '" id="terms-' + esc(introId) + '">' +
+      '<label class="f">The terms</label>' +
+      '<input id="t-subject-' + esc(introId) + '" placeholder="what this is about, one line" value="' + esc(t.subject || '') + '">' +
+      '<div class="grid2" style="margin-top:8px">' +
+      '<div><label class="f">Amount, optional (in minor units)</label><input id="t-amount-' + esc(introId) + '" placeholder="1800000" value="' + esc(t.amount_minor === undefined ? '' : t.amount_minor) + '"></div>' +
+      '<div><label class="f">Currency, if there is an amount</label><input id="t-currency-' + esc(introId) + '" placeholder="CNY" value="' + esc(t.currency || '') + '"></div>' +
+      '</div><div class="grid2" style="margin-top:8px">' +
+      '<div><label class="f">Deliver by, optional</label><input id="t-date-' + esc(introId) + '" placeholder="2026-11-15" value="' + esc(t.deliver_by || '') + '"></div>' +
+      '<div><label class="f">Place, optional</label><input id="t-place-' + esc(introId) + '" placeholder="Shenzhen" value="' + esc(t.place || '') + '"></div>' +
+      '</div><label class="f">Anything else worth writing down</label>' +
+      '<input id="t-notes-' + esc(introId) + '" placeholder="optional" value="' + esc(t.notes || '') + '">' +
+      '<div class="row"><button class="btn btn-p" data-propose="' + esc(introId) + '">Sign and propose</button>' +
+      '<span class="status">Signing uses your account key. The other side signs the same bytes.</span></div></div>';
   }
 
-  function recordHtml(introId, a){
-    var html = '<div class="agent">';
-    html += '<div class="mono">record ' + esc(a.id) + ' · version ' + a.version + ' · ' + esc(a.state) + '</div>';
-    html += '<div><b>' + esc(a.terms.subject) + '</b>';
-    var line = termsLine(a.terms);
-    if(line){ html += ' <span class="chip">' + esc(line) + '</span>'; }
-    html += '</div>';
-    html += '<div class="note">proposed by ' + esc(a.proposed_by) + ' · ' + esc(a.created_at) + '</div>';
-    if(a.terms.notes){ html += '<div class="note">' + esc(a.terms.notes) + '</div>'; }
-
+  function recordCard(a, introId){
+    var html = '<div class="deal"><div class="deal-top"><div class="deal-title">' + esc(a.terms.subject) + '</div>' +
+      '<span class="chip ' + (a.state === 'agreed' ? 'ok' : (a.state === 'proposed' ? 'wait' : 'no')) + '">' + esc(a.state) + ' · v' + a.version + '</span></div>' +
+      '<div class="small mono">' + esc(a.id) + '</div><dl class="terms">' +
+      (money(a.terms) ? '<dt>amount</dt><dd>' + esc(money(a.terms)) + '</dd>' : '') +
+      (a.terms.deliver_by ? '<dt>deliver by</dt><dd>' + esc(a.terms.deliver_by) + '</dd>' : '') +
+      (a.terms.place ? '<dt>place</dt><dd>' + esc(a.terms.place) + '</dd>' : '') +
+      (a.terms.notes ? '<dt>notes</dt><dd>' + esc(a.terms.notes) + '</dd>' : '') +
+      '<dt>proposed</dt><dd>' + esc(a.proposed_by) + ' · ' + esc(a.created_at) + '</dd>' +
+      (a.accepted_by ? '<dt>accepted</dt><dd>' + esc(a.accepted_by) + ' · ' + esc(a.accepted_at) + '</dd>' : '') +
+      '</dl>';
     if(a.yours_to_decide){
       html += '<div style="margin-top:8px"><input placeholder="a line with your answer" id="agn-' + esc(a.id) + '"></div>' +
-        '<div class="row" style="margin-top:8px">' +
-        '<button class="btn btn-p" style="padding:6px 11px;font-size:12.5px" data-acc="' + esc(a.id) + '">Accept and sign</button>' +
-        '<button class="btn" style="padding:6px 11px;font-size:12.5px" data-dec="' + esc(a.id) + '">Decline</button></div>';
-    }
-    if(a.state === 'proposed' && a.proposed_by === me){
-      html += '<div class="note" style="margin-top:6px">Waiting for their answer. Neither side sees a signature until both sign the same bytes.</div>';
-    }
-    if(a.state === 'declined'){
-      html += '<div class="note" style="margin-top:6px">Declined by ' + esc(a.accepted_by) + '. Nothing here is agreed, and nothing says why.</div>';
+        '<div class="row"><button class="btn btn-p btn-s" data-acc="' + esc(a.id) + '">Accept and sign</button>' +
+        '<button class="btn btn-s" data-dec="' + esc(a.id) + '">Decline</button></div>';
     }
     if(a.state === 'agreed'){
       var v = a.verification || {};
-      html += '<div class="note" style="margin-top:8px">Both sides signed the same bytes. Checked: body recomputes <b>' +
-        (v.body_recomputes ? 'yes' : 'no') + '</b> · proposer signature <b>' + (v.proposer_signature_holds ? 'yes' : 'no') +
-        '</b> · acceptor signature <b>' + (v.acceptor_signature_holds ? 'yes' : 'no') + '</b> · evidence ids <b>' +
-        (v.evidence_ids_recompute ? 'yes' : 'no') + '</b></div>';
-      html += '<div class="note mono" style="margin-top:4px">' +
-        '<a href="/api/verify/agreement/' + esc(a.id) + '" target="_blank">check it without an account</a></div>';
-      html += '<div style="margin-top:8px"><input placeholder="a note with the milestone (a word is required for an issue)" id="evn-' + esc(a.id) + '"></div>' +
-        '<div class="row" style="margin-top:8px">' +
-        '<button class="btn" style="padding:6px 11px;font-size:12.5px" data-ev="delivered|' + esc(a.id) + '">Mark delivered</button>' +
-        '<button class="btn" style="padding:6px 11px;font-size:12.5px" data-ev="accepted|' + esc(a.id) + '">Mark accepted</button>' +
-        '<button class="btn" style="padding:6px 11px;font-size:12.5px" data-ev="issue|' + esc(a.id) + '">Raise an issue</button></div>';
-      html += (a.events || []).map(function(e){
-        return '<div class="note" style="margin-top:4px"><b>' + esc(e.kind) + '</b> · ' + esc(e.actor) +
-          (e.note ? ' · ' + esc(e.note) : '') + '</div>'; }).join('');
+      html += '<div class="stamp" style="margin-top:10px">signed by both sides</div>' +
+        '<div class="checks">checked here: bytes recompute <b>' + (v.body_recomputes ? 'yes' : 'no') +
+        '</b> · proposer signature <b>' + (v.proposer_signature_holds ? 'yes' : 'no') +
+        '</b> · acceptor signature <b>' + (v.acceptor_signature_holds ? 'yes' : 'no') +
+        '</b> · recorded steps <b>' + (v.evidence_ids_recompute ? 'yes' : 'no') + '</b></div>' +
+        '<div class="row"><a class="btn btn-s" href="/api/verify/agreement/' + esc(a.id) + '" target="_blank">Check it without an account</a>' +
+        '<span class="status">or open the same id on any machine: the record is the id.</span></div>';
+    }
+    if(a.state === 'proposed' && a.proposed_by === me){
+      html += '<div class="small" style="margin-top:6px">Waiting for their answer.</div>';
+    }
+    if(a.state === 'declined'){
+      html += '<div class="small" style="margin-top:6px">Declined by ' + esc(a.accepted_by) + '. Nothing here is agreed.</div>';
     }
     return html + '</div>';
   }
 
-  function wireRecords(introId, container){
-    Array.prototype.forEach.call(container.querySelectorAll('[data-acc]'), function(b){
-      b.addEventListener('click', function(){
-        var id = b.getAttribute('data-acc'), n = document.getElementById('agn-' + id);
-        post('/api/app/agreements/' + id + '/decide', {decision: 'accept', note: n ? n.value : ''}).then(function(res){
-          if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
-          loadAgreements(introId);
+  function loadAgreements(introId, target){
+    target.innerHTML = '<span class="status">Loading the record…</span>';
+    fetch('/api/app/agreements?introduction_id=' + encodeURIComponent(introId)).then(function(r){ return r.json(); }).then(function(d){
+      if(!d.records){ target.innerHTML = '<span class="status">' + esc(d.detail || d.error || 'nothing here yet') + '</span>'; return; }
+      var open = (d.records || []).filter(function(a){ return a.state !== 'superseded'; }).slice().reverse();
+      var agreed = open.some(function(a){ return a.state === 'agreed'; });
+      var html = open.length ? open.map(function(a){ return recordCard(a, introId); }).join('')
+        : '<span class="status">No record yet. The first proposal starts one.</span>';
+      if(!agreed){
+        html = termForm(introId, open[0]) + html;
+      }
+      target.innerHTML = html;
+      Array.prototype.forEach.call(target.querySelectorAll('[data-propose]'), function(b){
+        b.addEventListener('click', function(){
+          var id = b.getAttribute('data-propose');
+          post('/api/app/introductions/' + id + '/agreement', {
+            subject: $('t-subject-' + id).value, amount_minor: $('t-amount-' + id).value,
+            currency: $('t-currency-' + id).value, deliver_by: $('t-date-' + id).value,
+            place: $('t-place-' + id).value, notes: $('t-notes-' + id).value
+          }).then(function(res){
+            if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
+            renderDeal(introId); loadIntros(); loadSummary();
+          });
         });
       });
-    });
-    Array.prototype.forEach.call(container.querySelectorAll('[data-dec]'), function(b){
-      b.addEventListener('click', function(){
-        var id = b.getAttribute('data-dec');
-        post('/api/app/agreements/' + id + '/decide', {decision: 'decline'}).then(function(){ loadAgreements(introId); });
+      Array.prototype.forEach.call(target.querySelectorAll('[data-acc]'), function(b){
+        b.addEventListener('click', function(){
+          var id = b.getAttribute('data-acc'), box = $('agn-' + id);
+          post('/api/app/agreements/' + id + '/decide', {decision: 'accept', note: box ? box.value : ''}).then(function(res){
+            if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
+            renderDeal(introId); loadIntros(); loadSummary();
+          });
+        });
       });
-    });
-    Array.prototype.forEach.call(container.querySelectorAll('[data-ev]'), function(b){
-      b.addEventListener('click', function(){
-        var pair = b.getAttribute('data-ev').split('|'), kind = pair[0], id = pair[1];
-        var n = document.getElementById('evn-' + id);
-        post('/api/app/agreements/' + id + '/events', {kind: kind, note: n ? n.value : ''}).then(function(res){
-          if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
-          loadAgreements(introId);
+      Array.prototype.forEach.call(target.querySelectorAll('[data-dec]'), function(b){
+        b.addEventListener('click', function(){
+          post('/api/app/agreements/' + b.getAttribute('data-dec') + '/decide', {decision: 'decline'}).then(function(){
+            loadAgreements(introId, target); loadSummary();
+          });
         });
       });
     });
   }
 
-  function loadAgreements(introId){
-    fetch('/api/app/agreements?introduction_id=' + encodeURIComponent(introId))
-      .then(function(r){ return r.json(); })
-      .then(function(d){
-        var box = document.getElementById('agr-' + introId);
-        if(!box){ return; }
-        if(!d.records){
-          box.innerHTML = '<div class="note">' + esc(d.detail || d.error || 'nothing here yet') + '</div>';
-          return;
-        }
-        var open = (d.records || []).filter(function(a){ return a.state !== 'superseded'; }).slice().reverse();
-        var agreed = open.some(function(a){ return a.state === 'agreed'; });
-        box.innerHTML =
-          (agreed ? '' :
-            '<label class="f">Put terms on the table</label>' +
-            '<input placeholder="what it is about, one line" id="t-subject-' + esc(introId) + '">' +
-            '<div class="grid2" style="margin-top:8px">' +
-              '<div><label class="f">Amount in minor units, optional</label><input id="t-amount-' + esc(introId) + '" placeholder="1200000"></div>' +
-              '<div><label class="f">Currency, if there is an amount</label><input id="t-currency-' + esc(introId) + '" placeholder="CNY"></div>' +
-            '</div>' +
-            '<div class="grid2" style="margin-top:8px">' +
-              '<div><label class="f">Deliver by, optional</label><input id="t-date-' + esc(introId) + '" placeholder="2026-11-15"></div>' +
-              '<div><label class="f">Place, optional</label><input id="t-place-' + esc(introId) + '" placeholder="Shenzhen"></div>' +
-            '</div>' +
-            '<label class="f">Anything else worth writing down</label>' +
-            '<input id="t-notes-' + esc(introId) + '" placeholder="optional">' +
-            '<div class="row" style="margin-top:10px"><button class="btn btn-p" id="t-go-' + esc(introId) + '">Sign and propose</button></div>' +
-            '<div class="note" style="margin-top:6px">Signing uses your account key. The other side signs the same bytes, and anyone holding the record id can check both afterwards.</div>') +
-          '<div id="agr-records-' + esc(introId) + '"></div>';
-
-        var propose = document.getElementById('t-go-' + introId);
-        if(propose){
-          propose.addEventListener('click', function(){
-            post('/api/app/introductions/' + introId + '/agreement', {
-              subject: document.getElementById('t-subject-' + introId).value,
-              amount_minor: document.getElementById('t-amount-' + introId).value,
-              currency: document.getElementById('t-currency-' + introId).value,
-              deliver_by: document.getElementById('t-date-' + introId).value,
-              place: document.getElementById('t-place-' + introId).value,
-              notes: document.getElementById('t-notes-' + introId).value
-            }).then(function(res){
-              if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
-              loadAgreements(introId);
-            });
+  /* ---------- 04 delivered ---------- */
+  function loadMilestones(introId, target){
+    if(!target){ return; }
+    fetch('/api/app/agreements?introduction_id=' + encodeURIComponent(introId)).then(function(r){ return r.json(); }).then(function(d){
+      var agreed = (d.records || []).filter(function(a){ return a.state === 'agreed'; }).slice(-1)[0];
+      if(!agreed){ target.innerHTML = '<span class="status">Milestones start once the terms are agreed.</span>'; return; }
+      var html = '<div class="tl">' + (agreed.events || []).map(function(e){
+        return '<div class="ev ' + (e.kind === 'issue' ? 'issue' : '') + '"><b>' + esc(e.kind) + '</b> · ' +
+          esc(e.actor) + (e.note ? ' · ' + esc(e.note) : '') + '<div class="small mono">' + esc(e.evidence_id) + '</div></div>';
+      }).join('') + '</div>';
+      html += '<div style="margin-top:8px"><input placeholder="a note with the step (a word is required for an issue)" id="evn-' + esc(agreed.id) + '"></div>' +
+        '<div class="row"><button class="btn btn-s" data-ev="delivered|' + esc(agreed.id) + '">Mark delivered</button>' +
+        '<button class="btn btn-s" data-ev="accepted|' + esc(agreed.id) + '">Mark accepted</button>' +
+        '<button class="btn btn-s" data-ev="issue|' + esc(agreed.id) + '">Raise an issue</button></div>';
+      target.innerHTML = html;
+      Array.prototype.forEach.call(target.querySelectorAll('[data-ev]'), function(b){
+        b.addEventListener('click', function(){
+          var pair = b.getAttribute('data-ev').split('|'), kind = pair[0], id = pair[1];
+          var box = $('evn-' + id);
+          post('/api/app/agreements/' + id + '/events', {kind: kind, note: box ? box.value : ''}).then(function(res){
+            if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
+            loadMilestones(introId, target); loadSummary();
           });
-        }
-
-        var records = document.getElementById('agr-records-' + introId);
-        if(!open.length){ records.innerHTML = '<div class="note">No record yet. The first proposal starts one.</div>'; return; }
-        records.innerHTML = open.map(function(a){ return recordHtml(introId, a); }).join('');
-        wireRecords(introId, records);
+        });
       });
+    });
+  }
+
+  /* ---------- agents list feeds stages 2 and 3 ---------- */
+  function loadAgents(){
+    fetch('/api/app/agents').then(function(r){ return r.json(); }).then(function(d){
+      var list = d.agents || [];
+      if(list.length){
+        $('agentChip').className = 'chip ok';
+        $('agentChip').textContent = list.length + (list.length === 1 ? ' agent' : ' agents') + ' of yours';
+        if(!$('mine').value){ $('mine').value = ''; }
+      }
+    });
+  }
+
+  /* ---------- introductions carry a record and milestones inside them ---------- */
+  /* One deal, four stages: the introduction carries the record and the milestones into their own steps
+     rather than nesting them in the card, so the road reads as one road. */
+  var activeIntro = null;
+  function renderDeal(introId){
+    if(!introId){ return; }
+    activeIntro = introId;
+    loadAgreements(introId, $('agreements'));
+    loadMilestones(introId, $('milestones'));
+    Array.prototype.forEach.call(document.querySelectorAll('[data-focus]'), function(b){
+      var on = b.getAttribute('data-focus') === introId;
+      b.textContent = on ? 'this one, shown below' : 'show its record below';
+    });
   }
 
   fetch('/api/app/me').then(function(r){ return r.json(); }).then(function(d){
-    if(d && d.signed_in){ showApp(d.account || {}); } else { showAuth(); }
+    if(d && d.signed_in){
+      showApp(d.account || {});
+      // fill the demo so one press runs the whole thing
+      if(!$('text').value){ $('text').value = 'We need warehousing and customs clearance near shenzhen, three teams, gdpr'; }
+      /* nothing polled: the introductions load once and lead the road themselves */
+    } else { showAuth(); }
   });
 })();
 </script>
