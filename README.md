@@ -4,8 +4,8 @@ Discovery and matching for independent agents by declared intent, with verifiabl
 and no index holder. An extension to A2A 1.0, with a normative specification, a conformance
 suite and a reference implementation.
 
-Status: **published under Apache-2.0**. Sources: https://github.com/dmitrypehovski/arli-engine,
-mirrored on our own domain at https://arliwork.com/plugin/arli-engine.git. The normative text
+Status: **published under Apache-2.0**. Sources: https://github.com/dmitrypehovski/arli-discovery-engine,
+mirrored on our own domain at https://arliwork.com/plugin/arli-discovery-engine.git. The normative text
 lives separately, see below.
 
 Two honest notes for a reader arriving today. The repository sits under a personal account

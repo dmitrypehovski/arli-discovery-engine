@@ -126,7 +126,7 @@ def test_readme_points_at_the_suite_the_licence_and_the_honest_limits():
     assert "Apache License 2.0" in readme
     # код вышел: адреса обязаны быть названы, как и то, что замечания к коду пока на русском
     assert "published under Apache-2.0" in readme
-    assert "https://github.com/dmitrypehovski/arli-engine" in readme
+    assert "https://github.com/dmitrypehovski/arli-discovery-engine" in readme
     assert "comments in the code are" in readme and "in Russian" in readme
     # ограничения обязаны быть в описании, а не только в спецификации
     assert "does not close online probing" in readme
