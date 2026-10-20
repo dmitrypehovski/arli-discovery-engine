@@ -431,26 +431,42 @@ def run_conformance(target: Target, holder: Target | None = None) -> Report:
     ))
 
     def below_floor():
+        """A find below the declared floor must come back empty. The floor has to be above the find.
+
+        The floor is learned from the two sides first, because the check must not depend on how alike the
+        two lists happen to be on this bench: with identical lists the overlap is the maximum and no floor
+        can be above it, so there is no below-floor case to test and the check says so instead of failing
+        a correct implementation.
+        """
         import secrets
 
-        session_id = secrets.token_hex(6)
-        keys = holder.result("arli/psi/keys", {"session_id": session_id})
-        commit = target.result("arli/psi/commit", {
-            "session_id": session_id, "peer_name": holder.name,
-            "n": keys["n"], "e": keys["e"],
-        })
-        signed = holder.result("arli/psi/sign", {
-            "session_id": session_id, "blinded": commit["blinded"],
-        })
-        high = target.result("arli/psi/finish", {
-            "session_id": session_id, "n": keys["n"],
-            "signed": signed["signed"], "holder_tokens": signed["holder_tokens"],
-            "floor_basis_points": 10000,
-        })
+        def run_once(floor: int) -> dict:
+            session_id = secrets.token_hex(6)
+            keys = holder.result("arli/psi/keys", {"session_id": session_id})
+            commit = target.result("arli/psi/commit", {
+                "session_id": session_id, "peer_name": holder.name,
+                "n": keys["n"], "e": keys["e"],
+            })
+            signed = holder.result("arli/psi/sign", {
+                "session_id": session_id, "blinded": commit["blinded"],
+            })
+            return target.result("arli/psi/finish", {
+                "session_id": session_id, "n": keys["n"],
+                "signed": signed["signed"], "holder_tokens": signed["holder_tokens"],
+                "floor_basis_points": floor,
+            })
+
+        first = run_once(0)
+        basis = int(first["overlap_basis_points"])
+        if basis >= 10000:
+            return True, ("not applicable: with the two lists coinciding, the overlap is the maximum and "
+                          "no floor can be above it")
+        high = run_once(min(10000, basis + 1))
         parameters = high["evidence"]["parameters"]
         return (
             high["matched_features"] == [] and parameters.get("passed_floor") is False,
-            f"matched={high['matched_features']} passed_floor={parameters.get('passed_floor')}",
+            f"floor={min(10000, basis + 1)} basis={basis} matched={high['matched_features']} "
+            f"passed_floor={parameters.get('passed_floor')}",
         )
 
     _check(report, "match.below_floor_is_empty", below_floor)

@@ -42,6 +42,16 @@
       }
     },
     {
+      "name": "arli_profile",
+      "description": "Calls arli/profile on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": true
+      }
+    },
+    {
       "name": "arli_commitments",
       "description": "Calls arli/commitments on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error.",
       "inputSchema": {
@@ -372,6 +382,7 @@
     "methods": [
       "agent/card",
       "arli/capabilities",
+      "arli/profile",
       "arli/commitments",
       "arli/match",
       "arli/psi/keys",
@@ -402,6 +413,7 @@
     "tool_names": [
       "agent_card",
       "arli_capabilities",
+      "arli_profile",
       "arli_commitments",
       "arli_match",
       "arli_psi_keys",

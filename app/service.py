@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from arli_engine.client.agent import AgentClient  # noqa: E402
 from arli_engine.core.intake import Taxonomy, read_request  # noqa: E402
 from arli_engine.core.surface import CALL_REJECTIONS as CALL_REFUSAL_CODES  # noqa: E402
 
@@ -78,7 +79,9 @@ def connect() -> sqlite3.Connection:
                kid TEXT NOT NULL DEFAULT '',
                jwk TEXT NOT NULL DEFAULT '{}',
                connected_at TEXT NOT NULL,
-               active INTEGER NOT NULL DEFAULT 1
+               active INTEGER NOT NULL DEFAULT 1,
+               profile TEXT NOT NULL DEFAULT '{}',
+               bucket_space TEXT NOT NULL DEFAULT ''
            )"""
     )
     # Added after the first rows existed: a remote agent that stops answering has to leave the room,
@@ -164,9 +167,12 @@ def connect() -> sqlite3.Connection:
                evidence_id TEXT NOT NULL
            )"""
     )
+    # A connected agent publishes a coarse profile, so a search can sift instead of asking everybody.
     for column, definition in (("failures", "INTEGER NOT NULL DEFAULT 0"),
                                ("last_checked", "TEXT NOT NULL DEFAULT ''"),
-                               ("unreachable_reason", "TEXT NOT NULL DEFAULT ''")):
+                               ("unreachable_reason", "TEXT NOT NULL DEFAULT ''"),
+                               ("profile", "TEXT NOT NULL DEFAULT '{}'"),
+                               ("bucket_space", "TEXT NOT NULL DEFAULT ''")):
         try:
             connection.execute(f"ALTER TABLE remotes ADD COLUMN {column} {definition}")
         except sqlite3.OperationalError:
@@ -243,14 +249,33 @@ def connect_agent(payload: dict) -> dict:
         )
 
     agent_id = verified["name"] or endpoint
+    # One call, once, at the door: what does this agent look like coarsely? A room of thousands cannot run
+    # an exchange with everybody on every search, so the profile is what a search sifts with. An agent that
+    # does not answer it is not refused: it is marked unsifted and every search still asks it, which is the
+    # price of not being able to place it, and it is said in the answer rather than hidden.
+    buckets: dict = {}
+    space = ""
+    profile_answer: dict = {}
+    try:
+        with AgentClient(endpoint) as client:
+            answer = client.call("arli/profile")
+        if isinstance(answer, dict) and isinstance(answer.get("buckets"), dict):
+            buckets = {str(slug): int(count) for slug, count in answer["buckets"].items()}
+            space = str(answer.get("bucket_space") or "")
+            profile_answer = answer
+    except Exception:  # noqa: BLE001
+        buckets, space, profile_answer = {}, "", {}
+
     with connect() as connection:
         connection.execute(
             """INSERT OR REPLACE INTO remotes
-               (id, name, kind, city, headline, endpoint, kid, jwk, connected_at, active)
-               VALUES (?,?,?,?,?,?,?,?,?,1)""",
+               (id, name, kind, city, headline, endpoint, kid, jwk, connected_at, active,
+                profile, bucket_space)
+               VALUES (?,?,?,?,?,?,?,?,?,1,?,?)""",
             (agent_id, verified["name"], kind, str(payload.get("city") or "").strip(),
              str(payload.get("headline") or "").strip(), endpoint, verified["kid"],
-             json.dumps(verified["jwk"]), datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
+             json.dumps(verified["jwk"]), datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+             json.dumps(profile_answer), space),
         )
         # Connecting again is the way back: the count resets and the agent is in the room once more.
         connection.execute("UPDATE remotes SET failures = 0, unreachable_reason = '', active = 1 WHERE id = ?",
@@ -262,6 +287,10 @@ def connect_agent(payload: dict) -> dict:
         "kind": kind,
         "endpoint": endpoint,
         "checks": {"card_verified": True, "extension_answers": True, "address_signed_our_nonce": True},
+        "profile": {"buckets": len(buckets), "bucket_space": space or "not published",
+                    "sifted": bool(space) and bucket_space_name() == space,
+                    "note": "A search sifts by this profile when both sides count in the same space. "
+                            "Otherwise the agent is asked on every search, which costs an exchange."},
         "note": "Connected from its own address. The card verified, the identity method answered, and "
                 "the address signed a nonce this service chose, so the key the card names is reachable "
                 "there. A proxy that forwards that signing passes too: it then holds a live path to "
@@ -295,7 +324,8 @@ def remotes_to_check() -> list[dict]:
         rows = connection.execute("SELECT * FROM remotes ORDER BY connected_at").fetchall()
     return [{"id": row["id"], "name": row["name"], "kind": row["kind"], "city": row["city"],
              "headline": row["headline"], "endpoint": row["endpoint"], "active": row["active"],
-             "failures": row["failures"]} for row in rows]
+             "failures": row["failures"], "profile": row["profile"] if "profile" in row.keys() else "{}",
+             "bucket_space": row["bucket_space"] if "bucket_space" in row.keys() else ""} for row in rows]
 
 
 def stored_agents(include_features: bool = False) -> list[dict]:
@@ -523,7 +553,36 @@ def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
             "evidence_ids": {name: envelope["evidence_id"]
                              for name, envelope in result["evidence"].items()},
         })
+    # The sift. This is what makes a room of thousands searchable at all: an exchange is one full private
+    # negotiation, so a search runs them with the agents that share a bucket, not with everyone. An agent
+    # whose profile is in another bucket space, or who publishes no profile, cannot be sifted: it is asked,
+    # and the cost of that is stated in the answer instead of being hidden.
+    seeker = seeker_buckets(my_features)
+    space_here = bucket_space_name()
+    sifted = skipped = unsifted = 0
+    skipped_ids: list[str] = []
     for remote in remotes_to_check():
+        judged = False
+        if seeker and space_here and remote.get("bucket_space") == space_here:
+            try:
+                theirs = json.loads(remote.get("profile") or "{}")
+            except json.JSONDecodeError:
+                theirs = {}
+            their_buckets = theirs.get("buckets") if isinstance(theirs, dict) else None
+            their_items = int((theirs or {}).get("feature_count") or 0)
+            if isinstance(their_buckets, dict) and their_buckets:
+                sifted += 1
+                judged = True
+                if not [bucket for bucket in their_buckets if seeker.get(bucket)]:
+                    skipped += 1
+                    skipped_ids.append(remote["id"])
+                    continue
+            elif their_items:
+                # It holds items and placed none of them in our published space. We cannot judge it, so we
+                # must not skip it: an unplaceable list is not an empty one.
+                pass
+        if not judged and remote["active"]:
+            unsifted += 1
         try:
             result = run_remote_exchange(
                 my_features, remote["endpoint"], floor, remote_id=remote["name"],
@@ -565,6 +624,11 @@ def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
         "your_kind": my_kind,
         "agents_checked": len(rows),
         "registered_agents": sum(1 for row in rows if not row.get("sample") and not row.get("remote")),
+        "remote_sifted": sifted, "remote_skipped_by_bucket": skipped, "remote_unsifted": unsifted,
+        "skipped_ids": skipped_ids,
+        "sift_note": "An exchange is one full private negotiation per agent, so a search runs them with the "
+                     "agents that share a bucket with you. Skipped agents were not asked; unsifted ones were "
+                     "asked because they do not publish a comparable profile.",
         "connected_agents": sum(1 for row in rows if row.get("remote")),
         "above_floor": sum(1 for row in rows if row.get("passed_floor")),
         "not_comparable": sum(1 for row in rows if not row.get("opened")),
@@ -577,6 +641,29 @@ def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
 INTAKE_KEY_ENV = "ARLI_INTAKE_KEY"
 TAXONOMY_PATH_ENV = "ARLI_MATCH_TAXONOMY"
 DEFAULT_TAXONOMY_PATH = "/llm-gateway/skill_taxonomy_v2.json"
+
+
+def bucket_space_name() -> str:
+    """The name of the bucket space this room indexes in, spelled exactly as an agent spells it.
+
+    Two bucket spaces are not comparable: a shared bucket means nothing across them, and "no shared bucket"
+    across two spaces is not evidence of no match. An agent publishing in another space is therefore never
+    skipped on its profile, only asked, and the room says so in the answer.
+    """
+    path = os.environ.get(TAXONOMY_PATH_ENV, DEFAULT_TAXONOMY_PATH)
+    return f"taxonomy:{path}" if path and Path(path).is_file() else ""
+
+
+def seeker_buckets(features: list[str]) -> dict[str, int]:
+    """What the seeker's list looks like coarsely, in this room's own space. Never published."""
+    taxonomy_ = taxonomy()
+    profile: dict[str, int] = {}
+    for feature in features:
+        slug = feature.split(":", 1)[-1]
+        category = taxonomy_.category_of(slug)
+        if category:
+            profile[category] = profile.get(category, 0) + 1
+    return profile
 
 
 def taxonomy() -> Taxonomy:

@@ -808,3 +808,41 @@ def test_the_room_does_not_offer_an_ask_it_cannot_deliver(monkeypatch, tmp_path)
     rows = {row["id"]: row for row in service.scan_room(["offer:warehousing"], 2000, "demand")["rows"]}
     assert rows[agent_b["id"]]["askable"] is True, "an account holds this one, so a request can land"
     assert rows[agent_a["id"]]["askable"] is True, "even the caller's own agent has a door, it is just not theirs to ask"
+
+
+def test_a_connected_agent_is_sifted_by_its_published_buckets(monkeypatch, tmp_path) -> None:
+    """The whole point of the profile: a search spends exchanges on the agents that share a bucket."""
+    from arli_engine.adapters.a2a.server import start_agent
+    from arli_engine.agent import build_agent
+    from arli_engine.core.signing import KeyPair
+
+    monkeypatch.setenv("ARLI_TAXONOMY", "/llm-gateway/skill_taxonomy_v2.json")
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    getattr(service.taxonomy, "cache_clear", lambda: None)()
+
+    states = []
+    for name, features in (("holder-warehousing", ["offer:warehousing", "city:shenzhen"]),
+                           ("holder-irrigation", ["offer:irrigation"])):
+        key = KeyPair.generate()
+        states.append(build_agent(name, features, "http://127.0.0.1:0", private_pem=key.private_pem))
+    servers = []
+    try:
+        for state in states:
+            server, _thread = start_agent(state, 0, host="127.0.0.1")
+            servers.append(server)
+        monkeypatch.setenv("ARLI_MATCH_ALLOW_PRIVATE", "1")
+        for server in servers:
+            answer = service.connect_agent({"endpoint": "http://127.0.0.1:%d" % server.server_address[1],
+                                            "kind": "supply"})
+            assert answer["profile"]["sifted"] is True, answer["profile"]
+
+        result = service.scan_room(["need:warehousing", "city:shenzhen"], 2000, "demand")
+        rows = {row["id"]: row for row in result["rows"] if row.get("remote")}
+        assert "holder-warehousing" in rows, "the agent in the same bucket was asked"
+        assert "holder-irrigation" not in rows, "an agent sharing no bucket is not worth an exchange"
+        assert result["remote_sifted"] == 2 and result["remote_skipped_by_bucket"] == 1, result
+        assert result["skipped_ids"] == ["holder-irrigation"], result
+        assert result["remote_unsifted"] == 0
+    finally:
+        for server in servers:
+            server.shutdown(); server.server_close()

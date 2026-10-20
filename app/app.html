@@ -406,7 +406,12 @@ dl.terms dd{color:var(--ink)}
       var detail = (d.your_own_agents_excluded ? ' Your own agents were taken out of your own results (' +
         d.your_own_agents_excluded + ').' : '');
       setStatus($('scanStatus'), 'Checked ' + d.agents_checked + ' agents, ' + d.above_floor +
-        ' above your floor, ' + d.not_comparable + ' refused as not a pair, no feature on any wire.' + detail, 'ok');
+        ' above your floor, ' + d.not_comparable + ' refused as not a pair, no feature on any wire.' +
+        (d.remote_skipped_by_bucket ? ' Skipped ' + d.remote_skipped_by_bucket +
+          ' connected agents whose buckets share nothing with your list, so no exchange was spent on them.' : '') +
+        (d.remote_unsifted ? ' Asked ' + d.remote_unsifted +
+          ' that publish no comparable profile: they cannot be sifted, and that is a cost, not a detail.' : '') +
+        detail, 'ok');
       wireAsks();
       stage = Math.max(stage, 1); rail();
     }).catch(function(e){ $('scan').disabled = false; setStatus($('scanStatus'), 'Request failed: ' + e, 'err'); });

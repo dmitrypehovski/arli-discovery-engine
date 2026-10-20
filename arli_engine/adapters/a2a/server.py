@@ -739,9 +739,31 @@ def _methods(state: AgentState) -> dict:
             "human_consent": opportunity.human_consent,
         }
 
+    def profile(_params: dict) -> dict:
+        """What this agent is willing to publish about itself: buckets, never items.
+
+        This is the answer that makes an agent searchable by a room it does not belong to. A search is one
+        exchange per agent, so a network cannot be searched by asking everybody; it runs exchanges with the
+        agents that share a bucket. What travels here is a count per bucket and nothing else, which the
+        normative text states as the price of being findable.
+        """
+        from arli_engine.core.buckets import profile_of
+
+        resolver, space = _bucket_space()
+        return {
+            "buckets": profile_of(list(state.features), bucket_of=resolver),
+            "bucket_space": space,
+            "kind": state.kind if hasattr(state, "kind") else "",
+            "city": state.city if hasattr(state, "city") else "",
+            "feature_count": len(state.features),
+            "note": "No item value is in this answer. A search still runs a real exchange; the bucket only "
+                    "decides who is worth one.",
+        }
+
     return {
         "agent/card": card,
         "arli/capabilities": capabilities,
+        "arli/profile": profile,
         "arli/commitments": commitments,
         "arli/match": match,
         "arli/psi/keys": psi_holder_keys,
@@ -769,6 +791,38 @@ def _methods(state: AgentState) -> dict:
         "arli/identity/sign": identity_sign,
         "arli/opportunity/decide": opportunity_decide,
     }
+
+
+class _BucketSpace:
+    """Which bucket space this agent publishes in, and whether it can place a given item at all.
+
+    Two bucket spaces are not comparable, so naming the space is part of the answer: a room that holds an
+    index in another space must not treat "no shared bucket" as "no match". An agent that cannot place its
+    items says so instead of guessing a bucket, because a guessed bucket is a wrong skip.
+    """
+
+    _cache: dict = {}
+
+    @classmethod
+    def taxonomy(cls):
+        import os
+        from arli_engine.core.intake import Taxonomy
+
+        path = os.environ.get("ARLI_TAXONOMY") or ""
+        if not path or not os.path.exists(path):
+            return None, ""
+        if cls._cache.get(path) is None:
+            cls._cache[path] = Taxonomy.from_file(path)
+        return cls._cache[path], f"taxonomy:{path}"
+
+
+def _bucket_space():
+    from arli_engine.core.buckets import bucket_of as fixture_bucket
+
+    taxonomy, space = _BucketSpace.taxonomy()
+    if taxonomy is None:
+        return (lambda feature: fixture_bucket(feature)), f"fixture:{__import__('arli_engine.core.buckets', fromlist=['QUANTITY_BUCKETS']).QUANTITY_BUCKETS}"
+    return (lambda feature: taxonomy.category_of(feature.split(":", 1)[-1]) or None), space
 
 
 def make_handler(state: AgentState):

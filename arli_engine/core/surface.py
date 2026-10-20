@@ -17,6 +17,7 @@ from __future__ import annotations
 METHOD_NAMES = (
     "agent/card",
     "arli/capabilities",
+    "arli/profile",
     "arli/commitments",
     "arli/match",
     "arli/psi/keys",

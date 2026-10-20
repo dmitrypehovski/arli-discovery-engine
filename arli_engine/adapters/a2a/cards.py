@@ -120,6 +120,13 @@ def capability_document(operations: list[Operation]) -> dict:
     return {
         "manifest": capability_manifest(operations),
         "extension_uri": EXTENSION_URI,
+        "profile": {
+            "published": "arli/profile",
+            "says": "buckets with a count each, the bucket space it resolves in, kind and city",
+            "never": "an item value, a list, or another agent's items",
+            "why": "a search is one exchange per agent, so a room has to know roughly who is worth an "
+                   "exchange without holding anyone's list",
+        },
         "negotiation_rules": {
             "max_turns": MAX_TURNS,
             "actions": list(ACTIONS),
