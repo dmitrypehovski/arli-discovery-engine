@@ -33,29 +33,35 @@ MAX_FEATURES = 64
 
 
 def connect() -> sqlite3.Connection:
+    """Open the store and make sure the schema is there.
+
+    The schema is created here rather than only at startup: a store can be deleted or moved under a
+    running service, and a request must not be the thing that discovers it.
+    """
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DB_PATH, timeout=10)
     connection.row_factory = sqlite3.Row
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS agents (
+               id TEXT PRIMARY KEY,
+               name TEXT NOT NULL,
+               kind TEXT NOT NULL,
+               city TEXT NOT NULL DEFAULT '',
+               headline TEXT NOT NULL DEFAULT '',
+               claim_level TEXT NOT NULL DEFAULT 'declared',
+               will_not_publish TEXT NOT NULL DEFAULT '',
+               features TEXT NOT NULL,
+               owner_token TEXT NOT NULL,
+               created_at TEXT NOT NULL,
+               active INTEGER NOT NULL DEFAULT 1
+           )"""
+    )
     return connection
 
 
 def init() -> None:
-    with connect() as connection:
-        connection.execute(
-            """CREATE TABLE IF NOT EXISTS agents (
-                   id TEXT PRIMARY KEY,
-                   name TEXT NOT NULL,
-                   kind TEXT NOT NULL,
-                   city TEXT NOT NULL DEFAULT '',
-                   headline TEXT NOT NULL DEFAULT '',
-                   claim_level TEXT NOT NULL DEFAULT 'declared',
-                   will_not_publish TEXT NOT NULL DEFAULT '',
-                   features TEXT NOT NULL,
-                   owner_token TEXT NOT NULL,
-                   created_at TEXT NOT NULL,
-                   active INTEGER NOT NULL DEFAULT 1
-               )"""
-        )
+    with connect():
+        pass
 
 
 def stored_agents(include_features: bool = False) -> list[dict]:

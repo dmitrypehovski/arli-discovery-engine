@@ -134,3 +134,19 @@ def test_a_removed_agent_leaves_the_room() -> None:
                            (agent["id"], token))
     assert not any(row["id"] == agent["id"] for row in service.stored_agents())
     assert service.entry_for(agent["id"]) is None, "a removed agent must not be matchable"
+
+
+def test_a_deleted_store_is_recreated_by_a_request() -> None:
+    """The store can vanish under a running service; a request must not be what discovers it."""
+    keep = service.DB_PATH
+    try:
+        service.DB_PATH = keep.with_suffix(".vanished.sqlite3")
+        if service.DB_PATH.exists():
+            service.DB_PATH.unlink()
+        assert service.stored_agents() == [], "a missing table must read as an empty room"
+        agent, token = service.create_agent(dict(GOOD, name="Registered After Wipe"))
+        assert service.owned_agent(agent["id"], token) is not None
+    finally:
+        if service.DB_PATH.exists():
+            service.DB_PATH.unlink()
+        service.DB_PATH = keep
