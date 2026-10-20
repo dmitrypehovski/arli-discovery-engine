@@ -1,0 +1,49 @@
+name: checks
+
+# Что здесь запускается и зачем. Проверки это не украшение репозитория: весь обещанный
+# смысл движка в том, что утверждение проверяемо. Поэтому прогон идёт на каждой отправке,
+# а рядом кладётся нормативный текст, чтобы проверки соответствия тексту не пропускались.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: take the engine
+        uses: actions/checkout@v4
+
+      - name: take the normative text, which lives in its own repository
+        uses: actions/checkout@v4
+        with:
+          repository: dmitrypehovski/arli-discovery
+          path: .spec-house
+          ref: main
+
+      - name: python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install cryptography httpx pytest
+
+      - name: run the test suite
+        env:
+          ARLI_SPEC_DIR: ${{ github.workspace }}/.spec-house
+        run: python -m pytest tests -q
+
+      - name: run the conformance suite against a live pair
+        run: |
+          python -m arli_engine.serve --port-a 8841 --port-b 8842 &
+          sleep 3
+          python -m arli_engine.conformance --target http://127.0.0.1:8841 --holder http://127.0.0.1:8842
+
+      - name: run the worked example
+        run: python examples/two_agents/main.py
