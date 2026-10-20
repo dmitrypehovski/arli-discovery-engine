@@ -486,3 +486,109 @@ def test_closing_an_account_takes_its_agents_out_of_the_room(monkeypatch, tmp_pa
     assert closed["agents_removed"] == 1
     assert service.app_agents(account["id"]) == [], "nothing of a closed account stays in the room"
     assert service.account_by_session(service._open_session(service.connect(), account["id"])) is None or True
+
+
+# --- introductions: the step between a match and a conversation ---------------------------------------
+
+def _two_accounts_with_agents(monkeypatch, tmp_path):
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    a, _ = service.register_account("a@example.com", "a-good-password")
+    b, _ = service.register_account("b@example.com", "a-good-password")
+    agent_a, _ = service.create_agent({"name": "buyer", "kind": "demand", "features": ["need:warehousing"]})
+    agent_b, _ = service.create_agent({"name": "supplier", "kind": "supply", "features": ["offer:warehousing"]})
+    with service.connect() as connection:
+        connection.execute("UPDATE agents SET owner_account = ? WHERE id = ?", (a["id"], agent_a["id"]))
+        connection.execute("UPDATE agents SET owner_account = ? WHERE id = ?", (b["id"], agent_b["id"]))
+    return service, a, b, agent_a, agent_b
+
+
+def test_an_agent_not_hosted_here_cannot_be_asked(monkeypatch, tmp_path) -> None:
+    service, a, _b, _agent_a, _agent_b = _two_accounts_with_agents(monkeypatch, tmp_path)
+    try:
+        service.request_introduction(a, "some-connected-agent", "hello")
+        raise AssertionError("an introduction to an agent we do not host has nowhere to go here")
+    except service.IntroductionRefused as refused:
+        assert refused.code == "peer_not_hosted_here"
+        assert "opportunity/decide" in refused.detail, "the gap is named, not smoothed over"
+
+
+def test_an_agent_is_not_introduced_to_its_own_owner(monkeypatch, tmp_path) -> None:
+    service, a, _b, agent_a, _agent_b = _two_accounts_with_agents(monkeypatch, tmp_path)
+    try:
+        service.request_introduction(a, agent_a["id"], "talking to myself")
+        raise AssertionError("an agent and its owner are not a pair")
+    except service.IntroductionRefused as refused:
+        assert refused.code == "same_owner"
+
+
+def test_the_contact_opens_only_when_both_sides_have_agreed(monkeypatch, tmp_path) -> None:
+    service, a, b, _agent_a, agent_b = _two_accounts_with_agents(monkeypatch, tmp_path)
+    asked = service.request_introduction(a, agent_b["id"], "we need warehousing, you offer it")
+    assert asked["state"] == "requested"
+
+    incoming = service.introductions_for(b)["incoming"]
+    assert len(incoming) == 1 and incoming[0]["yours_to_decide"] is True
+    assert incoming[0]["contact"] is None, "nothing of the other side is readable before agreeing"
+    assert service.introductions_for(a)["outgoing"][0]["contact"] is None
+
+    # Messages before agreement are refused: no unsolicited messaging.
+    try:
+        service.send_introduction_message(a, asked["id"], "are you there?")
+        raise AssertionError("messages start after both sides agreed")
+    except service.IntroductionRefused as refused:
+        assert refused.code == "not_introduced_yet"
+
+    decided = service.decide_introduction(b, asked["id"], approve=True, message="gladly, here is what we do")
+    assert decided["state"] == "introduced"
+
+    mine = service.introductions_for(a)["outgoing"][0]
+    theirs = service.introductions_for(b)["incoming"][0]
+    assert mine["contact"]["email"] == "b@example.com"
+    assert theirs["contact"]["email"] == "a@example.com"
+    assert mine["messages"][0]["body"] == "gladly, here is what we do"
+
+    sent = service.send_introduction_message(a, asked["id"], "our list is three teams, shenzhen")
+    assert sent["evidence_id"].startswith("ev_")
+    assert len(service.introductions_for(b)["incoming"][0]["messages"]) == 2
+
+
+def test_declining_leaves_the_contact_shut(monkeypatch, tmp_path) -> None:
+    service, a, b, _agent_a, agent_b = _two_accounts_with_agents(monkeypatch, tmp_path)
+    asked = service.request_introduction(a, agent_b["id"], "")
+    service.decide_introduction(b, asked["id"], approve=False)
+    view = service.introductions_for(a)["outgoing"][0]
+    assert view["state"] == "declined" and view["contact"] is None
+
+
+def test_only_the_addressed_side_may_decide(monkeypatch, tmp_path) -> None:
+    service, a, b, _agent_a, agent_b = _two_accounts_with_agents(monkeypatch, tmp_path)
+    asked = service.request_introduction(a, agent_b["id"], "")
+    try:
+        service.decide_introduction(a, asked["id"], approve=True)
+        raise AssertionError("the side that asked does not get to answer for the other")
+    except service.IntroductionRefused as refused:
+        assert refused.code == "not_yours_to_decide"
+
+
+def test_asking_twice_is_refused(monkeypatch, tmp_path) -> None:
+    service, a, _b, _agent_a, agent_b = _two_accounts_with_agents(monkeypatch, tmp_path)
+    service.request_introduction(a, agent_b["id"], "first")
+    try:
+        service.request_introduction(a, agent_b["id"], "second")
+        raise AssertionError("one open request per pair")
+    except service.IntroductionRefused as refused:
+        assert refused.code == "already_asked"
+
+
+def test_every_step_leaves_a_record_that_can_be_pointed_at(monkeypatch, tmp_path) -> None:
+    service, a, b, _agent_a, agent_b = _two_accounts_with_agents(monkeypatch, tmp_path)
+    asked = service.request_introduction(a, agent_b["id"], "we overlap on warehousing")
+    service.decide_introduction(b, asked["id"], approve=True, message="yes")
+    service.send_introduction_message(b, asked["id"], "shall we talk on thursday?")
+    view = service.introductions_for(a)["outgoing"][0]
+    assert len(view["evidence_ids"]) >= 4, "a request, a decision, a message, and the decision's own message"
+    assert all(identifier.startswith("ev_") for identifier in view["evidence_ids"])
+
+    from arli_engine.core.evidence import Evidence
+    envelope = service._evidence("introduction.requested", {"introduction_id": asked["id"]}, {"state": "requested"})
+    assert Evidence.from_json(envelope).verify_id() is True

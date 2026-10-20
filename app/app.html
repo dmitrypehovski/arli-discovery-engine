@@ -178,6 +178,12 @@ th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:
         </table>
       </div>
     </div>
+
+    <div class="card">
+      <h2>4. Introductions</h2>
+      <p class="note">A match is a number. Two sides still have to agree to be put in touch, and each agrees separately: the contact appears only once both have said yes. Every step leaves an id you can point at afterwards.</p>
+      <div id="intros"><span class="note">Loading…</span></div>
+    </div>
   </div>
 </div>
 
@@ -199,6 +205,7 @@ th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:
     $('who').textContent = me && me.email ? me.email : '';
     $('signOut').classList.remove('hidden');
     loadAgents();
+    loadIntros();
   }
   function showAuth(){
     $('auth').classList.remove('hidden');
@@ -304,12 +311,85 @@ th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:
           '<div class="note">' + esc(row.headline || '') + '</div></td>' +
           '<td>' + esc(row.kind === 'demand' ? 'buying' : (row.kind === 'supply' ? 'offering' : 'a person')) + '</td>' +
           '<td>' + esc(row.city || '') + '</td><td>' + overlap + '</td>' +
-          '<td class="mono">' + ((row.matched_features || []).length ? (row.matched_features || []).map(esc).join(' · ') : 'none above your floor') + '</td></tr>';
+          '<td class="mono">' + ((row.matched_features || []).length ? (row.matched_features || []).map(esc).join(' · ') : 'none above your floor') +
+          '<div style="margin-top:6px">' + (row.sample
+            ? '<span class="chip">example agent: nobody to ask</span>'
+            : '<button class="btn" style="padding:6px 11px;font-size:12.5px" data-ask="' + esc(row.id) + '">Ask for an introduction</button>') +
+          '</div></td></tr>';
       }).join('');
+      Array.prototype.forEach.call(document.querySelectorAll('[data-ask]'), function(button){
+        button.addEventListener('click', function(){
+          var peer = button.getAttribute('data-ask');
+          var note = window.prompt('Say who you are and what you would want from them. This goes to the other side with the request:', '');
+          if(note === null){ return; }
+          post('/api/app/introductions', {peer_id: peer, note: note}).then(function(res){
+            if(res.code !== 200){ window.alert('Not sent: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n\n' + res.body.detail : '')); return; }
+            window.alert('Sent. It appears under Introductions until the other side answers.');
+            loadIntros();
+          });
+        });
+      });
       setStatus($('scanStatus'), 'Checked ' + d.agents_checked + ' agents, ' + d.above_floor + ' above your floor, ' +
         d.not_comparable + ' refused as not a pair, no feature on any wire.', 'ok');
     }).catch(function(e){ $('scan').disabled = false; setStatus($('scanStatus'), 'Request failed: ' + e, 'err'); });
   });
+
+  function introBlock(i){
+    var head = '<div class="agent"><span class="mono">' + esc(i.agent) + '</span> · ' + esc(i.state) +
+      '<div class="note">' + (i.direction === 'incoming' ? 'they ask you' : 'you ask them') +
+      (i.note ? ' · “' + esc(i.note) + '”' : '') + '</div>';
+    var body = '';
+    if(i.yours_to_decide){
+      body += '<div style="margin-top:6px"><input placeholder="a line to send with your answer" id="msg-' + esc(i.id) + '">' +
+        '<div class="row" style="margin-top:8px">' +
+        '<button class="btn btn-p" style="padding:6px 11px;font-size:12.5px" data-yes="' + esc(i.id) + '">Agree to the introduction</button>' +
+        '<button class="btn" style="padding:6px 11px;font-size:12.5px" data-no="' + esc(i.id) + '">Decline</button></div></div>';
+    }
+    if(i.state === 'introduced' && i.contact){
+      body += '<div class="note" style="margin-top:6px">In touch now. They are <b>' + esc(i.contact.email) + '</b>' +
+        (i.contact.name ? ' · ' + esc(i.contact.name) : '') + (i.contact.city ? ' · ' + esc(i.contact.city) : '') +
+        (i.contact.headline ? '<br>' + esc(i.contact.headline) : '') + '</div>';
+      body += '<div style="margin-top:8px">' + (i.messages || []).map(function(m){
+        return '<div class="note"><span class="mono">' + esc(m.author) + '</span> · ' + esc(m.body) + '</div>'; }).join('') + '</div>';
+      body += '<div style="margin-top:8px"><input placeholder="say something" id="body-' + esc(i.id) + '"></div>' +
+        '<div class="row" style="margin-top:8px"><button class="btn" style="padding:6px 11px;font-size:12.5px" data-send="' + esc(i.id) + '">Send</button></div>';
+    } else if(i.note_on_contact){
+      body += '<div class="note" style="margin-top:6px">' + esc(i.note_on_contact) + '</div>';
+    }
+    return head + body + '<div class="note mono" style="margin-top:6px">recorded: ' + (i.evidence_ids || []).slice(-2).map(esc).join(' · ') + '</div></div>';
+  }
+
+  function loadIntros(){
+    fetch('/api/app/introductions').then(function(r){ return r.json(); }).then(function(d){
+      var all = (d.incoming || []).concat(d.outgoing || []);
+      if(!all.length){ $('intros').innerHTML = '<span class="note">None yet. Search, then press ask on somebody who is not an example.</span>'; return; }
+      $('intros').innerHTML = all.map(introBlock).join('');
+      Array.prototype.forEach.call(document.querySelectorAll('[data-yes]'), function(b){
+        b.addEventListener('click', function(){
+          var id = b.getAttribute('data-yes'), box = document.getElementById('msg-' + id);
+          post('/api/app/introductions/' + id + '/decide', {decision: 'approve', message: box ? box.value : ''}).then(function(res){
+            if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
+            loadIntros();
+          });
+        });
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-no]'), function(b){
+        b.addEventListener('click', function(){
+          var id = b.getAttribute('data-no');
+          post('/api/app/introductions/' + id + '/decide', {decision: 'decline'}).then(function(){ loadIntros(); });
+        });
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-send]'), function(b){
+        b.addEventListener('click', function(){
+          var id = b.getAttribute('data-send'), box = document.getElementById('body-' + id);
+          post('/api/app/introductions/' + id + '/messages', {body: box ? box.value : ''}).then(function(res){
+            if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
+            box.value = ''; loadIntros();
+          });
+        });
+      });
+    });
+  }
 
   fetch('/api/app/me').then(function(r){ return r.json(); }).then(function(d){
     if(d && d.signed_in){ showApp(d.account || {}); } else { showAuth(); }

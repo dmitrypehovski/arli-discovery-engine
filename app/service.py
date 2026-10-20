@@ -99,6 +99,31 @@ def connect() -> sqlite3.Connection:
                expires_at TEXT NOT NULL
            )"""
     )
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS introductions (
+               id TEXT PRIMARY KEY,
+               from_account TEXT NOT NULL,
+               from_agent TEXT NOT NULL,
+               to_agent TEXT NOT NULL,
+               to_account TEXT NOT NULL DEFAULT '',
+               note TEXT NOT NULL DEFAULT '',
+               state TEXT NOT NULL,
+               created_at TEXT NOT NULL,
+               decided_at TEXT NOT NULL DEFAULT '',
+               opened_at TEXT NOT NULL DEFAULT '',
+               evidence_ids TEXT NOT NULL DEFAULT '[]'
+           )"""
+    )
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS intro_messages (
+               id TEXT PRIMARY KEY,
+               introduction_id TEXT NOT NULL,
+               author TEXT NOT NULL,
+               body TEXT NOT NULL,
+               created_at TEXT NOT NULL,
+               evidence_id TEXT NOT NULL
+           )"""
+    )
     for column, definition in (("failures", "INTEGER NOT NULL DEFAULT 0"),
                                ("last_checked", "TEXT NOT NULL DEFAULT ''"),
                                ("unreachable_reason", "TEXT NOT NULL DEFAULT ''")):
@@ -679,6 +704,193 @@ def app_agents(account_id: str) -> list[dict]:
     } for row in rows]
 
 
+# --- introductions: a match is not a conversation, and this is the step between -------------------------
+# What happens after a search finds somebody. A match is a number; two sides still have to agree to be put in
+# touch, and each approves separately. Nothing is shared before both have: the contact opens only when the
+# other side has also said yes. Every step writes an evidence envelope, so afterwards either side can point
+# at what was decided and when, rather than at a copy of a chat.
+#
+# What this does not do yet, and it is said rather than hidden: an agent not hosted here is not reachable by
+# this path. Its introduction would have to travel to its own address with arli/opportunity/decide, which is
+# the same two-sided rule over the wire, and that step is not built.
+
+INTRO_STATES = ("requested", "declined", "introduced", "withdrawn")
+
+
+def _evidence(operation: str, parameters: dict, result: dict, authority: str = "local-calculation") -> dict:
+    from arli_engine.core.evidence import Evidence
+
+    envelope = Evidence(
+        provider={"service": "arli-match", "product": "match.arliwork.com"},
+        operation=operation,
+        parameters=parameters,
+        normalized_result=result,
+        confidence="observed",
+        authority=authority,
+        limitations=["The service records that a side said this, and nothing about whether it was true."],
+    )
+    return envelope.to_json()
+
+
+def _record_evidence(connection: sqlite3.Connection, intro_id: str, envelope: dict) -> None:
+    row = connection.execute("SELECT evidence_ids FROM introductions WHERE id = ?", (intro_id,)).fetchone()
+    ids = json.loads(row["evidence_ids"]) if row else []
+    ids.append(envelope["evidence_id"])
+    connection.execute("UPDATE introductions SET evidence_ids = ? WHERE id = ?", (json.dumps(ids), intro_id))
+
+
+class IntroductionRefused(RuntimeError):
+    """The introduction was refused, with a code from a small closed list."""
+
+    CODES = ("peer_not_hosted_here", "same_owner", "already_asked", "unknown_introduction",
+             "not_yours_to_decide", "already_decided", "not_introduced_yet", "empty_message")
+
+    def __init__(self, code: str, detail: str = "") -> None:
+        if code not in self.CODES:
+            raise ValueError(f"{code!r} is not in IntroductionRefused.CODES")
+        self.code = code
+        self.detail = detail
+        super().__init__(f"{code}: {detail}" if detail else code)
+
+
+def _agent_owner(connection: sqlite3.Connection, agent_id: str) -> str:
+    row = connection.execute("SELECT owner_account, active FROM agents WHERE id = ?", (agent_id,)).fetchone()
+    if row is None or not row["active"]:
+        return ""
+    return str(row["owner_account"] or "")
+
+
+def request_introduction(account: dict, peer_agent_id: str, note: str = "") -> dict:
+    """One side asks to be put in touch. Order matters: the other side learns nothing until it answers."""
+    peer_agent_id = str(peer_agent_id or "").strip()
+    if not peer_agent_id:
+        raise IntroductionRefused("unknown_introduction", "name the agent you want to be introduced to")
+    with connect() as connection:
+        peer_owner = _agent_owner(connection, peer_agent_id)
+        if not peer_owner:
+            raise IntroductionRefused(
+                "peer_not_hosted_here",
+                "this agent is not hosted on this service, so an introduction cannot be delivered here. A "
+                "connected agent would have to answer arli/opportunity/decide at its own address, and that "
+                "step is not built yet.",
+            )
+        if peer_owner == account["id"]:
+            raise IntroductionRefused("same_owner", "that agent is yours: an agent is not introduced to its own owner")
+        mine = connection.execute(
+            "SELECT id FROM agents WHERE owner_account = ? AND active = 1 ORDER BY created_at LIMIT 1",
+            (account["id"],)).fetchone()
+        existing = connection.execute(
+            """SELECT id, state FROM introductions
+               WHERE from_account = ? AND to_agent = ? AND state IN ('requested','introduced')
+               ORDER BY created_at DESC LIMIT 1""",
+            (account["id"], peer_agent_id)).fetchone()
+        if existing:
+            raise IntroductionRefused("already_asked",
+                                      f"you already asked for this introduction: it is {existing['state']}")
+        intro_id = f"in-{secrets.token_hex(6)}"
+        envelope = _evidence("introduction.requested",
+                             {"introduction_id": intro_id, "from_agent": mine["id"] if mine else "",
+                              "to_agent": peer_agent_id, "note": note.strip()[:400]},
+                             {"state": "requested"})
+        connection.execute(
+            """INSERT INTO introductions (id, from_account, from_agent, to_agent, to_account, note, state,
+               created_at, evidence_ids) VALUES (?,?,?,?,?,?,?,?,?)""",
+            (intro_id, account["id"], mine["id"] if mine else "", peer_agent_id, peer_owner,
+             note.strip()[:400], "requested", _now(), json.dumps([envelope["evidence_id"]])))
+    return {"id": intro_id, "state": "requested", "to_agent": peer_agent_id,
+            "evidence_id": envelope["evidence_id"]}
+
+
+def decide_introduction(account: dict, intro_id: str, approve: bool, message: str = "") -> dict:
+    """The other side answers. Only then does either side learn how to reach the other."""
+    with connect() as connection:
+        row = connection.execute("SELECT * FROM introductions WHERE id = ?", (intro_id,)).fetchone()
+        if row is None:
+            raise IntroductionRefused("unknown_introduction", f"no introduction with the id {intro_id}")
+        if row["to_account"] != account["id"]:
+            raise IntroductionRefused("not_yours_to_decide", "this introduction was not addressed to you")
+        if row["state"] != "requested":
+            raise IntroductionRefused("already_decided", f"this one is already {row['state']}")
+        state = "introduced" if approve else "declined"
+        envelope = _evidence("introduction.decided" if approve else "introduction.declined",
+                             {"introduction_id": intro_id, "decided_by": account["email"],
+                              "message": message.strip()[:400]},
+                             {"state": state}, authority="self-declared")
+        connection.execute(
+            "UPDATE introductions SET state = ?, decided_at = ?, opened_at = ? WHERE id = ?",
+            (state, _now(), _now() if approve else "", intro_id))
+        _record_evidence(connection, intro_id, envelope)
+        if approve and message.strip():
+            _store_message(connection, intro_id, account, message)
+    return {"id": intro_id, "state": state, "evidence_id": envelope["evidence_id"]}
+
+
+def _store_message(connection: sqlite3.Connection, intro_id: str, account: dict, body: str) -> dict:
+    body = str(body or "").strip()
+    if not body:
+        raise IntroductionRefused("empty_message", "an empty message is not a message")
+    message_id = f"m-{secrets.token_hex(6)}"
+    envelope = _evidence("introduction.message",
+                         {"introduction_id": intro_id, "author": account["email"], "body": body[:400]},
+                         {"stored": True}, authority="self-declared")
+    connection.execute(
+        "INSERT INTO intro_messages (id, introduction_id, author, body, created_at, evidence_id) VALUES (?,?,?,?,?,?)",
+        (message_id, intro_id, account["email"], body[:2000], _now(), envelope["evidence_id"]))
+    _record_evidence(connection, intro_id, envelope)
+    return {"id": message_id, "evidence_id": envelope["evidence_id"]}
+
+
+def send_introduction_message(account: dict, intro_id: str, body: str) -> dict:
+    with connect() as connection:
+        row = connection.execute("SELECT * FROM introductions WHERE id = ?", (intro_id,)).fetchone()
+        if row is None or account["id"] not in (row["from_account"], row["to_account"]):
+            raise IntroductionRefused("unknown_introduction", f"no introduction with the id {intro_id} for you")
+        if row["state"] != "introduced":
+            raise IntroductionRefused("not_introduced_yet",
+                                      f"this one is {row['state']}: messages start once both sides have agreed")
+        return _store_message(connection, intro_id, account, body)
+
+
+def introduction_view(account: dict, row) -> dict:
+    """What one side is allowed to see. The contact and the messages appear only after both said yes."""
+    mine_to_receive = row["to_account"] == account["id"]
+    peer_agent = row["to_agent"] if not mine_to_receive else row["from_agent"]
+    out = {
+        "id": row["id"], "state": row["state"], "created_at": row["created_at"],
+        "decided_at": row["decided_at"], "direction": "incoming" if mine_to_receive else "outgoing",
+        "agent": peer_agent, "note": row["note"],
+        "evidence_ids": json.loads(row["evidence_ids"] or "[]"),
+        "yours_to_decide": mine_to_receive and row["state"] == "requested",
+    }
+    if row["state"] != "introduced":
+        out["contact"] = None
+        out["note_on_contact"] = ("The contact appears when both sides have agreed. Until then the other side "
+                                  "is a matching agent and nothing more.")
+        return out
+    peer_account = row["to_account"] if not mine_to_receive else row["from_account"]
+    with connect() as connection:
+        peer = connection.execute(
+            """SELECT a.email AS email, g.name AS name, g.headline AS headline, g.kind AS kind, g.city AS city
+               FROM accounts AS a LEFT JOIN agents AS g ON g.owner_account = a.id AND g.active = 1
+               WHERE a.id = ? LIMIT 1""", (peer_account,)).fetchone()
+        messages = connection.execute(
+            "SELECT author, body, created_at, evidence_id FROM intro_messages WHERE introduction_id = ? "
+            "ORDER BY created_at", (row["id"],)).fetchall()
+    out["contact"] = dict(peer) if peer else None
+    out["messages"] = [dict(message) for message in messages]
+    return out
+
+
+def introductions_for(account: dict) -> dict:
+    with connect() as connection:
+        rows = connection.execute(
+            """SELECT * FROM introductions WHERE from_account = ? OR to_account = ?
+               ORDER BY created_at DESC LIMIT 100""", (account["id"], account["id"])).fetchall()
+    views = [introduction_view(account, row) for row in rows]
+    return {"incoming": [v for v in views if v["direction"] == "incoming"],
+            "outgoing": [v for v in views if v["direction"] == "outgoing"]}
+
+
 def entry_for(agent_id: str) -> dict | None:
     for agent in ROSTER:
         if agent["id"] == agent_id:
@@ -827,6 +1039,15 @@ class Handler(BaseHandler):
             account = account_by_session(self._cookie_token())
             self._json(200, {"signed_in": bool(account), "account": account or {}})
             return
+        if path == "/api/app/introductions":
+            account = account_by_session(self._cookie_token())
+            if account is None:
+                self._json(401, {"error": "not_signed_in", "detail": "Sign in first."})
+                return
+            self._json(200, {**introductions_for(account),
+                             "note": "A match is a number. Each side agrees separately, and the contact opens "
+                                     "only once both have. Every step is recorded with an id you can point at."})
+            return
         if path == "/api/app/agents":
             account = account_by_session(self._cookie_token())
             if account is None:
@@ -840,7 +1061,8 @@ class Handler(BaseHandler):
         path = self.path.split("?")[0]
         if path not in ("/api/agents", "/api/scan", "/api/negotiate", "/api/connect", "/api/intake",
                          "/api/app/register", "/api/app/login", "/api/app/logout",
-                         "/api/app/intake") and not (
+                         "/api/app/intake", "/api/app/introductions") and not (
+            path.startswith("/api/app/introductions/") or
             path.startswith("/api/agents/") and len(path) > len("/api/agents/")
         ):
             super().do_POST()
@@ -896,6 +1118,48 @@ class Handler(BaseHandler):
         if path == "/api/app/logout":
             sign_out(self._cookie_token())
             self._send_with_cookie(200, {"signed_in": False}, "", clear=True)
+            return
+
+        if path == "/api/app/introductions":
+            account = account_by_session(self._cookie_token())
+            if account is None:
+                self._json(401, {"error": "not_signed_in", "detail": "Sign in first."})
+                return
+            try:
+                result = request_introduction(account, payload.get("peer_id"), str(payload.get("note") or ""))
+            except IntroductionRefused as error:
+                self._json(409, {"error": error.code, "detail": error.detail})
+                return
+            self._json(200, result)
+            return
+
+        if path.startswith("/api/app/introductions/"):
+            parts = path.strip("/").split("/")
+            if len(parts) < 4:
+                self._json(404, {"error": "not found", "path": path})
+                return
+            intro_id, action = parts[3], (parts[4] if len(parts) > 4 else "")
+            account = account_by_session(self._cookie_token())
+            if account is None:
+                self._json(401, {"error": "not_signed_in", "detail": "Sign in first."})
+                return
+            try:
+                if action == "decide":
+                    decision = str(payload.get("decision") or "").strip().lower()
+                    if decision not in ("approve", "decline"):
+                        self._json(400, {"error": "decision_required", "detail": "approve or decline"})
+                        return
+                    result = decide_introduction(account, intro_id, decision == "approve",
+                                                 str(payload.get("message") or ""))
+                elif action == "messages":
+                    result = send_introduction_message(account, intro_id, str(payload.get("body") or ""))
+                else:
+                    self._json(404, {"error": "not found", "path": path})
+                    return
+            except IntroductionRefused as error:
+                self._json(409, {"error": error.code, "detail": error.detail})
+                return
+            self._json(200, result)
             return
 
         if path == "/api/app/intake":
@@ -1001,7 +1265,21 @@ class Handler(BaseHandler):
             self._json(400, {"error": f"{len(mine)} features is above the cap of {MAX_FEATURES} per exchange"})
             return
         try:
-            self._json(200, scan_room(mine, floor, my_kind))
+            result = scan_room(mine, floor, my_kind)
+            # An agent is not a pair with its own owner, and a search that shows a person their own agent at
+            # full overlap is noise pretending to be a find.
+            account = account_by_session(self._cookie_token())
+            if account is not None:
+                with connect() as connection:
+                    mine_ids = {row["id"] for row in connection.execute(
+                        "SELECT id FROM agents WHERE owner_account = ?", (account["id"],)).fetchall()}
+                if mine_ids:
+                    before = len(result["rows"])
+                    result["rows"] = [row for row in result["rows"] if row.get("id") not in mine_ids]
+                    result["your_own_agents_excluded"] = before - len(result["rows"])
+                    result["agents_checked"] = len(result["rows"])
+                    result["above_floor"] = sum(1 for row in result["rows"] if row.get("passed_floor"))
+            self._json(200, result)
         except Exception as error:  # noqa: BLE001
             self._json(500, {"error": f"{type(error).__name__}: {error}"})
 
