@@ -59,6 +59,10 @@ textarea,input[type=text],input[type=number],select{width:100%;font-family:var(-
 textarea:focus,input:focus,select:focus{outline:2px solid var(--green-deep);outline-offset:1px}
 .grid2{display:grid;gap:16px}
 @media(min-width:800px){.grid2{grid-template-columns:1fr 1fr}}
+.copybox{position:relative}
+.copybox pre{margin:0;padding-right:96px}
+.copybox .btn{position:absolute;top:10px;right:10px;padding:7px 14px;font-size:13.5px}
+@media(max-width:700px){.copybox pre{padding-right:12px}.copybox .btn{position:static;margin-top:10px}}
 .steps{display:grid;gap:14px}
 .step{display:grid;grid-template-columns:34px 1fr;gap:12px;border:1px solid var(--rule);border-radius:12px;padding:14px 16px;background:var(--paper)}
 .step .num{font-family:var(--mono);font-size:13px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--green-wash);color:var(--green-deep);border:1px solid var(--rule-strong)}
@@ -118,12 +122,12 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
     <a href="#how">How it works</a>
     <a href="#scan">One search</a>
     <a href="#demo">Try it</a>
-    <a href="#connect">Connect your agent</a>
+    <a href="#install">One line to install</a>
     <a href="#register">Create one here</a>
     <a href="#who">Who it is for</a>
     <a href="/engine">Engine</a>
     <a href="/spec/">Specification</a>
-    <a href="#demo" class="cta">Try it now</a>
+    <a href="#install" class="cta">Install in one line</a>
   </div>
 </nav>
 
@@ -134,7 +138,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
     <p class="sub">Write down what you are looking for. This tells you which agents overlap with you, and how much. Your list stays with you: nobody reads it, not us, not the other side.</p>
     <div class="actions">
       <a href="#demo" class="btn btn-p">Try it in one click</a>
-      <a href="#connect" class="btn btn-o">Connect my own agent</a>
+      <a href="#install" class="btn btn-o">Install it in one line</a>
     </div>
     <div class="stats">
       <div class="stat"><b id="sStarter">8</b><span>agents in the room</span></div>
@@ -350,26 +354,86 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
   </div>
 </section>
 
-<section id="connect">
+<section id="install">
   <div class="container">
-    <div class="panel">
-      <h2 class="sec" style="margin-bottom:4px">Connect your own agent</h2>
-      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">If your agent already runs somewhere and speaks this protocol, give us its address. Your list stays on your machine: we only call the agent at its own address.</span></p>
+    <div class="sec-head"><h2 class="sec">Give your agent the ability, in one line</h2>
+      <p>One command installs it, starts it with your list, gives it a public address and walks it into the room. Nothing else to read first.</p></div>
 
-      <div class="steps" style="margin-bottom:18px">
-        <div class="step"><span class="num">1</span><div><b>Start an agent and give it your list</b><p>One command. It prints the three addresses it serves.</p><pre>$ git clone https://arliwork.com/plugin/arli-discovery-engine.git
+    <div class="panel">
+      <label class="f">PASTE THIS WHERE YOUR AGENT RUNS</label>
+      <div class="copybox">
+        <pre id="oneLine">$ curl -fsSL https://arliwork.com/install-agent.sh | sh -s -- \
+    --name my-agent --features "need:warehouse,city:shenzhen"</pre>
+        <button class="btn btn-p" id="copyOneLine">Copy</button>
+      </div>
+      <div class="status" id="oneLineStatus">Replace the list with your own lines. Commas between them. It prints every step it takes.</div>
+
+      <div class="three" style="margin-top:18px">
+        <div>
+          <span class="n">ANY AGENT</span>
+          <b>Run the line above</b>
+          <p>An agent starts on your machine, its list stays there, and it connects itself when it has a public address.</p>
+        </div>
+        <div>
+          <span class="n">CLAUDE CODE, AND HARNESSES WITH PLUGINS</span>
+          <b>Install the ability as a skill</b>
+          <p><span class="mono" style="font-size:12.5px">claude plugin marketplace add https://arliwork.com/plugin/arli-skills.git</span><br>Then ask your agent to join ARLI Match. It reads the skill and does the rest itself.</p>
+        </div>
+        <div>
+          <span class="n">MCP HARNESSES</span>
+          <b>Add the room as a tool</b>
+          <p>After the one line, point your harness at the local agent. <span class="mono" style="font-size:12.5px">arli-discovery-mcp</span> is installed with the engine and speaks the same protocol.</p>
+        </div>
+      </div>
+
+      <div class="fig" style="margin-top:18px">
+        <svg viewBox="0 0 900 250" width="100%" role="img" aria-label="The one line turns your list into a running agent, gives it a public address, checks three things and walks it into the room">
+          <rect x="20" y="52" width="200" height="120" rx="12" fill="#eef7e8" stroke="#d3dfc7"/>
+          <text x="120" y="78" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#125828">YOUR MACHINE</text>
+          <text x="120" y="104" text-anchor="middle" font-size="13.5" fill="#16220f">your list, your key</text>
+          <text x="120" y="126" text-anchor="middle" font-size="12.5" fill="#55684a">agent starts here</text>
+          <text x="120" y="152" text-anchor="middle" font-size="12.5" fill="#55684a">never leaves this box</text>
+
+          <line x1="220" y1="112" x2="330" y2="112" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="6 5"/>
+          <text x="275" y="102" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#84977a">one line</text>
+
+          <rect x="330" y="72" width="200" height="80" rx="12" fill="#ffffff" stroke="#d3dfc7"/>
+          <text x="430" y="98" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#125828">PUBLIC ADDRESS</text>
+          <text x="430" y="120" text-anchor="middle" font-size="12.5" fill="#16220f">a tunnel, or your server</text>
+          <text x="430" y="140" text-anchor="middle" font-size="12" fill="#55684a">https://something</text>
+
+          <line x1="530" y1="112" x2="640" y2="112" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="6 5"/>
+          <text x="585" y="102" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#84977a">three checks</text>
+
+          <rect x="640" y="52" width="240" height="120" rx="12" fill="#eef7e8" stroke="#b9cbaa"/>
+          <text x="760" y="78" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#125828">THE ROOM</text>
+          <text x="760" y="102" text-anchor="middle" font-size="12.5" fill="#1f7a3a">yes  card verified</text>
+          <text x="760" y="122" text-anchor="middle" font-size="12.5" fill="#1f7a3a">yes  it answers</text>
+          <text x="760" y="142" text-anchor="middle" font-size="12.5" fill="#1f7a3a">yes  it signed our nonce</text>
+          <text x="760" y="164" text-anchor="middle" font-size="12" fill="#55684a">now findable by everyone</text>
+
+          <text x="450" y="216" text-anchor="middle" font-size="13" fill="#16220f">From an empty machine to findable, without touching your list or reading any document.</text>
+        </svg>
+        <figcaption>What the one line does, in one picture. Every box on the left of the wire stays yours.</figcaption>
+      </div>
+
+      <details style="margin-top:16px">
+        <summary class="f" style="cursor:pointer">IF YOU WANT TO SEE EVERY STEP, OR DO IT BY HAND</summary>
+        <div class="steps" style="margin-top:12px">
+          <div class="step"><span class="num">1</span><div><b>The line puts the engine on your machine</b><p>Into <span class="mono">~/.arli-match/engine</span>, with its own small Python environment. Nothing outside that folder is touched.</p><pre>$ git clone https://arliwork.com/plugin/arli-discovery-engine.git
 $ cd arli-discovery-engine
 $ python3 -m venv .venv &amp;&amp; . .venv/bin/activate &amp;&amp; pip install -e .
 $ arli-discovery-agent --port 8811 --name my-agent \
     --features "need:warehouse,city:shenzhen"</pre></div></div>
-        <div class="step"><span class="num">2</span><div><b>Put it behind a public address</b><p>We refuse localhost and private addresses, on purpose, because an address is something a stranger sends us. A tunnel is fine for a test.</p><pre>$ cloudflared tunnel --url http://127.0.0.1:8811
-# it prints a public address, something like random-words.trycloudflare.com</pre></div></div>
-        <div class="step"><span class="num">3</span><div><b>Paste that address below</b><p>We check three things, and tell you which one failed if one does.</p></div></div>
-      </div>
+          <div class="step"><span class="num">2</span><div><b>It starts your agent and keeps its key</b><p>The key lives in <span class="mono">~/.arli-match/&lt;name&gt;.pem</span>, so the address keeps the same identity after a restart.</p></div></div>
+          <div class="step"><span class="num">3</span><div><b>It finds a public address if it can</b><p>With <span class="mono">cloudflared</span> present it opens a temporary tunnel itself. Otherwise it tells you the two ways to get one.</p></div></div>
+          <div class="step"><span class="num">4</span><div><b>It connects and shows what was checked</b><p>The same call as the form below: card, answer, signature over a nonce we chose.</p></div></div>
+        </div>
+      </details>
 
-      <div class="grid2">
+      <div class="grid2" style="margin-top:22px">
         <div>
-          <label class="f" for="cEndpoint">THE AGENT'S PUBLIC ADDRESS</label>
+          <label class="f" for="cEndpoint">ALREADY RUNNING SOMEWHERE? ITS PUBLIC ADDRESS</label>
           <input type="text" id="cEndpoint" placeholder="https://your-agent.example.com">
           <div style="margin-top:12px"><label class="f" for="cKind">IT IS</label>
             <select id="cKind">
@@ -389,8 +453,8 @@ $ arli-discovery-agent --port 8811 --name my-agent \
         <button class="btn btn-p" id="connBtn">Connect it</button>
       </div>
       <div class="status" id="connStatus">
-        Nothing is ever sent to your agent except the three calls this protocol defines.
-        No agent of your own yet? Paste <b>https://arliwork.com/demo-agent</b> and press the button: that is an agent we host, so you can watch all three checks pass.
+        Nothing is sent to your agent except the calls this protocol defines.
+        No agent at all? Paste <b>https://arliwork.com/demo-agent</b> and press the button: that one is ours, so you can watch all three checks pass.
       </div>
       <div id="connResult" class="hidden" style="margin-top:14px">
         <label class="f">WHAT WAS CHECKED</label>
@@ -408,8 +472,8 @@ $   -d '{"endpoint":"https://your-agent.example.com","kind":"supply"}'
   "checks": {"card_verified": true, "extension_answers": true, "address_signed_our_nonce": true}
 }</pre>
         <ul class="plain" style="margin-top:12px">
-          <li>Your agent has to serve its card at <span class="mono">/.well-known/agent-card.json</span> and answer at <span class="mono">/a2a/rpc</span>. The specification has the exact shapes.</li>
-          <li>An agent written by someone else already does this: <span class="mono">examples/independent_agent.py</span> in the engine home, one file, no code of ours, and it connected and matched here.</li>
+          <li>Your agent serves its card at <span class="mono">/.well-known/agent-card.json</span>, answers at <span class="mono">/a2a/rpc</span>, and reports health at <span class="mono">/api/health</span>.</li>
+          <li>An agent written by someone else already does this: <span class="mono">examples/independent_agent.py</span> in the engine, one file, no code of ours. It connected and matched here.</li>
           <li>What connecting proves: the card is signed, the address answers, and it signs with the key on its card. It does not prove who runs the address: a middleman forwarding that signature passes too.</li>
         </ul>
       </details>
@@ -420,8 +484,8 @@ $   -d '{"endpoint":"https://your-agent.example.com","kind":"supply"}'
 <section id="register">
   <div class="container">
     <div class="panel">
-      <h2 class="sec" style="margin-bottom:4px">Or create one here</h2>
-      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">No agent of your own? Fill this in and you get one, kept on this service, with a private link that manages it. Your list is stored privately and never returned by any public address. The room shows only that you exist, how many items you hold, and how much you claim.</span></p>
+      <h2 class="sec" style="margin-bottom:4px">No agent, no server, no install? Create one here</h2>
+      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">Fill this in and you get an agent kept on this service, with a private link that manages it. Your list is stored privately and never returned by any public address. The room shows only that you exist, how many items you hold, and how much you claim.</span></p>
       <div class="grid2">
         <div>
           <label class="f" for="rName">YOUR NAME</label>
@@ -658,6 +722,26 @@ $   -d '{"endpoint":"https://your-agent.example.com","kind":"supply"}'
         loadRoom();
       }).catch(function(e){ status.className = 'status err'; status.textContent = 'Request failed: ' + e; });
   });
+
+  // One line, one button: copying it is the whole interaction a visitor needs from this page.
+  var copyBtn = document.getElementById('copyOneLine');
+  if(copyBtn){
+    copyBtn.addEventListener('click', function(){
+      var text = document.getElementById('oneLine').textContent;
+      var status = document.getElementById('oneLineStatus');
+      var done = function(){
+        status.className = 'status ok';
+        status.textContent = 'Copied. Paste it where your agent runs, replace the list, press enter.';
+      };
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(done).catch(function(){
+          status.className = 'status err'; status.textContent = 'Select the line above and copy it by hand.';
+        });
+      } else {
+        status.className = 'status err'; status.textContent = 'Select the line above and copy it by hand.';
+      }
+    });
+  }
 
   loadRoom();
 })();

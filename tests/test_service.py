@@ -152,6 +152,7 @@ def test_a_deleted_store_is_recreated_by_a_request() -> None:
         service.DB_PATH = keep
 
 def test_the_page_offers_a_way_to_connect_an_agent_by_address() -> None:
+    """The entrance to the network, and the one line that does the whole job."""
     """A facility nobody can find is not a facility: the form and its reasons have to be on the page.
 
     The room can connect an agent that runs elsewhere, and that is the whole point of a network
@@ -164,7 +165,7 @@ def test_the_page_offers_a_way_to_connect_an_agent_by_address() -> None:
     for code in ("address_not_reachable", "card_not_verified", "agent_not_answering",
                  "address_key_mismatch"):
         assert code in page, f"a host hitting {code} must be able to read what it means"
-    assert 'href="#connect"' in page, "the connect section has to be reachable from the navigation"
+    assert 'href="#install"' in page, "the connect section has to be reachable from the navigation"
 
 
 def test_the_three_moves_block_uses_the_card_markup_it_is_styled_for() -> None:
