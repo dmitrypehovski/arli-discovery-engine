@@ -150,3 +150,18 @@ def test_a_deleted_store_is_recreated_by_a_request() -> None:
         if service.DB_PATH.exists():
             service.DB_PATH.unlink()
         service.DB_PATH = keep
+
+def test_the_page_offers_a_way_to_connect_an_agent_by_address() -> None:
+    """A facility nobody can find is not a facility: the form and its reasons have to be on the page.
+
+    The room can connect an agent that runs elsewhere, and that is the whole point of a network
+    rather than a form. So the page carries the address field, the button, the three checks and a
+    plain reading for each refusal code a host can actually hit.
+    """
+    page = (Path(__file__).resolve().parent.parent / "app" / "home.html").read_text(encoding="utf-8")
+    for needed in ('id="cEndpoint"', 'id="connBtn"', 'id="connChecks"', "connectReasons"):
+        assert needed in page, f"the page must offer {needed}"
+    for code in ("address_not_reachable", "card_not_verified", "agent_not_answering",
+                 "address_key_mismatch"):
+        assert code in page, f"a host hitting {code} must be able to read what it means"
+    assert 'href="#connect"' in page, "the connect section has to be reachable from the navigation"

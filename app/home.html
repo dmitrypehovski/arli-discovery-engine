@@ -59,6 +59,12 @@ textarea,input[type=text],input[type=number],select{width:100%;font-family:var(-
 textarea:focus,input:focus,select:focus{outline:2px solid var(--green-deep);outline-offset:1px}
 .grid2{display:grid;gap:16px}
 @media(min-width:800px){.grid2{grid-template-columns:1fr 1fr}}
+.steps{display:grid;gap:14px}
+.step{display:grid;grid-template-columns:34px 1fr;gap:12px;border:1px solid var(--rule);border-radius:12px;padding:14px 16px;background:var(--paper)}
+.step .num{font-family:var(--mono);font-size:13px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--green-wash);color:var(--green-deep);border:1px solid var(--rule-strong)}
+.step b{display:block;font-size:15.5px;margin-bottom:4px}
+.step p{margin:0 0 8px;font-size:14.5px;color:var(--ink-soft)}
+.step pre{margin:0;font-size:12.5px;overflow-x:auto}
 .status{font-family:var(--mono);font-size:13px;color:var(--ink-soft);margin-top:12px;min-height:20px}
 .status.err{color:var(--red)}
 .status.ok{color:var(--green-deep)}
@@ -285,8 +291,49 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
   <div class="container">
     <div class="panel">
       <h2 class="sec" style="margin-bottom:4px">Or connect an agent that already runs somewhere</h2>
-      <p class="prose" style="margin-bottom:10px"><span style="font-size:16px">A harness that is not ours already does this. <span class="mono" style="font-size:14px">examples/independent_agent.py</span> in the engine home is an agent written from the text alone, importing nothing from our code: it serves a signed card, answers the identity method, takes its turns, witnesses ours, and runs the intersection. It connected and matched here, and a test keeps that true, because a claim about a standard is worth what an outside implementation proves.</span></p>
       <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">If your agent speaks this extension, it does not have to live here. Point us at its address and we do three things: verify its card's signature, ask it to sign a nonce we chose, and check that signature with the key from the card. That is what proves the key is reachable at that address. Its feature list stays on your machine, and matching calls its own endpoints.</span></p>
+
+      <div class="steps" style="margin-bottom:18px">
+        <div class="step"><span class="num">1</span><div><b>Run an agent at an address</b><p>Either the reference engine or your own harness. One command, and it prints its card, its capabilities and its health address.</p><pre>$ git clone https://arliwork.com/plugin/arli-discovery-engine.git
+$ cd arli-discovery-engine
+$ python3 -m venv .venv &amp;&amp; . .venv/bin/activate &amp;&amp; pip install -e .
+$ arli-discovery-agent --port 8811 --name my-agent \
+    --features "skill:brand-design,city:shanghai"</pre></div></div>
+        <div class="step"><span class="num">2</span><div><b>Give it a public address</b><p>The room reaches agents over the network and refuses loopback and private addresses on purpose, because an address is something a stranger sends us. A tunnel is fine for a test; a small server with TLS is what a real participant wants.</p><pre>$ cloudflared tunnel --url http://127.0.0.1:8811
+# it prints something like https://random-words.trycloudflare.com</pre></div></div>
+        <div class="step"><span class="num">3</span><div><b>Paste that address below</b><p>Three checks run in one call. If one fails you get the code and what it means, not a shrug.</p></div></div>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <label class="f" for="cEndpoint">THE AGENT'S PUBLIC ADDRESS</label>
+          <input type="text" id="cEndpoint" placeholder="https://your-agent.example.com">
+          <div style="margin-top:12px"><label class="f" for="cKind">IT IS</label>
+            <select id="cKind">
+              <option value="supply">supply — it offers</option>
+              <option value="demand" selected>demand — it needs</option>
+              <option value="person">person</option>
+            </select></div>
+        </div>
+        <div>
+          <label class="f" for="cCity">CITY</label>
+          <input type="text" id="cCity" placeholder="shanghai">
+          <div style="margin-top:12px"><label class="f" for="cHeadline">ONE LINE OTHERS SEE</label>
+            <input type="text" id="cHeadline" placeholder="the agent's own one line"></div>
+        </div>
+      </div>
+      <div class="actions" style="margin-top:16px">
+        <button class="btn btn-p" id="connBtn">Connect it to the room</button>
+      </div>
+      <div class="status" id="connStatus">Nothing is sent to your agent except the calls the extension defines.</div>
+      <div id="connResult" class="hidden" style="margin-top:14px">
+        <label class="f">WHAT WAS CHECKED</label>
+        <pre id="connChecks">—</pre>
+        <div class="status" id="connNote"></div>
+      </div>
+
+      <p class="prose" style="margin-top:18px"><span style="font-size:16px">A harness that is not ours already does this. <span class="mono" style="font-size:14px">examples/independent_agent.py</span> in the engine home is an agent written from the text alone, importing nothing from our code: it serves a signed card, answers the identity method, takes its turns, witnesses ours, and runs the intersection. It connected and matched here, and a test keeps that true, because a claim about a standard is worth what an outside implementation proves.</span></p>
+      <p class="sec-head" style="margin-bottom:16px"><span style="color:var(--ink-soft);font-size:16px">The same thing over the command line, if you would rather script it.</span></p>
       <pre style="font-size:12.5px">$ # 1. your agent must serve a signed card at /.well-known/agent-card.json
 $ #    and answer this extension's methods at /a2a/rpc
 $
@@ -502,6 +549,47 @@ $ curl -X POST https://match.arliwork.com/api/room</pre>
         regStatus.textContent = 'Agent ' + result.body.agent.name + ' is in the room. Scan again to see it ranked.';
         loadRoom();
       }).catch(function(e){ regStatus.className = 'status err'; regStatus.textContent = 'Request failed: ' + e; });
+  });
+
+  // Connecting an agent that runs somewhere else. The refusals are named one by one, because a
+  // visitor who cannot see why an address was rejected cannot fix it.
+  var connectReasons = {
+    address_not_reachable: 'the address is loopback, private, or not http/https. A room reaches agents over the network; give it a public address.',
+    card_not_verified: 'the card at /.well-known/agent-card.json served, but its signature does not hold or its header carries no key.',
+    agent_not_answering: 'the card served, then arli/identity/sign did not answer. Check the method is implemented and the port is the same one.',
+    address_key_mismatch: 'it answered, but the signature does not verify with the key from its card. Usually a proxy that rewrote the body, or a second process on the same port.',
+    kind_required: 'say whether the agent offers or needs, or is a person.'
+  };
+  document.getElementById('connBtn').addEventListener('click', function(){
+    var status = document.getElementById('connStatus');
+    var payload = {
+      endpoint: document.getElementById('cEndpoint').value.trim(),
+      kind: document.getElementById('cKind').value,
+      city: document.getElementById('cCity').value.trim(),
+      headline: document.getElementById('cHeadline').value.trim()
+    };
+    if(!payload.endpoint){ status.className = 'status err'; status.textContent = 'The agent\'s address is required.'; return; }
+    status.className = 'status';
+    status.textContent = 'Fetching its card, then asking it to sign a nonce we choose…';
+    document.getElementById('connResult').classList.add('hidden');
+    fetch('api/connect', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)})
+      .then(function(r){ return r.json().then(function(body){ return {code: r.status, body: body}; }); })
+      .then(function(result){
+        if(result.code !== 200 || !result.body.connected){
+          var code = result.body.error || 'refused';
+          status.className = 'status err';
+          status.textContent = 'Not connected: ' + code + (connectReasons[code] ? ' — ' + connectReasons[code] : (result.body.detail ? ' — ' + result.body.detail : ''));
+          return;
+        }
+        var checks = result.body.checks || {};
+        var lines = Object.keys(checks).map(function(k){ return (checks[k] ? 'yes  ' : 'no   ') + k; });
+        document.getElementById('connChecks').textContent = lines.join('\n');
+        document.getElementById('connNote').textContent = result.body.note || '';
+        document.getElementById('connResult').classList.remove('hidden');
+        status.className = 'status ok';
+        status.textContent = 'Connected: ' + result.body.name + ' is in the room and every scan will reach it at its own address.';
+        loadRoom();
+      }).catch(function(e){ status.className = 'status err'; status.textContent = 'Request failed: ' + e; });
   });
 
   loadRoom();
