@@ -56,7 +56,7 @@ def test_registration_refuses_empty_or_absurd_lists() -> None:
 def test_the_room_never_publishes_a_feature_list() -> None:
     service.create_agent(dict(GOOD, name="Registered Two"))
     room = service.room_view()
-    stored = [agent for agent in room if not agent.get("sample")]
+    stored = [agent for agent in room if not agent.get("sample") and not agent.get("remote")]
     assert stored, "the registered agent must appear in the room"
     blob = " ".join(str(value) for agent in stored for value in agent.values())
     for feature in GOOD["features"]:

@@ -24,6 +24,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.network import (  # noqa: E402
+    ConnectRefused, allow_private_addresses, normalize_endpoint, run_remote_exchange,
+    verify_endpoint,
+)
 from app.server import DEFAULT_FLOOR, DEFAULT_MINE, ROSTER, Handler as BaseHandler, public_view  # noqa: E402
 from demo.exchange import run_exchange  # noqa: E402
 
@@ -56,12 +60,91 @@ def connect() -> sqlite3.Connection:
                active INTEGER NOT NULL DEFAULT 1
            )"""
     )
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS remotes (
+               id TEXT PRIMARY KEY,
+               name TEXT NOT NULL,
+               kind TEXT NOT NULL,
+               city TEXT NOT NULL DEFAULT '',
+               headline TEXT NOT NULL DEFAULT '',
+               endpoint TEXT NOT NULL,
+               kid TEXT NOT NULL DEFAULT '',
+               jwk TEXT NOT NULL DEFAULT '{}',
+               connected_at TEXT NOT NULL,
+               active INTEGER NOT NULL DEFAULT 1
+           )"""
+    )
     return connection
 
 
 def init() -> None:
     with connect():
         pass
+
+
+def connect_agent(payload: dict) -> dict:
+    """Connect somebody else's agent: verify its card, then check that it answers our extension.
+
+    What this proves and what it does not. The card's signature proves the key published this agent,
+    and the probe proves the address serves an implementation of this text right now. It does not
+    prove that the address is run by the key's owner: a proxy would pass both checks, and a signing
+    method in the extension would close that. Say so instead of implying more.
+    """
+    endpoint = normalize_endpoint(str(payload.get("endpoint") or ""),
+                                  allow_private=allow_private_addresses())
+    kind = str(payload.get("kind") or "").strip()
+    if kind not in ("demand", "supply", "person"):
+        raise ConnectRefused("kind_required", "declare the agent's type: demand, supply or person")
+
+    verified = verify_endpoint(endpoint)
+    try:
+        Client = __import__("arli_engine.client", fromlist=["AgentClient"]).AgentClient
+        with Client(endpoint) as client:
+            capabilities = client.get_capabilities()
+    except Exception as error:  # noqa: BLE001
+        raise ConnectRefused(
+            "agent_not_answering",
+            f"{endpoint} served a card but did not answer the extension: {type(error).__name__}",
+        ) from error
+    if not isinstance(capabilities, dict) or not capabilities:
+        raise ConnectRefused("agent_not_answering", f"{endpoint} answered with nothing usable")
+
+    agent_id = verified["name"] or endpoint
+    with connect() as connection:
+        connection.execute(
+            """INSERT OR REPLACE INTO remotes
+               (id, name, kind, city, headline, endpoint, kid, jwk, connected_at, active)
+               VALUES (?,?,?,?,?,?,?,?,?,1)""",
+            (agent_id, verified["name"], kind, str(payload.get("city") or "").strip(),
+             str(payload.get("headline") or "").strip(), endpoint, verified["kid"],
+             json.dumps(verified["jwk"]), datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
+        )
+    return {
+        "connected": True,
+        "id": agent_id,
+        "name": verified["name"],
+        "kind": kind,
+        "endpoint": endpoint,
+        "checks": {"card_verified": True, "extension_answers": True},
+        "note": "Connected from its own address. Its feature list stays there; matching calls its own "
+                "endpoints. Ownership of the address is not proven: a proxy would pass these two checks.",
+    }
+
+
+def remote_agents(include_endpoint: bool = False) -> list[dict]:
+    with connect() as connection:
+        rows = connection.execute("SELECT * FROM remotes WHERE active = 1 ORDER BY connected_at").fetchall()
+    agents = []
+    for row in rows:
+        agent = {"id": row["id"], "name": row["name"], "kind": row["kind"], "city": row["city"],
+                 "headline": row["headline"], "claim_level": "declared",
+                 "will_not_publish": "whatever its owner keeps at home",
+                 "feature_count": None, "remote": True, "connected_at": row["connected_at"]}
+        if include_endpoint:
+            agent["endpoint"] = row["endpoint"]
+            agent["kid"] = row["kid"]
+        agents.append(agent)
+    return agents
 
 
 def stored_agents(include_features: bool = False) -> list[dict]:
@@ -82,11 +165,14 @@ def stored_agents(include_features: bool = False) -> list[dict]:
 
 
 def room_view() -> list[dict]:
-    """Everyone in the room: the starter agents plus everyone who registered. Never a feature."""
+    """Everyone in the room: starters, agents registered here, and agents connected from elsewhere.
+
+    Never a feature list, and never a remote agent's address: an address is an invitation to probe.
+    """
     samples = [{**public_view(agent), "stored": False, "sample": True} for agent in ROSTER]
     stored = [{key: value for key, value in agent.items() if key != "features"}
               for agent in stored_agents(include_features=True)]
-    return samples + stored
+    return samples + stored + remote_agents(include_endpoint=False)
 
 
 def create_agent(payload: dict) -> tuple[dict, str]:
@@ -170,13 +256,33 @@ def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
             "evidence_ids": {name: envelope["evidence_id"]
                              for name, envelope in result["evidence"].items()},
         })
+    for remote in remote_agents(include_endpoint=True):
+        try:
+            result = run_remote_exchange(
+                my_features, remote["endpoint"], floor, remote_id=remote["name"],
+                remote_kind=remote["kind"], my_kind=my_kind,
+            )
+        except Exception as error:  # noqa: BLE001
+            result = {"id": remote["id"], "name": remote["name"], "kind": remote["kind"],
+                      "city": remote["city"], "headline": remote["headline"],
+                      "claim_level": "declared", "will_not_publish": "",
+                      "feature_count": None, "sample": False, "remote": True,
+                      "opened": False, "rejection": f"remote_unreachable: {type(error).__name__}",
+                      "overlap_basis_points": None, "overlap_ratio": None,
+                      "matched_features": [], "passed_floor": False, "agreed": False,
+                      "wires_clean": True, "leaked_features": [], "evidence_ids": {}}
+        result["city"] = remote["city"] or result.get("city", "")
+        result["headline"] = remote["headline"] or result.get("headline", "")
+        rows.append(result)
+
     rows.sort(key=lambda row: (row.get("overlap_basis_points") or -1), reverse=True)
     return {
-        "roster_kind": "sample plus registered",
+        "roster_kind": "samples, registered and connected",
         "floor_basis_points": floor,
         "your_kind": my_kind,
         "agents_checked": len(rows),
-        "registered_agents": sum(1 for row in rows if not row.get("sample")),
+        "registered_agents": sum(1 for row in rows if not row.get("sample") and not row.get("remote")),
+        "connected_agents": sum(1 for row in rows if row.get("remote")),
         "above_floor": sum(1 for row in rows if row.get("passed_floor")),
         "not_comparable": sum(1 for row in rows if not row.get("opened")),
         "wires_clean": all(row.get("wires_clean", False) for row in rows),
@@ -271,18 +377,27 @@ class Handler(BaseHandler):
                 ).fetchall() if token else []
             self._json(200, {"agents": [owned_agent(row["id"], token) for row in rows]})
             return
+        if path == "/api/remotes":
+            self._json(200, {
+                "connected_agents": len(remote_agents()),
+                "note": "Agents that connected from their own address. Their addresses are not published: "
+                        "an address is an invitation to probe.",
+                "agents": remote_agents(include_endpoint=False),
+            })
+            return
         if path == "/api/health":
             with connect() as connection:
                 registered = connection.execute("SELECT COUNT(*) AS n FROM agents WHERE active = 1").fetchone()["n"]
             self._json(200, {"ok": True, "engine": "arli-discovery", "app": "arli-match",
                              "sample_agents": len(ROSTER), "registered_agents": registered,
+                             "connected_agents": len(remote_agents()),
                              "database": str(DB_PATH), "network": "network-eu-design"})
             return
         super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802
         path = self.path.split("?")[0]
-        if path not in ("/api/agents", "/api/scan", "/api/negotiate") and not (
+        if path not in ("/api/agents", "/api/scan", "/api/negotiate", "/api/connect") and not (
             path.startswith("/api/agents/") and len(path) > len("/api/agents/")
         ):
             super().do_POST()
@@ -310,6 +425,13 @@ class Handler(BaseHandler):
                              "in a readable form and is never shown again.",
                 "manage_url": f"/account?token={token}",
             })
+            return
+
+        if path == "/api/connect":
+            try:
+                self._json(200, connect_agent(payload))
+            except ConnectRefused as error:
+                self._json(400, {"error": error.code, "detail": error.detail})
             return
 
         if path.startswith("/api/agents/") and len(path) > len("/api/agents/"):
