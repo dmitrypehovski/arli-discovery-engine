@@ -421,6 +421,62 @@ def read_optional(path: Path) -> dict | None:
         return None
 
 
+def evaluate_direct_exchange() -> dict:
+    """One exchange opened by us at another agent's address, with no room involved.
+
+    Two questions here. Does the shape work at all without the service, and does the vocabulary actually
+    make a need meet an offer: both are claims the product makes, so both are measured.
+    """
+    from arli_engine.adapters.a2a.server import start_agent
+    from arli_engine.agent import build_agent
+    from arli_engine.core.signing import KeyPair
+    from arli_engine.core.vocabulary import canonical_token
+    from arli_engine.exchange import direct_exchange
+
+    key = KeyPair.generate()
+    holder = build_agent("measure-holder", ["offer:warehouse", "city:shenzhen", "capacity:3-teams"],
+                         "http://127.0.0.1:0", private_pem=key.private_pem)
+    server, _thread = start_agent(holder, 0, host="127.0.0.1")
+    timings = []
+    try:
+        peer = f"http://127.0.0.1:{server.server_address[1]}"
+        for _ in range(3):
+            started = time.perf_counter()
+            outcome = direct_exchange(peer, ["need:warehouse", "city:shenzhen"], floor=3000,
+                                      my_kind="demand", peer_kind="supply", my_name="measure-buyer")
+            timings.append(round((time.perf_counter() - started) * 1000, 1))
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    vocabulary_cases = [
+        ("need:warehouse", "offer:warehouse", True),
+        ("skill:design", "need:design", True),
+        ("city:SF", "city:sf", True),
+        ("role:studio", "skill:studio", False),
+        ("industry:berlin", "city:berlin", False),
+    ]
+    vocabulary = [
+        {"left": left, "right": right, "should_match": should,
+         "matched": canonical_token(left) == canonical_token(right)}
+        for left, right, should in vocabulary_cases
+    ]
+    return {
+        "opened": bool(outcome.get("opened")),
+        "agreed": bool(outcome.get("agreed")),
+        "matched_features": outcome.get("matched_features"),
+        "overlap_basis_points": outcome.get("overlap_basis_points"),
+        "their_overlap_basis_points": (outcome.get("their_side") or {}).get("overlap_basis_points"),
+        "median_ms": sorted(timings)[len(timings) // 2],
+        "runs_ms": timings,
+        "vocabulary_agrees": all(
+            case["matched"] == case["should_match"] for case in vocabulary
+        ),
+        "vocabulary_cases": vocabulary,
+        "note": "No room in the session: our side opened at the holder's own address.",
+    }
+
+
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
@@ -436,6 +492,7 @@ def main() -> int:
         "adversarial": evaluate_adversarial(),
         "performance": evaluate_performance(),
         "concurrency": evaluate_concurrency(),
+        "direct_exchange": evaluate_direct_exchange(),
         "psi_benchmark": read_optional(Path(__file__).resolve().parents[1] / "out" / "bench_intersection.json"),
         "measurement_calibration": read_optional(
             Path(__file__).resolve().parents[1] / "out" / "measure_dry_run.json"),
@@ -459,6 +516,13 @@ def main() -> int:
             (entry["features_per_side"], entry["median_ms"], entry["wire_bytes"])
             for entry in result["performance"]["exchanges"]
         ],
+        "direct_exchange": {
+            "opened": result["direct_exchange"]["opened"],
+            "agreed": result["direct_exchange"]["agreed"],
+            "overlap": result["direct_exchange"]["overlap_basis_points"],
+            "median_ms": result["direct_exchange"]["median_ms"],
+            "vocabulary_agrees": result["direct_exchange"]["vocabulary_agrees"],
+        },
         "elapsed": result["elapsed_seconds"],
     }, ensure_ascii=False))
     return 0
