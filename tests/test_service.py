@@ -846,3 +846,65 @@ def test_a_connected_agent_is_sifted_by_its_published_buckets(monkeypatch, tmp_p
     finally:
         for server in servers:
             server.shutdown(); server.server_close()
+
+
+def test_an_agent_without_the_vocabulary_can_declare_its_areas_and_be_sifted(monkeypatch, tmp_path) -> None:
+    """A foreign agent has no copy of the vocabulary. Without a declaration it is asked on every search."""
+    from arli_engine.adapters.a2a.server import start_agent
+    from arli_engine.agent import build_agent
+    from arli_engine.core.signing import KeyPair
+
+    monkeypatch.setenv("ARLI_TAXONOMY", "/llm-gateway/skill_taxonomy_v2.json")
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    getattr(service.taxonomy, "cache_clear", lambda: None)()
+
+    monkeypatch.setenv("ARLI_DECLARED_AREAS", "manufacturing-and-production")
+    key = KeyPair.generate()
+    state = build_agent("foreign", ["offer:packaging"], "http://127.0.0.1:0", private_pem=key.private_pem)
+    server, _thread = start_agent(state, 0, host="127.0.0.1")
+    try:
+        monkeypatch.setenv("ARLI_MATCH_ALLOW_PRIVATE", "1")
+        answer = service.connect_agent({"endpoint": "http://127.0.0.1:%d" % server.server_address[1],
+                                       "kind": "supply"})
+        assert answer["profile"]["sifted"] is True, "a declared profile in our own vocabulary is comparable"
+
+        result = service.scan_room(["need:packaging"], 2000, "demand")
+        assert result["remote_sifted"] == 1 and result["remote_skipped_by_bucket"] == 0
+        row = [r for r in result["rows"] if r.get("remote")][0]
+        assert row["overlap_basis_points"] == 10000, row
+
+        other = service.scan_room(["need:irrigation"], 2000, "demand")
+        assert other["remote_skipped_by_bucket"] == 1, "declared areas are sifted like resolved ones"
+    finally:
+        server.shutdown(); server.server_close()
+
+
+def test_the_vocabulary_travels_to_a_holder_of_the_key(monkeypatch, tmp_path) -> None:
+    """Areas with no item names, and only to whoever holds the room's key."""
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    monkeypatch.setenv("ARLI_TAXONOMY", "/llm-gateway/skill_taxonomy_v2.json")
+    getattr(service.taxonomy, "cache_clear", lambda: None)()
+    body = service.vocabulary()
+    assert body["vocabulary"] == "arli-areas-v1" and body["size"] == 31, body
+    assert "warehousing" not in json.dumps(body), "item names are the licensed part and must not travel"
+    assert service.bucket_space_name() == "arli-areas-v1"
+
+
+def test_one_agent_can_belong_to_two_rooms_without_the_second_being_refused(monkeypatch, tmp_path) -> None:
+    """An agent limits one signature per address and purpose per minute, so the purpose names the room."""
+    from arli_engine.adapters.a2a.server import start_agent
+    from arli_engine.agent import build_agent
+    from arli_engine.core.signing import KeyPair
+
+    monkeypatch.setenv("ARLI_MATCH_ALLOW_PRIVATE", "1")
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    key = KeyPair.generate()
+    state = build_agent("two-rooms", ["offer:warehousing"], "http://127.0.0.1:0", private_pem=key.private_pem)
+    server, _thread = start_agent(state, 0, host="127.0.0.1")
+    endpoint = "http://127.0.0.1:%d" % server.server_address[1]
+    try:
+        first = service.connect_agent({"endpoint": endpoint, "kind": "supply"}, room="room-a.example.com")
+        second = service.connect_agent({"endpoint": endpoint, "kind": "supply"}, room="room-b.example.com")
+        assert first["connected"] and second["connected"], (first, second)
+    finally:
+        server.shutdown(); server.server_close()

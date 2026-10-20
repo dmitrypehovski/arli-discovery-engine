@@ -20,12 +20,14 @@ PORT="${ARLI_MATCH_PORT:-8811}"
 NAME=""
 FEATURES=""
 ADDRESS=""
+AREAS=""
 NO_TUNNEL=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --name) NAME="$2"; shift 2 ;;
     --features) FEATURES="$2"; shift 2 ;;
+    --areas) AREAS="$2"; shift 2 ;;
     --address) ADDRESS="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
     --no-tunnel) NO_TUNNEL=1; shift ;;
@@ -102,7 +104,13 @@ if [ -z "$FEATURES" ]; then
 fi
 
 say "  agent: starting $NAME on port $PORT"
-"$ENGINE_DIR/.venv/bin/python" -m arli_engine.agent \
+# ARLI_DECLARED_AREAS is what makes this agent findable: three or four coarse area names, no items. Without
+# it the agent is asked on every search instead of being sifted, which works and costs an exchange each time.
+# Run from the installed engine's own directory: `-m` resolves the package from the working directory, so
+# invoking this script from inside another checkout would silently run that checkout's code instead of the
+# installed one. The installed engine is the engine.
+cd "$ENGINE_DIR" || exit 1
+ARLI_DECLARED_AREAS="$AREAS" "$ENGINE_DIR/.venv/bin/python" -m arli_engine.agent \
   --port "$PORT" --name "$NAME" --features "$FEATURES" \
   --key-file "$HOME_DIR/$NAME.pem" > "$HOME_DIR/$NAME.log" 2>&1 &
 AGENT_PID=$!

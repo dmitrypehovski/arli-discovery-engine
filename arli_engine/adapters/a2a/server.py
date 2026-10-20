@@ -750,9 +750,25 @@ def _methods(state: AgentState) -> dict:
         from arli_engine.core.buckets import profile_of
 
         resolver, space = _bucket_space()
+        declared = declared_areas()
+        if declared:
+            # Stated by the owner rather than resolved from items, and named as such: a room comparing this
+            # profile must know it is a declaration, not a reading.
+            return {
+                "buckets": {area: 1 for area in declared},
+                "bucket_space": VOCABULARY_ID,
+                "declared": True,
+                "declared_by": "the owner of this agent, without publishing any item",
+                "kind": state.kind if hasattr(state, "kind") else "",
+                "city": state.city if hasattr(state, "city") else "",
+                "feature_count": len(state.features),
+                "note": "No item value is in this answer. A search still runs a real exchange; the bucket "
+                        "only decides who is worth one.",
+            }
         return {
             "buckets": profile_of(list(state.features), bucket_of=resolver),
             "bucket_space": space,
+            "declared": False,
             "kind": state.kind if hasattr(state, "kind") else "",
             "city": state.city if hasattr(state, "city") else "",
             "feature_count": len(state.features),
@@ -816,13 +832,29 @@ class _BucketSpace:
         return cls._cache[path], f"taxonomy:{path}"
 
 
+VOCABULARY_ID = "arli-areas-v1"
+
+
+def declared_areas() -> list[str]:
+    """Areas the owner states by hand, so an agent without the vocabulary can still be found.
+
+    A foreign agent has no copy of the vocabulary, so it cannot place its own items in areas. Without a
+    declaration such an agent can only ever be asked and never sifted, on every search, forever. The owner
+    knows roughly what they do, so they say it: three or four area names, no items, no list.
+    """
+    import os
+
+    raw = os.environ.get("ARLI_DECLARED_AREAS") or ""
+    return [area.strip() for area in raw.split(",") if area.strip()]
+
+
 def _bucket_space():
     from arli_engine.core.buckets import bucket_of as fixture_bucket
 
-    taxonomy, space = _BucketSpace.taxonomy()
+    taxonomy, _path = _BucketSpace.taxonomy()
     if taxonomy is None:
         return (lambda feature: fixture_bucket(feature)), f"fixture:{__import__('arli_engine.core.buckets', fromlist=['QUANTITY_BUCKETS']).QUANTITY_BUCKETS}"
-    return (lambda feature: taxonomy.category_of(feature.split(":", 1)[-1]) or None), space
+    return (lambda feature: taxonomy.category_of(feature.split(":", 1)[-1]) or None), VOCABULARY_ID
 
 
 def make_handler(state: AgentState):

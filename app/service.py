@@ -205,7 +205,7 @@ def init() -> None:
         pass
 
 
-def connect_agent(payload: dict) -> dict:
+def connect_agent(payload: dict, room: str = "") -> dict:
     """Connect somebody else's agent: verify its card, then require the address to sign our nonce.
 
     What this proves and what it does not. The card's signature proves the key published this agent,
@@ -227,7 +227,11 @@ def connect_agent(payload: dict) -> dict:
     try:
         Client = __import__("arli_engine.client", fromlist=["AgentClient"]).AgentClient
         with Client(endpoint) as client:
-            answer = client.call("arli/identity/sign", {"nonce": nonce, "purpose": "connect"})
+            # The purpose names the room, because the agent it asks limits one signature per address and
+            # purpose per minute. A fixed word would make the second room an agent belongs to look like a
+            # repeat of the first and be refused, which is the wrong refusal for the right reason.
+            answer = client.call("arli/identity/sign",
+                                 {"nonce": nonce, "purpose": "connect:" + (room.strip().lower() or "room")})
     except Exception as error:  # noqa: BLE001
         # The agent's own refusal is more useful than a shrug: a rate limit, a short nonce and a
         # missing purpose all mean different things to the person holding the address.
@@ -643,6 +647,30 @@ TAXONOMY_PATH_ENV = "ARLI_MATCH_TAXONOMY"
 DEFAULT_TAXONOMY_PATH = "/llm-gateway/skill_taxonomy_v2.json"
 
 
+VOCABULARY_ID = "arli-areas-v1"
+
+
+def vocabulary() -> dict:
+    """The areas this room indexes in, published to whoever may hold them.
+
+    An agent can only be sifted if it can name the areas it works in, and a foreign agent has no copy of the
+    vocabulary. Handing it over is deliberate and limited: the vocabulary is the licensed data of the network,
+    so it travels to a holder of the room's key rather than to anyone who asks, and this endpoint says so
+    instead of answering an empty object.
+    """
+    path = os.environ.get(TAXONOMY_PATH_ENV, DEFAULT_TAXONOMY_PATH)
+    if not (path and Path(path).is_file()):
+        return {"error": "no_vocabulary", "detail": "this deployment indexes no vocabulary"}
+    taxonomy_ = taxonomy()
+    areas: dict[str, str] = {}
+    for slug, node in taxonomy_.entries.items():
+        areas[node["category"]] = node["category"]
+    return {"vocabulary": VOCABULARY_ID, "size": len(areas), "areas": sorted(areas),
+            "items": taxonomy_.size(),
+            "note": "Areas only: the item names that map onto them are the licensed part and are not here. "
+                    "An agent that holds them resolves items itself; one that does not declares areas by hand."}
+
+
 def bucket_space_name() -> str:
     """The name of the bucket space this room indexes in, spelled exactly as an agent spells it.
 
@@ -651,7 +679,7 @@ def bucket_space_name() -> str:
     skipped on its profile, only asked, and the room says so in the answer.
     """
     path = os.environ.get(TAXONOMY_PATH_ENV, DEFAULT_TAXONOMY_PATH)
-    return f"taxonomy:{path}" if path and Path(path).is_file() else ""
+    return VOCABULARY_ID if path and Path(path).is_file() else ""
 
 
 def seeker_buckets(features: list[str]) -> dict[str, int]:
@@ -1642,6 +1670,17 @@ class Handler(BaseHandler):
             else:
                 self._json(500, {"error": "no app page"})
             return
+        if path == "/api/vocabulary":
+            given = str(self.headers.get("X-ARLI-Key") or "")
+            expected = os.environ.get(INTAKE_KEY_ENV) or os.environ.get("ARLI_INTAKE_KEY") or ""
+            if not expected or not secrets.compare_digest(given, expected):
+                self._json(403, {"error": "vocabulary_not_published",
+                                 "detail": "The vocabulary is the network's licensed data and travels to a "
+                                           "holder of this room's key. Ask us for the key and the areas, then "
+                                           "declare your areas when you connect."})
+                return
+            self._json(200, vocabulary())
+            return
         if path == "/api/app/summary":
             account = account_by_session(self._cookie_token())
             if account is None:
@@ -1706,7 +1745,7 @@ class Handler(BaseHandler):
         path = self.path.split("?")[0]
         if path not in ("/api/agents", "/api/scan", "/api/negotiate", "/api/connect", "/api/intake",
                          "/api/app/register", "/api/app/login", "/api/app/logout",
-                         "/api/app/intake", "/api/app/introductions",
+                         "/api/vocabulary", "/api/app/intake", "/api/app/introductions",
                          "/api/app/agreements") and not (
             path.startswith("/api/app/introductions/") or path.startswith("/api/app/agreements/") or
             path.startswith("/api/agents/") and len(path) > len("/api/agents/")
@@ -1884,7 +1923,7 @@ class Handler(BaseHandler):
 
         if path == "/api/connect":
             try:
-                self._json(200, connect_agent(payload))
+                self._json(200, connect_agent(payload, room=str(self.headers.get("Host") or "")))
             except ConnectRefused as error:
                 self._json(400, {"error": error.code, "detail": error.detail})
             return
