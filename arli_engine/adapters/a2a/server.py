@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .cards import capability_document
 from arli_engine.core.capability import Operation
-from arli_engine.core.crypto import derive_pair_key, pair_label, sign_envelope
+from arli_engine.core.crypto import derive_pair_key, pair_label, sign_envelope, verify_envelope
 from arli_engine.core.evidence import Completeness, Evidence
 from arli_engine.core.match import (
     MATCH_REJECTIONS,
@@ -41,9 +41,11 @@ from arli_engine.core.claims import (
     FeatureClaim,
 )
 from arli_engine.core.registry import Registry
+from arli_engine.core.signing import verify_card_self
 from arli_engine.core.surface import CALL_REJECTIONS, METHOD_NAMES
 from arli_engine.core.retention import Retention
 from arli_engine.core.negotiate import (
+    witness,
     IntentStanding,
     Negotiation,
     NegotiationError,
@@ -105,6 +107,39 @@ def _rpc_ok(req_id, result) -> dict:
 
 def _rpc_err(req_id, code, message) -> dict:
     return {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
+
+
+def _card_public_pem(card: dict) -> bytes | None:
+    """The public key of the card's own signature header, as PEM, for verifying its turns."""
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    signatures = card.get("signatures") or []
+    if not signatures:
+        return None
+    protected = signatures[0].get("protected") or ""
+    try:
+        header = json.loads(base64.urlsafe_b64decode(protected + "=" * (-len(protected) % 4)))
+    except Exception:  # noqa: BLE001
+        return None
+    jwk = header.get("jwk") or {}
+    if not jwk.get("x") or not jwk.get("y"):
+        return None
+
+    def decode(text: str) -> bytes:
+        return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+
+    try:
+        key = ec.EllipticCurvePublicNumbers(
+            int.from_bytes(decode(jwk["x"]), "big"),
+            int.from_bytes(decode(jwk["y"]), "big"),
+            ec.SECP256R1(),
+        ).public_key()
+    except Exception:  # noqa: BLE001
+        return None
+    return key.public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
 
 
 def _methods(state: AgentState) -> dict:
@@ -582,6 +617,23 @@ def _methods(state: AgentState) -> dict:
         result["evidence"] = _signed(result["evidence"])
         return result
 
+    def negotiation_witness(params: dict) -> dict:
+        """Record the counterparty's turn. The rules live in the core, the wire stays thin."""
+        negotiation_id = params.get("negotiation_id")
+        if negotiation_id not in state.negotiations:
+            raise KeyError(f"unknown negotiation: {negotiation_id}")
+        result = witness(
+            state.negotiations[negotiation_id],
+            state.name,
+            params.get("seat"),
+            params.get("action"),
+            params.get("message", ""),
+            params.get("proof"),
+            params.get("card"),
+        )
+        result["evidence"] = _signed(result["evidence"])
+        return result
+
     def opportunity_decide(params: dict) -> dict:
         negotiation_id = params.get("negotiation_id")
         if negotiation_id not in state.opportunities:
@@ -620,6 +672,7 @@ def _methods(state: AgentState) -> dict:
         "arli/retention/purge": retention_purge,
         "arli/negotiation/open": negotiation_open,
         "arli/negotiation/turn": negotiation_turn,
+        "arli/negotiation/witness": negotiation_witness,
         "arli/opportunity/decide": opportunity_decide,
     }
 

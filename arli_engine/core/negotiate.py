@@ -34,6 +34,12 @@ REJECTIONS = (
     "seats_must_alternate",
     "accept_without_offer",
     "propose_over_offer",
+    "not_a_witness",
+    "witness_without_proof",
+    "witness_card_unverified",
+    "witness_seat_mismatch",
+    "witness_proof_invalid",
+    "witness_mismatch",
 )
 
 # Reasons a pair does not open at all. Checked before the first turn.
@@ -53,6 +59,66 @@ LIMITATIONS = [
     "Agent agreement is not principal consent; a separate human act is required.",
 ]
 
+
+
+def witness(
+    negotiation: "Negotiation",
+    own_name: str,
+    seat: str,
+    action: str,
+    message: str = "",
+    proof: dict | None = None,
+    card: dict | None = None,
+) -> "Turn":
+    """Record the counterparty's turn in this journal, on the strength of its own signed card.
+
+    Two machines do not share a journal, so each side has to record what the other side said. The
+    card binds a key to a seat and the envelope binds the turn to that key, which is why both are
+    required: without them a turn could be written by anyone.
+    """
+    from arli_engine.core.crypto import verify_envelope
+    from arli_engine.core.signing import public_pem_from_card, verify_card_self
+
+    if not isinstance(seat, str) or not seat:
+        raise NegotiationRejected("not_a_seat", "a seat is required")
+    if seat == own_name:
+        raise NegotiationRejected(
+            "not_a_witness",
+            "an agent takes its own turns with the turn method; witnessing is for the other side",
+        )
+    if seat not in negotiation.seats:
+        raise NegotiationRejected("not_a_seat", f"{seat!r} is not a seat of this negotiation")
+    if not isinstance(proof, dict):
+        raise NegotiationRejected("witness_without_proof", "the speaker's envelope is required")
+    if not isinstance(card, dict):
+        raise NegotiationRejected("witness_card_unverified", "the speaker's signed card is required")
+
+    verified, reasons = verify_card_self(card)
+    if not verified:
+        raise NegotiationRejected(
+            "witness_card_unverified", "; ".join(reasons) or "the card does not verify"
+        )
+    if card.get("name") != seat:
+        raise NegotiationRejected(
+            "witness_seat_mismatch",
+            f"the card names {card.get('name')!r}, the witnessed seat is {seat!r}",
+        )
+    public_pem = public_pem_from_card(card)
+    if not public_pem:
+        raise NegotiationRejected("witness_card_unverified", "the card carries no usable public key")
+    proved, reasons = verify_envelope(proof, public_pem)
+    if not proved:
+        raise NegotiationRejected(
+            "witness_proof_invalid", "; ".join(reasons) or "the envelope does not verify"
+        )
+    recorded = proof.get("parameters") or {}
+    if recorded.get("seat") != seat or recorded.get("action") != action:
+        raise NegotiationRejected(
+            "witness_mismatch",
+            f"the envelope records seat {recorded.get('seat')!r} and action "
+            f"{recorded.get('action')!r}, the request names {seat!r} and {action!r}",
+        )
+    return negotiation.turn(seat, action, message)
 
 class NegotiationError(RuntimeError):
     """A turn violates the grammar."""

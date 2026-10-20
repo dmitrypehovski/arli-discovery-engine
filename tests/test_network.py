@@ -1,17 +1,23 @@
-"""Tests for connecting somebody else's agent, and for the reach guards.
+"""Tests for connecting somebody else's agent, and for matching across two processes.
 
-Why these exist. An endpoint is supplied by a stranger, so the checks that stand between our server
-and that stranger's address are the most important code here. The one known gap, negotiation across
-two separate processes, is recorded as a test rather than as prose: when the witness step lands,
-this test fails and gets rewritten.
+Why these exist. An endpoint is supplied by a stranger, so the guards that stand between our server
+and that stranger's address are the most important code here. And the point of the witness step is
+that two separate machines can negotiate, so the test that matters starts a real second process and
+drives it over the network rather than raising both agents in one interpreter.
 """
 
 from __future__ import annotations
 
 import os
+import socket
+import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
+
+import httpx
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -23,6 +29,44 @@ from app import network, service  # noqa: E402
 from arli_engine.serve import build_pair, port_of  # noqa: E402
 
 service.init()
+REPO = Path(__file__).resolve().parent.parent
+
+
+def free_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+def wait_for_card(port: int, timeout: float = 25.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            response = httpx.get(f"http://127.0.0.1:{port}/.well-known/agent-card.json", timeout=1)
+            if response.status_code == 200:
+                return
+        except Exception:  # noqa: BLE001
+            time.sleep(0.2)
+    raise AssertionError(f"the agent on port {port} never came up")
+
+
+@pytest.fixture()
+def second_process():
+    """A real second process with its own agents, used as the counterparty."""
+    port_a, port_b = free_port(), free_port()
+    process = subprocess.Popen(
+        [sys.executable, "-m", "arli_engine.serve", "--port-a", str(port_a), "--port-b", str(port_b)],
+        cwd=str(REPO), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    try:
+        wait_for_card(port_b)
+        yield port_a, port_b
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
 
 
 def test_reach_guards_refuse_what_they_should() -> None:
@@ -89,26 +133,39 @@ def test_connecting_requires_a_declared_type() -> None:
             server.server_close()
 
 
-def test_matching_across_two_processes_is_a_recorded_gap() -> None:
-    """Known gap, written down as a test instead of as prose.
+def test_two_separate_processes_settle_a_pair(second_process) -> None:
+    """The witness step, exercised the only way that proves it: across two processes.
 
-    The negotiation log assumes both sides share one journal ("no wire between the agents"), which
-    holds when both agents are raised in one process and fails when the counterparty is a separate
-    one: it refuses a turn it never saw. The fix is a witness step in the extension, where a side
-    records the counterparty's signed turn after checking it against the counterparty's card. Until
-    that lands, a connected agent shows up as connected and its exchange is refused by code.
+    Each side keeps its own journal, so a turn one side takes is invisible to the other until it is
+    witnessed. This test would have failed before the witness clause: the counterparty refused a
+    turn it had never seen.
     """
-    states, servers = build_pair(0, 0, names=("distant-holder", "peer"))
-    try:
-        endpoint = f"http://127.0.0.1:{port_of(servers[0])}"
-        result = network.run_remote_exchange(
-            ["skill:brand-design", "city:berlin"], endpoint, 3000,
-            remote_id="distant-holder", remote_kind="supply",
-        )
-        assert result["remote"] is True
-        assert result["opened"] is False
-        assert result["rejection"].startswith("remote_refused"), result["rejection"]
-    finally:
-        for server in servers:
-            server.shutdown()
-            server.server_close()
+    _port_a, port_b = second_process
+    endpoint = f"http://127.0.0.1:{port_b}"
+    with httpx.Client(timeout=10) as client:
+        name = client.get(f"{endpoint}/.well-known/agent-card.json").json()["name"]
+
+    result = network.run_remote_exchange(
+        ["need:infra", "skill:design", "city:sf", "role:founder"],
+        endpoint, 3000, remote_id=name, remote_kind="supply", my_kind="demand",
+    )
+    assert result["opened"] is True, result.get("rejection")
+    assert result["agreed"] is True, "the counterparty must accept through its own journal"
+    assert result["overlap_basis_points"] == 5000, result
+    assert result["matched_features"] == ["city:sf", "skill:design"]
+    assert result["passed_floor"] is True
+    assert result["wires_clean"] is True, result["leaked_features"]
+
+
+def test_a_connected_agent_is_matched_through_the_service(second_process) -> None:
+    _port_a, port_b = second_process
+    connected = service.connect_agent({"endpoint": f"http://127.0.0.1:{port_b}", "kind": "supply"})
+    assert connected["connected"] is True
+
+    scan = service.scan_room(["need:infra", "skill:design", "city:sf", "role:founder"], 3000, "demand")
+    remote_rows = [row for row in scan["rows"] if row.get("remote")]
+    assert remote_rows, "the connected agent must appear in the scan"
+    found = [row for row in remote_rows if row.get("passed_floor")]
+    assert found, "the connected agent shares two features and must clear the floor of 3000"
+    assert found[0]["matched_features"] == ["city:sf", "skill:design"]
+    assert scan["wires_clean"] is True, [row.get("leaked_features") for row in scan["rows"]]

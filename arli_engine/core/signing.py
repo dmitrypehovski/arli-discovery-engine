@@ -155,6 +155,34 @@ def _verify_with_key(card: dict, key: ec.EllipticCurvePublicKey, protected: str,
     return True, []
 
 
+
+def public_pem_from_card(card: dict) -> bytes | None:
+    """The public key of the card's own signature header, as PEM.
+
+    Used wherever a signed card has to stand for a key: the card binds a key to a name, so a
+    signature that verifies against this key belongs to whoever the card names.
+    """
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+
+    signatures = card.get("signatures") or []
+    if not signatures:
+        return None
+    protected = signatures[0].get("protected") or ""
+    try:
+        header = json.loads(b64u_decode(protected))
+    except Exception:  # noqa: BLE001
+        return None
+    jwk = header.get("jwk") or {}
+    if not jwk.get("x") or not jwk.get("y"):
+        return None
+    try:
+        key = jwk_to_public_key(jwk)
+    except Exception:  # noqa: BLE001
+        return None
+    return key.public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+
 def verify_card_self(card: dict) -> tuple[bool, list[str]]:
     """Verify the card with the key from its own header.
 

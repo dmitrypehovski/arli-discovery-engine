@@ -325,6 +325,22 @@
       }
     },
     {
+      "name": "arli_negotiation_witness",
+      "description": "Calls arli/negotiation/witness on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "negotiation_id",
+          "seat",
+          "action",
+          "proof",
+          "card"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
       "name": "arli_opportunity_decide",
       "description": "Calls arli/opportunity/decide on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
       "inputSchema": {
@@ -366,6 +382,7 @@
       "arli/claims/declare",
       "arli/negotiation/open",
       "arli/negotiation/turn",
+      "arli/negotiation/witness",
       "arli/opportunity/decide"
     ],
     "tool_names": [
@@ -394,6 +411,7 @@
       "arli_claims_declare",
       "arli_negotiation_open",
       "arli_negotiation_turn",
+      "arli_negotiation_witness",
       "arli_opportunity_decide"
     ],
     "rule": "generated from the engine surface, never hand-written"

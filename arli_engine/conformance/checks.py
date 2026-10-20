@@ -38,6 +38,12 @@ EXPECTED_TURN_REJECTIONS = [
     "seats_must_alternate",
     "accept_without_offer",
     "propose_over_offer",
+    "not_a_witness",
+    "witness_without_proof",
+    "witness_card_unverified",
+    "witness_seat_mismatch",
+    "witness_proof_invalid",
+    "witness_mismatch",
 ]
 EXPECTED_OPENING_REJECTIONS = [
     "intent_inactive",

@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from arli_engine.core.negotiate import (
+    witness,
     MAX_TURNS,
     OPENING_REJECTIONS,
     REJECTIONS,
@@ -54,6 +55,33 @@ def _after_counter() -> Negotiation:
 
 # each code is reached by a specific sequence of turns; the key is the code, the value is
 # a function that must raise NegotiationRejected with exactly that code
+def _wcard(key=None):
+    """A signed card naming seat b: the card is what binds a key to a seat."""
+    from arli_engine.core.signing import KeyPair, sign_card
+
+    key = key or _WKEY
+    return sign_card({"name": "b", "version": "1.2.0", "description": "witness case"},
+                     key.private_pem, "b-key-1")
+
+
+def _wproof(action: str = "propose", other_key: bool = False):
+    """The envelope a speaker receives for its own turn; the proof binds the turn to the key."""
+    from arli_engine.core.crypto import sign_envelope
+
+    key = _WKEY_OTHER if other_key else _WKEY
+    body = {
+        "operation": "negotiation_turn",
+        "parameters": {"seat": "b", "action": action, "turn_index": 1, "turn_limit": 12},
+    }
+    return sign_envelope(body, key.private_pem, "b-key-1")
+
+
+from arli_engine.core.signing import KeyPair as _KP  # noqa: E402
+
+_WKEY = _KP.generate()
+_WKEY_OTHER = _KP.generate()
+
+
 REACHABLE = {
     "not_a_seat": lambda: _fresh().turn("c", "propose", ""),
     "unknown_action": lambda: _fresh().turn("a", "sing", ""),
@@ -64,6 +92,21 @@ REACHABLE = {
     "seats_must_alternate": lambda: _after_propose().turn("a", "counter", ""),
     "accept_without_offer": lambda: _after_counter().turn("a", "accept", ""),
     "propose_over_offer": lambda: _after_propose().turn("b", "propose", ""),
+    "not_a_witness": lambda: witness(Negotiation(("a", "b")), "a", "a", "propose", "", _wproof(), _wcard()),
+    "witness_without_proof": lambda: witness(Negotiation(("a", "b")), "a", "b", "propose", "", None, _wcard()),
+    "witness_card_unverified": lambda: witness(
+        Negotiation(("a", "b")), "a", "b", "propose", "", _wproof(),
+        {**_wcard(), "name": "b-tampered"},
+    ),
+    "witness_seat_mismatch": lambda: witness(
+        Negotiation(("a", "c")), "a", "c", "propose", "", _wproof(), _wcard(),
+    ),
+    "witness_proof_invalid": lambda: witness(
+        Negotiation(("a", "b")), "a", "b", "propose", "", _wproof(other_key=True), _wcard(),
+    ),
+    "witness_mismatch": lambda: witness(
+        Negotiation(("a", "b")), "a", "b", "propose", "", _wproof(action="counter"), _wcard(),
+    ),
 }
 
 

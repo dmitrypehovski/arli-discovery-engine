@@ -40,6 +40,7 @@ METHOD_NAMES = (
     "arli/claims/declare",
     "arli/negotiation/open",
     "arli/negotiation/turn",
+    "arli/negotiation/witness",
     "arli/opportunity/decide",
 )
 
@@ -71,6 +72,7 @@ MUTATING_METHODS = (
     "arli/claims/declare",
     "arli/negotiation/open",
     "arli/negotiation/turn",
+    "arli/negotiation/witness",
     "arli/opportunity/decide",
 )
 
@@ -98,6 +100,7 @@ REQUIRED_FIELDS = {
     "arli/claims/declare": ("feature", "level"),
     "arli/negotiation/open": ("negotiation_id", "peers", "intents"),
     "arli/negotiation/turn": ("negotiation_id", "seat", "action"),
+    "arli/negotiation/witness": ("negotiation_id", "seat", "action", "proof", "card"),
     "arli/opportunity/decide": ("negotiation_id", "actor", "approve"),
 }
 

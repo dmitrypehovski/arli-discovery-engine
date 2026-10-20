@@ -209,12 +209,27 @@ def run_remote_exchange(my_features: list[str], remote_endpoint: str, floor: int
             try:
                 call(theirs, "arli/negotiation/open", open_params)
 
-                call(mine, "arli/negotiation/turn",
+                mine_card = mine.get_card()
+                theirs_card = theirs.get_card()
+
+                # Our turn, then the counterparty records it in its own journal: two machines do
+                # not share a log, so each side witnesses what the other said.
+                propose = call(mine, "arli/negotiation/turn",
+                               {"negotiation_id": session, "seat": seat_a, "action": "propose",
+                                "message": {"scope": "matching only"}})
+                call(theirs, "arli/negotiation/witness",
                      {"negotiation_id": session, "seat": seat_a, "action": "propose",
-                      "message": {"scope": "matching only"}})
+                      "message": {"scope": "matching only"},
+                      "proof": propose["evidence"], "card": mine_card})
+
                 accept = call(theirs, "arli/negotiation/turn",
                               {"negotiation_id": session, "seat": seat_b, "action": "accept",
                                "message": {"agreed": True}})
+                call(mine, "arli/negotiation/witness",
+                     {"negotiation_id": session, "seat": seat_b, "action": "accept",
+                      "message": {"agreed": True},
+                      "proof": accept["evidence"], "card": theirs_card})
+
                 call(mine, "arli/opportunity/decide",
                      {"negotiation_id": session, "actor": seat_a, "approve": True})
                 call(theirs, "arli/opportunity/decide",
@@ -230,15 +245,25 @@ def run_remote_exchange(my_features: list[str], remote_endpoint: str, floor: int
                               {"session_id": session, "n": keys["n"], "signed": signed["signed"],
                                "holder_tokens": signed["holder_tokens"],
                                "floor_basis_points": floor})
+                call(theirs, "arli/psi/record",
+                     {"session_id": session, "matched": finish.get("matched_features", []),
+                      "floor_basis_points": floor})
             except Exception as error:  # noqa: BLE001
-                # The counterparty refuses with a code. Until the witness step exists in the
-                # extension, a separate process refuses the turns it never saw; say which refusal
-                # this was instead of raising, so a scan keeps its other rows.
                 code = getattr(error, "code", None) or f"{type(error).__name__}"
                 return _refused(f"remote_refused: {code}", remote_id, floor)
 
+            # Two different questions, kept apart. Before the intersection is revealed, no
+            # feature of ours may travel: that is the promise. The record call comes after by
+            # design, because both sides hold an envelope over the same intersection, so it may
+            # carry the shared items and nothing else.
+            before = wire[:-1] if wire else []
+            revealed = wire[-1] if wire else ""
             leaked = [feature for feature in my_features
-                      for payload in wire if re.search(re.escape(feature.strip()), payload, re.IGNORECASE)]
+                      for payload in before
+                      if re.search(re.escape(feature.strip()), payload, re.IGNORECASE)]
+            revealed_extras = [feature for feature in my_features
+                               if feature not in (finish.get("matched_features") or [])
+                               and re.search(re.escape(feature.strip()), revealed, re.IGNORECASE)]
             basis = int(finish.get("overlap_basis_points") or 0)
             return {
                 "id": remote_id, "name": remote_id, "kind": remote_kind, "city": "",
@@ -252,7 +277,8 @@ def run_remote_exchange(my_features: list[str], remote_endpoint: str, floor: int
                 "overlap_ratio": finish.get("overlap_ratio"),
                 "matched_features": finish.get("matched_features", []),
                 "passed_floor": basis >= floor,
-                "wires_clean": not leaked, "leaked_features": leaked,
+                "wires_clean": not leaked and not revealed_extras,
+                "leaked_features": leaked + revealed_extras,
                 "evidence_ids": {},
             }
     finally:
