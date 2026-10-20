@@ -1,0 +1,16 @@
+ARLI Discovery Extension
+Copyright 2026 Shenzhen Capernaum Technology Co., Ltd. (ARLI)
+
+This product includes software developed at Shenzhen Capernaum Technology Co., Ltd.
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The normative specification text is in Apache-2.0 as well, so that anyone may implement
+the extension, including for commercial use, and so that the conformance suite is addressed
+to someone.
+
+The name ARLI, the ARLI logo and the "ARLI verified" conformance mark are NOT licensed under
+Apache-2.0. They remain the property of Shenzhen Capernaum Technology Co., Ltd. See
+TRADEMARK.md. Passing the conformance suite does not grant the right to use the mark.
+
+No patent license beyond the patent grant inside the Apache License, Version 2.0 is granted
+by this distribution.

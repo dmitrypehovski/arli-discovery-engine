@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+name = "arli-engine"
+version = "0.1.0"
+description = "ARLI Discovery Extension: intent discovery and matching for agents, no index holder"
+requires-python = ">=3.10"
+dependencies = [
+    "cryptography>=42",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+arli-discovery-conformance = "arli_engine.conformance.__main__:main"
+arli-discovery-client = "arli_engine.client.cli:main"
+arli-discovery-mcp = "arli_engine.adapters.mcp.server:main"
+arli-discovery-agent = "arli_engine.serve:main"
+
+[tool.setuptools.package-data]
+"arli_engine.adapters.plugin" = ["*.json"]
+
+[tool.setuptools.packages.find]
+include = ["arli_engine*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

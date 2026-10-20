@@ -1,0 +1,394 @@
+{
+  "name": "arli-discovery",
+  "version": "0.1.0",
+  "description": "ARLI discovery: an agent that matches on declared intent without an index holder. Ships the A2A surface to a model runtime as MCP tools.",
+  "transport": {
+    "type": "stdio",
+    "jsonrpc": "2.0",
+    "framing": "newline-delimited"
+  },
+  "server": {
+    "command": [
+      "/home/paperclip/arli-org/arli-engine/.venv/bin/python",
+      "-m",
+      "arli_engine.adapters.mcp.server"
+    ],
+    "env": {}
+  },
+  "tools": [
+    {
+      "name": "agent_card",
+      "description": "Calls agent/card on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_capabilities",
+      "description": "Calls arli/capabilities on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_commitments",
+      "description": "Calls arli/commitments on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_match",
+      "description": "Calls arli/match on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "commitment"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_psi_keys",
+      "description": "Calls arli/psi/keys on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_psi_commit",
+      "description": "Calls arli/psi/commit on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "features"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_psi_sign",
+      "description": "Calls arli/psi/sign on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "blinded"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_psi_finish",
+      "description": "Calls arli/psi/finish on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "signed",
+          "floor_basis_points"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_psi_record",
+      "description": "Calls arli/psi/record on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "matched",
+          "floor_basis_points"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_registry_status",
+      "description": "Calls arli/registry/status on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_registry_register",
+      "description": "Calls arli/registry/register on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "kid",
+          "principal_id",
+          "public_pem"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_registry_rotate",
+      "description": "Calls arli/registry/rotate on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "kid",
+          "new_kid",
+          "new_public_pem"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_registry_revoke",
+      "description": "Calls arli/registry/revoke on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_registry_confirm",
+      "description": "Calls arli/registry/confirm on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "principal_id"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_registry_check",
+      "description": "Calls arli/registry/check on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "kid"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_retention_status",
+      "description": "Calls arli/retention/status on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_retention_record",
+      "description": "Calls arli/retention/record on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "evidence_id",
+          "intent_id"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_retention_archive",
+      "description": "Calls arli/retention/archive on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "intent_id"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_retention_delete",
+      "description": "Calls arli/retention/delete on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "evidence_id"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_retention_purge",
+      "description": "Calls arli/retention/purge on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_claims_status",
+      "description": "Calls arli/claims/status on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_claims_issuers",
+      "description": "Calls arli/claims/issuers on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "name",
+          "public_pem"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_claims_declare",
+      "description": "Calls arli/claims/declare on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "feature",
+          "level"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_negotiation_open",
+      "description": "Calls arli/negotiation/open on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "negotiation_id",
+          "peers",
+          "intents"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_negotiation_turn",
+      "description": "Calls arli/negotiation/turn on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "negotiation_id",
+          "agent",
+          "act"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "arli_opportunity_decide",
+      "description": "Calls arli/opportunity/decide on the ARLI discovery agent. Arguments are passed to the engine unchanged. A refusal keeps the engine's rejection code instead of a generic error. This call changes state on the agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          "negotiation_id",
+          "agent"
+        ],
+        "additionalProperties": true
+      }
+    }
+  ],
+  "surface": {
+    "methods": [
+      "agent/card",
+      "arli/capabilities",
+      "arli/commitments",
+      "arli/match",
+      "arli/psi/keys",
+      "arli/psi/commit",
+      "arli/psi/sign",
+      "arli/psi/finish",
+      "arli/psi/record",
+      "arli/registry/status",
+      "arli/registry/register",
+      "arli/registry/rotate",
+      "arli/registry/revoke",
+      "arli/registry/confirm",
+      "arli/registry/check",
+      "arli/retention/status",
+      "arli/retention/record",
+      "arli/retention/archive",
+      "arli/retention/delete",
+      "arli/retention/purge",
+      "arli/claims/status",
+      "arli/claims/issuers",
+      "arli/claims/declare",
+      "arli/negotiation/open",
+      "arli/negotiation/turn",
+      "arli/opportunity/decide"
+    ],
+    "tool_names": [
+      "agent_card",
+      "arli_capabilities",
+      "arli_commitments",
+      "arli_match",
+      "arli_psi_keys",
+      "arli_psi_commit",
+      "arli_psi_sign",
+      "arli_psi_finish",
+      "arli_psi_record",
+      "arli_registry_status",
+      "arli_registry_register",
+      "arli_registry_rotate",
+      "arli_registry_revoke",
+      "arli_registry_confirm",
+      "arli_registry_check",
+      "arli_retention_status",
+      "arli_retention_record",
+      "arli_retention_archive",
+      "arli_retention_delete",
+      "arli_retention_purge",
+      "arli_claims_status",
+      "arli_claims_issuers",
+      "arli_claims_declare",
+      "arli_negotiation_open",
+      "arli_negotiation_turn",
+      "arli_opportunity_decide"
+    ],
+    "rule": "generated from the engine surface, never hand-written"
+  },
+  "limitations": [
+    "The plugin runs the MCP binding as a local process; it holds no engine logic of its own.",
+    "Features never leave the agent: the plugin cannot read raw feature values.",
+    "Matching is not a search: a smaller intersection is a smaller answer, not a worse one."
+  ]
+}
