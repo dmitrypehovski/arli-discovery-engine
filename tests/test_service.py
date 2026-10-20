@@ -7,6 +7,8 @@ Each promise gets a test that fails when it stops being true. The database is a 
 
 from __future__ import annotations
 
+import json
+
 import os
 import sys
 import tempfile
@@ -592,3 +594,147 @@ def test_every_step_leaves_a_record_that_can_be_pointed_at(monkeypatch, tmp_path
     from arli_engine.core.evidence import Evidence
     envelope = service._evidence("introduction.requested", {"introduction_id": asked["id"]}, {"state": "requested"})
     assert Evidence.from_json(envelope).verify_id() is True
+
+
+# --- agreements: what the two sides agreed to, checkable by somebody else ------------------------------
+
+def _introduced_pair(monkeypatch, tmp_path):
+    service, a, b, _agent_a, agent_b = _two_accounts_with_agents(monkeypatch, tmp_path)
+    asked = service.request_introduction(a, agent_b["id"], "we overlap")
+    service.decide_introduction(b, asked["id"], approve=True, message="yes")
+    return service, a, b, asked["id"]
+
+
+def test_a_pr_oposed_and_accepted_record_verifies_with_both_signatures(monkeypatch, tmp_path) -> None:
+    service, a, b, intro = _introduced_pair(monkeypatch, tmp_path)
+    proposed = service.propose_agreement(a, intro, {"subject": "warehouse space in Shenzhen",
+                                                    "amount_minor": 1200000, "currency": "CNY",
+                                                    "deliver_by": "2026-11-15", "place": "Shenzhen"})
+    assert proposed["state"] == "proposed" and proposed["signed_by_you"] is True
+    with service.connect() as connection:
+        row = connection.execute("SELECT * FROM agreements WHERE id = ?", (proposed["id"],)).fetchone()
+    assert service.verify_agreement(row)["proposer_signature_holds"] is True
+    assert service.verify_agreement(row)["acceptor_signature_holds"] is None, "(nothing signed by nobody)"
+
+    decided = service.decide_agreement(b, proposed["id"], accept=True, note="agreed")
+    assert decided["state"] == "agreed"
+    with service.connect() as connection:
+        row = connection.execute("SELECT * FROM agreements WHERE id = ?", (proposed["id"],)).fetchone()
+    checked = service.verify_agreement(row)
+    assert checked["body_recomputes"] and checked["proposer_signature_holds"]
+    assert checked["acceptor_signature_holds"] and checked["evidence_ids_recompute"], checked
+
+
+def test_the_bytes_that_were_signed_are_kept_so_tampering_shows(monkeypatch, tmp_path) -> None:
+    service, a, b, intro = _introduced_pair(monkeypatch, tmp_path)
+    proposed = service.propose_agreement(a, intro, {"subject": "three teams of warehouse work"})
+    service.decide_agreement(b, proposed["id"], accept=True)
+    with service.connect() as connection:
+        row = connection.execute("SELECT * FROM agreements WHERE id = ?", (proposed["id"],)).fetchone()
+    signed_bytes = row["body"]
+
+    # Changing the terms alone: the kept bytes no longer follow from the terms, and the check says so.
+    with service.connect() as connection:
+        connection.execute("UPDATE agreements SET terms = ? WHERE id = ?",
+                           (json.dumps({"subject": "nine teams of warehouse work"}), proposed["id"]))
+        row = connection.execute("SELECT * FROM agreements WHERE id = ?", (proposed["id"],)).fetchone()
+    checked = service.verify_agreement(row)
+    assert checked["body_recomputes"] is False, "a changed term must not still be the bytes that were signed"
+    assert checked["checked_reasons"]
+
+    # Changing the signed bytes themselves: now the signature is over something else and must not hold.
+    with service.connect() as connection:
+        connection.execute("UPDATE agreements SET terms = ?, body = ? WHERE id = ?",
+                           (json.dumps({"subject": "three teams of warehouse work"}),
+                            signed_bytes.replace("three", "nine"), proposed["id"]))
+        row = connection.execute("SELECT * FROM agreements WHERE id = ?", (proposed["id"],)).fetchone()
+    checked = service.verify_agreement(row)
+    assert checked["proposer_signature_holds"] is False, "a signature over other bytes is not this signature"
+    assert checked["body_recomputes"] is False
+
+
+def test_a_second_proposal_from_the_other_side_is_a_counter_and_the_first_is_kept(monkeypatch, tmp_path) -> None:
+    service, a, b, intro = _introduced_pair(monkeypatch, tmp_path)
+    first = service.propose_agreement(a, intro, {"subject": "their first asking price"})
+    second = service.propose_agreement(b, intro, {"subject": "our counter"})
+    assert second["version"] == 2
+    records = service.agreements_for(a, intro)["records"]
+    by_version = {record["version"]: record["state"] for record in records}
+    assert by_version == {1: "superseded", 2: "proposed"}, "the sequence is the record, not only the landing"
+    assert first["id"] != second["id"]
+
+
+def test_declining_leaves_nothing_agreed_and_no_second_signature(monkeypatch, tmp_path) -> None:
+    service, a, b, intro = _introduced_pair(monkeypatch, tmp_path)
+    proposed = service.propose_agreement(a, intro, {"subject": "something they will not take"})
+    service.decide_agreement(b, proposed["id"], accept=False)
+    view = service.agreements_for(a, intro)["records"][0]
+    assert view["state"] == "declined"
+    assert view["signatures"]["acceptor"] is None
+    assert view["verification"]["acceptor_signature_holds"] is None
+
+
+def test_the_proposer_does_not_answer_its_own_proposal(monkeypatch, tmp_path) -> None:
+    service, a, _b, intro = _introduced_pair(monkeypatch, tmp_path)
+    proposed = service.propose_agreement(a, intro, {"subject": "we propose"})
+    try:
+        service.decide_agreement(a, proposed["id"], accept=True)
+        raise AssertionError("the side that proposed cannot also accept")
+    except service.AgreementRefused as refused:
+        assert refused.code == "not_yours_to_decide"
+
+
+def test_an_amount_without_a_currency_is_not_an_amount(monkeypatch, tmp_path) -> None:
+    service, a, _b, intro = _introduced_pair(monkeypatch, tmp_path)
+    for terms, code in (({"subject": "a job", "amount_minor": 5000}, "amount_needs_currency"),
+                        ({"subject": "a job", "currency": "CNY"}, "currency_needs_amount"),
+                        ({"subject": "a job", "deliver_by": "next friday"}, "bad_date"),
+                        ({"subject": "x"}, "subject_required")):
+        try:
+            service.propose_agreement(a, intro, terms)
+            raise AssertionError(f"{terms} should have been refused")
+        except service.AgreementRefused as refused:
+            assert refused.code == code, refused.code
+
+
+def test_milestones_start_only_after_the_terms_are_agreed(monkeypatch, tmp_path) -> None:
+    service, a, b, intro = _introduced_pair(monkeypatch, tmp_path)
+    proposed = service.propose_agreement(a, intro, {"subject": "two teams, two weeks"})
+    try:
+        service.record_agreement_event(a, proposed["id"], "delivered", "done")
+        raise AssertionError("nothing is delivered before anything is agreed")
+    except service.AgreementRefused as refused:
+        assert refused.code == "not_agreed_yet"
+
+    service.decide_agreement(b, proposed["id"], accept=True)
+    service.record_agreement_event(a, proposed["id"], "delivered", "shift one started")
+    service.record_agreement_event(b, proposed["id"], "accepted", "received")
+    try:
+        service.record_agreement_event(b, proposed["id"], "issue", "")
+        raise AssertionError("an issue without a word about it is not a record")
+    except service.AgreementRefused as refused:
+        assert refused.code == "empty_note"
+    events = service.agreements_for(a, intro)["records"][0]["events"]
+    assert [event["kind"] for event in events] == ["delivered", "accepted"]
+    assert all(event["evidence_id"].startswith("ev_") for event in events)
+
+
+def test_a_fresh_proposal_after_agreement_is_refused(monkeypatch, tmp_path) -> None:
+    service, a, b, intro = _introduced_pair(monkeypatch, tmp_path)
+    proposed = service.propose_agreement(a, intro, {"subject": "agreed once"})
+    service.decide_agreement(b, proposed["id"], accept=True)
+    try:
+        service.propose_agreement(b, intro, {"subject": "changed my mind"})
+        raise AssertionError("a change means talking again, not silently replacing the record")
+    except service.AgreementRefused as refused:
+        assert refused.code == "already_agreed"
+
+
+def test_terms_before_an_introduction_are_refused(monkeypatch, tmp_path) -> None:
+    service, a, b, _agent_a, agent_b = _two_accounts_with_agents(monkeypatch, tmp_path)
+    asked = service.request_introduction(a, agent_b["id"], "")
+    try:
+        service.propose_agreement(a, asked["id"], {"subject": "too early"})
+        raise AssertionError("terms come after both sides agreed to be introduced")
+    except service.AgreementRefused as refused:
+        assert refused.code == "not_introduced_yet"

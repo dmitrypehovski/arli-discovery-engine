@@ -111,6 +111,39 @@ def sign_bytes(private_pem: bytes, kid: str, data: bytes) -> dict:
     raw = r.to_bytes(32, "big") + s_value.to_bytes(32, "big")
     return {"alg": "ES256", "kid": kid, "value": b64u(raw)}
 
+def verify_signed_bytes(public_jwk_dict: dict, data: bytes, signature: dict) -> tuple[bool, list[str]]:
+    """Whether a signature over exactly these bytes holds for this key.
+
+    The counterpart of sign_bytes, and it belongs here rather than in a product: the rules of a signature
+    are the protocol's, and a second place that decides them is a second place that can disagree. The public
+    key travels in the signature itself (the jwk of RFC 7515 4.1.3) when the caller has none, which is what
+    makes a record checkable by a stranger who was not there.
+    """
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric import utils as _utils
+
+    reasons: list[str] = []
+    if str(signature.get("alg") or "") != "ES256":
+        reasons.append(f"unknown_alg:{signature.get('alg')!r}")
+    jwk = signature.get("jwk") or public_jwk_dict or {}
+    try:
+        key = jwk_to_public_key(jwk)
+    except (ValueError, KeyError, TypeError) as error:
+        return False, [f"unusable_key:{type(error).__name__}"]
+    raw = b64u_decode(str(signature.get("value") or ""))
+    if len(raw) != 64:
+        reasons.append(f"signature_is_{len(raw)}_bytes_not_64")
+    else:
+        r = int.from_bytes(raw[:32], "big")
+        s_value = int.from_bytes(raw[32:], "big")
+        der = _utils.encode_dss_signature(r, s_value)
+        try:
+            key.verify(der, data, ec.ECDSA(hashes.SHA256()))
+        except InvalidSignature:
+            reasons.append("signature_does_not_hold")
+    return (not reasons), reasons
+
+
 def sign_card(card: dict, private_pem: bytes, kid: str) -> dict:
     """Return a copy of the card with a JWS signature added.
 

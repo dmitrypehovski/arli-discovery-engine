@@ -132,3 +132,27 @@ def test_the_window_follows_the_caller_behind_a_proxy(agent: str) -> None:
     assert "result" in first, first
     assert "result" in second, "a second caller in the same minute must not inherit the first window"
     assert "error" in third and "rate_limited" in third["error"]["message"]
+
+
+def test_a_signature_over_exact_bytes_can_be_checked_by_a_stranger() -> None:
+    """The counterpart of sign_bytes: the same rules, in one place, so two sides cannot disagree."""
+    from arli_engine.core.signing import KeyPair, public_jwk, sign_bytes, verify_signed_bytes
+
+    pair = KeyPair.generate()
+    jwk = public_jwk(pair.public_pem, "kid-under-test")
+    body = b'{"agreement":"what was agreed"}'
+    signature = sign_bytes(pair.private_pem, "kid-under-test", body)
+    signature["jwk"] = jwk  # a stranger gets the key with the signature, not from anywhere else
+
+    ok, reasons = verify_signed_bytes(jwk, body, signature)
+    assert ok is True, reasons
+    assert reasons == []
+
+    ok, reasons = verify_signed_bytes(jwk, b'{"agreement":"something else"}', signature)
+    assert ok is False and "signature_does_not_hold" in reasons, (
+        "a signature over other bytes must not verify: that is the whole point of signing these bytes"
+    )
+
+    broken = dict(signature, value=signature["value"][:-4] + "AAAA")
+    ok, reasons = verify_signed_bytes(jwk, body, broken)
+    assert ok is False, reasons

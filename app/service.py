@@ -92,6 +92,44 @@ def connect() -> sqlite3.Connection:
            )"""
     )
     connection.execute(
+        """CREATE TABLE IF NOT EXISTS agreements (
+               id TEXT PRIMARY KEY,
+               introduction_id TEXT NOT NULL,
+               version INTEGER NOT NULL DEFAULT 1,
+               proposed_by TEXT NOT NULL,
+               proposed_by_email TEXT NOT NULL,
+               accepted_by TEXT NOT NULL DEFAULT '',
+               accepted_by_email TEXT NOT NULL DEFAULT '',
+               terms TEXT NOT NULL,
+               body TEXT NOT NULL,
+               state TEXT NOT NULL,
+               created_at TEXT NOT NULL,
+               accepted_at TEXT NOT NULL DEFAULT '',
+               signature_proposer TEXT NOT NULL,
+               signature_acceptor TEXT NOT NULL DEFAULT '',
+               evidence_ids TEXT NOT NULL DEFAULT '[]'
+           )"""
+    )
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS evidence_records (
+               id TEXT PRIMARY KEY,
+               subject TEXT NOT NULL,
+               envelope TEXT NOT NULL,
+               created_at TEXT NOT NULL
+           )"""
+    )
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS agreement_events (
+               id TEXT PRIMARY KEY,
+               agreement_id TEXT NOT NULL,
+               kind TEXT NOT NULL,
+               actor TEXT NOT NULL,
+               note TEXT NOT NULL DEFAULT '',
+               created_at TEXT NOT NULL,
+               evidence_id TEXT NOT NULL
+           )"""
+    )
+    connection.execute(
         """CREATE TABLE IF NOT EXISTS sessions (
                token TEXT PRIMARY KEY,
                account_id TEXT NOT NULL,
@@ -136,6 +174,14 @@ def connect() -> sqlite3.Connection:
         connection.execute("ALTER TABLE agents ADD COLUMN owner_account TEXT NOT NULL DEFAULT ''")
     except sqlite3.OperationalError:
         pass
+    # An account has a signing key of its own, so what it agreed to can be checked by a stranger later.
+    for column, definition in (("kid", "TEXT NOT NULL DEFAULT ''"),
+                               ("public_jwk", "TEXT NOT NULL DEFAULT '{}'"),
+                               ("private_pem", "TEXT NOT NULL DEFAULT ''")):
+        try:
+            connection.execute(f"ALTER TABLE accounts ADD COLUMN {column} {definition}")
+        except sqlite3.OperationalError:
+            pass
     return connection
 
 
@@ -635,12 +681,26 @@ def account_by_session(token: str) -> dict | None:
         return None
     with connect() as connection:
         row = connection.execute(
-            """SELECT a.id AS id, a.email AS email
+            """SELECT a.id AS id, a.email AS email, a.kid AS kid, a.public_jwk AS public_jwk
                FROM sessions AS s JOIN accounts AS a ON a.id = s.account_id
                WHERE s.token = ? AND s.expires_at > ?""",
             (token, _now()),
         ).fetchone()
     return dict(row) if row else None
+
+
+def account_keypair() -> tuple[str, dict, str]:
+    """A signing key per account, so what a person agreed to is checkable by somebody who was not there.
+
+    The private key is kept by the service, in the same store as everything else. That is a real trade and it
+    is said out loud rather than hidden: an account hosted here is held here, key and vault alike. Move to
+    your own agent later and the key is yours.
+    """
+    from arli_engine.core.signing import KeyPair, public_jwk
+
+    pair = KeyPair.generate()
+    kid = f"kid-{secrets.token_hex(4)}"
+    return kid, public_jwk(pair.public_pem, kid), pair.private_pem.decode("utf-8")
 
 
 def register_account(email, password) -> tuple[dict, str]:
@@ -649,13 +709,17 @@ def register_account(email, password) -> tuple[dict, str]:
     if len(password) < MIN_PASSWORD_CHARS:
         raise ValueError(f"a password of at least {MIN_PASSWORD_CHARS} characters")
     account_id = f"u-{secrets.token_hex(6)}"
+    kid, jwk, private_pem = account_keypair()
     with connect() as connection:
         if connection.execute("SELECT id FROM accounts WHERE email = ?", (email,)).fetchone():
             raise ValueError("an account with this email already exists: sign in instead")
-        connection.execute("INSERT INTO accounts (id, email, password_hash, created_at) VALUES (?,?,?,?)",
-                           (account_id, email, _hash_password(password), _now()))
+        connection.execute(
+            "INSERT INTO accounts (id, email, password_hash, created_at, kid, public_jwk, private_pem)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (account_id, email, _hash_password(password), _now(), kid,
+             json.dumps(jwk), private_pem))
         token = _open_session(connection, account_id)
-    return {"id": account_id, "email": email}, token
+    return {"id": account_id, "email": email, "kid": kid, "public_jwk": jwk}, token
 
 
 def sign_in(email, password) -> tuple[dict | None, str]:
@@ -891,6 +955,300 @@ def introductions_for(account: dict) -> dict:
             "outgoing": [v for v in views if v["direction"] == "outgoing"]}
 
 
+# --- agreements: what the two sides agreed to, in a form somebody else can check ----------------------
+# Why this exists. An introduction opens a conversation, and a conversation ends in "we agreed" that neither
+# side can point at afterwards. An agreement here is a small set of stated terms, signed by both accounts,
+# with the exact bytes that were signed kept beside it, so a stranger holding the id can check the two
+# signatures himself instead of believing a screenshot. Every proposal, answer and milestone leaves an
+# evidence envelope as well.
+#
+# What this is not, and it is said rather than implied: it moves no money and decides nothing legally. It is
+# a record of what was said, checkable. Anything with value in it still needs a contract, a payment rail and
+# a decision from the founder, and none of those are here.
+
+AGREEMENT_STATES = ("proposed", "agreed", "declined", "superseded")
+AGREEMENT_EVENT_KINDS = ("delivered", "accepted", "issue")
+
+
+class AgreementRefused(RuntimeError):
+    CODES = ("unknown_introduction", "not_a_party", "not_introduced_yet", "subject_required",
+             "amount_needs_currency", "currency_needs_amount", "bad_date", "already_agreed",
+             "not_yours_to_decide", "unknown_agreement", "unknown_event_kind", "empty_note",
+             "not_agreed_yet")
+
+    def __init__(self, code: str, detail: str = "") -> None:
+        if code not in self.CODES:
+            raise ValueError(f"{code!r} is not in AgreementRefused.CODES")
+        self.code = code
+        self.detail = detail
+        super().__init__(f"{code}: {detail}" if detail else code)
+
+
+def _store_envelope(connection: sqlite3.Connection, subject: str, envelope: dict) -> None:
+    """Kept whole, not just its id: an id can be recomputed from an envelope, and only then is a check a check."""
+    connection.execute(
+        "INSERT OR REPLACE INTO evidence_records (id, subject, envelope, created_at) VALUES (?,?,?,?)",
+        (envelope["evidence_id"], subject, json.dumps(envelope), _now()))
+
+
+def _clean_terms(payload: dict) -> dict:
+    subject = str(payload.get("subject") or "").strip()
+    if len(subject) < 3:
+        raise AgreementRefused("subject_required", "say what this agreement is about, in one line")
+    terms: dict = {"subject": subject[:300]}
+    deliver_by = str(payload.get("deliver_by") or "").strip()
+    if deliver_by:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", deliver_by):
+            raise AgreementRefused("bad_date", "a date looks like 2026-11-01")
+        terms["deliver_by"] = deliver_by
+    for field in ("place", "notes"):
+        value = str(payload.get(field) or "").strip()
+        if value:
+            terms[field] = value[:600]
+    amount = payload.get("amount_minor")
+    currency = str(payload.get("currency") or "").strip().upper()
+    if amount is not None and str(amount).strip() != "":
+        if not currency:
+            raise AgreementRefused("amount_needs_currency", "an amount without a currency is not an amount")
+        try:
+            value = int(amount)
+        except (TypeError, ValueError):
+            raise AgreementRefused("amount_needs_currency", "the amount must be a whole number of minor units")
+        if value < 0:
+            raise AgreementRefused("amount_needs_currency", "a negative amount is not an amount")
+        terms["amount_minor"] = value
+        terms["currency"] = currency[:3]
+    elif currency:
+        raise AgreementRefused("currency_needs_amount", "a currency without an amount says nothing")
+    return terms
+
+
+def _agreement_body(introduction_id: str, version: int, proposer_email: str, terms: dict) -> bytes:
+    """The exact bytes both sides sign. Kept beside the record, because a signature over other bytes is not
+    this signature, and a stranger has to be able to rebuild these bytes to check that."""
+    from arli_engine.core.canonical import canonical_json
+
+    return canonical_json({"introduction": introduction_id, "version": version,
+                           "proposed_by": proposer_email, "terms": terms}).encode("utf-8")
+
+
+def _introduction_parties(connection: sqlite3.Connection, introduction_id: str):
+    row = connection.execute("SELECT * FROM introductions WHERE id = ?", (introduction_id,)).fetchone()
+    if row is None:
+        raise AgreementRefused("unknown_introduction", f"no introduction with the id {introduction_id}")
+    return row
+
+
+def _account_key(connection: sqlite3.Connection, account_id: str) -> tuple[dict, str]:
+    row = connection.execute(
+        "SELECT kid, public_jwk, private_pem FROM accounts WHERE id = ?", (account_id,)).fetchone()
+    if row is None:
+        raise AgreementRefused("not_a_party", "no such account")
+    return json.loads(row["public_jwk"] or "{}"), str(row["private_pem"] or "")
+
+
+def _jwk_of(account: dict) -> dict:
+    """The public key of an account, whether it arrives as a stored string or as a freshly built dict."""
+    raw = account.get("public_jwk")
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw or "{}")
+    except (TypeError, ValueError):
+        return {}
+
+
+def propose_agreement(account: dict, introduction_id: str, payload: dict) -> dict:
+    """Put terms on the table. A second proposal from the other side replaces this one and is a counter, which
+    is kept: the sequence is what the two sides did, not only where they landed."""
+    from arli_engine.core.signing import sign_bytes
+
+    terms = _clean_terms(payload)
+    with connect() as connection:
+        introduction = _introduction_parties(connection, introduction_id)
+        if account["id"] not in (introduction["from_account"], introduction["to_account"]):
+            raise AgreementRefused("not_a_party", "this introduction is not yours")
+        if introduction["state"] != "introduced":
+            raise AgreementRefused("not_introduced_yet",
+                                   "terms come after both sides agreed to be introduced")
+        agreed = connection.execute(
+            "SELECT id FROM agreements WHERE introduction_id = ? AND state = 'agreed'", (introduction_id,)).fetchone()
+        if agreed:
+            raise AgreementRefused("already_agreed",
+                                   f"this pair already has an agreed record: {agreed['id']}. A change means a "
+                                   "new proposal, which means talking again")
+        previous = connection.execute(
+            "SELECT id, version FROM agreements WHERE introduction_id = ? ORDER BY version DESC LIMIT 1",
+            (introduction_id,)).fetchone()
+        version = (previous["version"] + 1) if previous else 1
+        if previous:
+            connection.execute("UPDATE agreements SET state = 'superseded' WHERE id = ?", (previous["id"],))
+
+        body = _agreement_body(introduction_id, version, account["email"], terms)
+        _jwk, private_pem = _account_key(connection, account["id"])
+        signature = sign_bytes(private_pem.encode("utf-8"), str(account.get("kid") or ""), body)
+        signature["jwk"] = _jwk_of(account) or signature.get("jwk")
+        agreement_id = f"ag-{secrets.token_urlsafe(12)}"
+        envelope = _evidence("agreement.proposed",
+                             {"agreement_id": agreement_id, "introduction_id": introduction_id,
+                              "version": version, "subject": terms["subject"]},
+                             {"state": "proposed"}, authority="self-declared")
+        connection.execute(
+            """INSERT INTO agreements (id, introduction_id, version, proposed_by, proposed_by_email, terms,
+               body, state, created_at, signature_proposer, evidence_ids) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (agreement_id, introduction_id, version, account["id"], account["email"], json.dumps(terms),
+             body.decode("utf-8"), "proposed", _now(), json.dumps(signature),
+             json.dumps([envelope["evidence_id"]])))
+        _store_envelope(connection, agreement_id, envelope)
+    return {"id": agreement_id, "version": version, "state": "proposed", "terms": terms,
+            "signed_by_you": True, "evidence_id": envelope["evidence_id"]}
+
+
+def decide_agreement(account: dict, agreement_id: str, accept: bool, note: str = "") -> dict:
+    """The other side answers the proposal. Accepting means signing the same bytes the proposer signed."""
+    from arli_engine.core.signing import sign_bytes
+
+    with connect() as connection:
+        row = connection.execute("SELECT * FROM agreements WHERE id = ?", (agreement_id,)).fetchone()
+        if row is None:
+            raise AgreementRefused("unknown_agreement", f"no agreement with the id {agreement_id}")
+        introduction = _introduction_parties(connection, row["introduction_id"])
+        if account["id"] not in (introduction["from_account"], introduction["to_account"]):
+            raise AgreementRefused("not_a_party", "this record is not yours")
+        if account["id"] == row["proposed_by"]:
+            raise AgreementRefused("not_yours_to_decide", "the side that proposed does not answer its own proposal")
+        if row["state"] != "proposed":
+            raise AgreementRefused("unknown_agreement", f"this one is already {row['state']}")
+
+        state = "agreed" if accept else "declined"
+        operation = "agreement.agreed" if accept else "agreement.declined"
+        envelope = _evidence(operation,
+                             {"agreement_id": agreement_id, "introduction_id": row["introduction_id"],
+                              "decided_by": account["email"], "note": str(note or "")[:400]},
+                             {"state": state}, authority="self-declared")
+        signature_json = ""
+        if accept:
+            _jwk, private_pem = _account_key(connection, account["id"])
+            signature = sign_bytes(private_pem.encode("utf-8"), str(account.get("kid") or ""),
+                                   row["body"].encode("utf-8"))
+            signature["jwk"] = _jwk_of(account) or signature.get("jwk")
+            signature_json = json.dumps(signature)
+        connection.execute(
+            "UPDATE agreements SET state = ?, accepted_by = ?, accepted_by_email = ?, accepted_at = ?,"
+            " signature_acceptor = ? WHERE id = ?",
+            (state, account["id"], account["email"], _now() if accept else "", signature_json, agreement_id))
+        ids = json.loads(row["evidence_ids"] or "[]") + [envelope["evidence_id"]]
+        connection.execute("UPDATE agreements SET evidence_ids = ? WHERE id = ?", (json.dumps(ids), agreement_id))
+        _store_envelope(connection, agreement_id, envelope)
+    return {"id": agreement_id, "state": state, "evidence_id": envelope["evidence_id"]}
+
+
+def record_agreement_event(account: dict, agreement_id: str, kind: str, note: str = "") -> dict:
+    """What happened next: delivered, accepted, or a problem stated. Only after there is something to run."""
+    kind = str(kind or "").strip().lower()
+    if kind not in AGREEMENT_EVENT_KINDS:
+        raise AgreementRefused("unknown_event_kind", f"one of {', '.join(AGREEMENT_EVENT_KINDS)}")
+    with connect() as connection:
+        row = connection.execute("SELECT * FROM agreements WHERE id = ?", (agreement_id,)).fetchone()
+        if row is None:
+            raise AgreementRefused("unknown_agreement", f"no agreement with the id {agreement_id}")
+        introduction = _introduction_parties(connection, row["introduction_id"])
+        if account["id"] not in (introduction["from_account"], introduction["to_account"]):
+            raise AgreementRefused("not_a_party", "this record is not yours")
+        if row["state"] != "agreed":
+            raise AgreementRefused("not_agreed_yet",
+                                   "milestones start once the terms are agreed, not before")
+        if kind == "issue" and len(str(note or "").strip()) < 3:
+            raise AgreementRefused("empty_note", "an issue without a word about it is not a record")
+        envelope = _evidence(f"agreement.{kind}",
+                             {"agreement_id": agreement_id, "by": account["email"], "note": str(note or "")[:400]},
+                             {"recorded": True}, authority="self-declared")
+        event_id = f"ae-{secrets.token_hex(6)}"
+        connection.execute(
+            "INSERT INTO agreement_events (id, agreement_id, kind, actor, note, created_at, evidence_id)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (event_id, agreement_id, kind, account["email"], str(note or "")[:600], _now(),
+             envelope["evidence_id"]))
+        ids = json.loads(row["evidence_ids"] or "[]") + [envelope["evidence_id"]]
+        connection.execute("UPDATE agreements SET evidence_ids = ? WHERE id = ?", (json.dumps(ids), agreement_id))
+        _store_envelope(connection, agreement_id, envelope)
+    return {"id": event_id, "kind": kind, "evidence_id": envelope["evidence_id"]}
+
+
+def verify_agreement(row) -> dict:
+    """Check the record without trusting this service: rebuild the signed bytes from the stored terms, then
+    check both signatures against the public keys of the two accounts, then recompute every evidence id."""
+    from arli_engine.core.evidence import Evidence
+    from arli_engine.core.signing import verify_signed_bytes
+
+    reasons: list[str] = []
+    rebuilt = _agreement_body(row["introduction_id"], row["version"], row["proposed_by_email"],
+                              json.loads(row["terms"]))
+    body_matches = rebuilt.decode("utf-8") == row["body"]
+    if not body_matches:
+        reasons.append("the stored bytes are not the bytes the terms give")
+    proposer_jwk, proposer_ok = {}, False
+    acceptor_jwk, acceptor_ok = {}, None
+    with connect() as connection:
+        proposer_jwk = json.loads(connection.execute(
+            "SELECT public_jwk FROM accounts WHERE id = ?", (row["proposed_by"],)).fetchone()["public_jwk"])
+        if row["accepted_by"]:
+            acceptor_jwk = json.loads(connection.execute(
+                "SELECT public_jwk FROM accounts WHERE id = ?", (row["accepted_by"],)).fetchone()["public_jwk"])
+        envelopes = [r["envelope"] for r in connection.execute(
+            "SELECT envelope FROM evidence_records WHERE subject = ?", (row["id"],)).fetchall()]
+    proposer_ok, why = verify_signed_bytes(proposer_jwk, row["body"].encode("utf-8"),
+                                           json.loads(row["signature_proposer"]))
+    reasons += [f"proposer: {reason}" for reason in why]
+    if row["signature_acceptor"]:
+        acceptor_ok, why = verify_signed_bytes(acceptor_jwk, row["body"].encode("utf-8"),
+                                               json.loads(row["signature_acceptor"]))
+        reasons += [f"acceptor: {reason}" for reason in why]
+    elif row["state"] == "agreed":
+        acceptor_ok = False
+        reasons.append("an agreed record without the second signature")
+
+    evidence_ok = all(Evidence.from_json(json.loads(raw)).verify_id() for raw in envelopes)
+    if not evidence_ok:
+        reasons.append("an evidence id does not recompute from its envelope")
+    return {"body_recomputes": body_matches, "proposer_signature_holds": proposer_ok,
+            "acceptor_signature_holds": acceptor_ok, "evidence_ids_recompute": evidence_ok,
+            "checked_reasons": reasons}
+
+
+def agreement_view(account: dict, row) -> dict:
+    with connect() as connection:
+        events = connection.execute(
+            "SELECT id, kind, actor, note, created_at, evidence_id FROM agreement_events"
+            " WHERE agreement_id = ? ORDER BY created_at", (row["id"],)).fetchall()
+    return {
+        "id": row["id"], "introduction_id": row["introduction_id"], "version": row["version"],
+        "state": row["state"], "terms": json.loads(row["terms"]),
+        "proposed_by": row["proposed_by_email"], "accepted_by": row["accepted_by_email"],
+        "created_at": row["created_at"], "accepted_at": row["accepted_at"],
+        "yours_to_decide": (row["state"] == "proposed" and account["id"] != row["proposed_by"]),
+        "events": [dict(event) for event in events],
+        "evidence_ids": json.loads(row["evidence_ids"] or "[]"),
+        "verification": verify_agreement(row),
+        "signatures": {"proposer": json.loads(row["signature_proposer"]),
+                       "acceptor": json.loads(row["signature_acceptor"]) if row["signature_acceptor"] else None},
+    }
+
+
+def agreements_for(account: dict, introduction_id: str) -> dict:
+    with connect() as connection:
+        introduction = connection.execute(
+            "SELECT * FROM introductions WHERE id = ?", (introduction_id,)).fetchone()
+        if introduction is None or account["id"] not in (introduction["from_account"], introduction["to_account"]):
+            raise AgreementRefused("unknown_introduction", f"no introduction with the id {introduction_id}")
+        rows = connection.execute(
+            "SELECT * FROM agreements WHERE introduction_id = ? ORDER BY version", (introduction_id,)).fetchall()
+    return {"introduction_id": introduction_id,
+            "records": [agreement_view(account, row) for row in rows],
+            "note": "Terms are signed by both accounts over the same bytes, and the bytes are kept, so anyone "
+                    "holding the id can check the signatures instead of taking our word for it."}
+
+
 def entry_for(agent_id: str) -> dict | None:
     for agent in ROSTER:
         if agent["id"] == agent_id:
@@ -967,11 +1325,25 @@ class Handler(BaseHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _serve_page(self, path: Path) -> None:
+        """Serve a page without letting it be cached.
+
+        A cached page is a page from an older deployment: the browser keeps the old script, the script calls
+        endpoints that have moved, and the person sees a form that does nothing. Cheap to prevent, confusing
+        to debug afterwards.
+        """
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(path.read_bytes())))
+        self.send_header("Cache-Control", "no-store, must-revalidate")
+        self.end_headers()
+        self.wfile.write(path.read_bytes())
+
     def _serve_home(self) -> None:
         for name in ("home.html", "index.html"):
             candidate = HERE / name
             if candidate.is_file():
-                self._send(200, candidate.read_bytes(), "text/html; charset=utf-8")
+                self._serve_page(candidate)
                 return
         self._json(500, {"error": "no page to serve"})
 
@@ -980,7 +1352,7 @@ class Handler(BaseHandler):
         if path == "/account":
             page = HERE / "account.html"
             if page.is_file():
-                self._send(200, page.read_bytes(), "text/html; charset=utf-8")
+                self._serve_page(page)
             else:
                 self._json(500, {"error": "no account page"})
             return
@@ -1031,7 +1403,7 @@ class Handler(BaseHandler):
         if path in ("/app", "/app/"):
             page = HERE / "app.html"
             if page.is_file():
-                self._send(200, page.read_bytes(), "text/html; charset=utf-8")
+                self._serve_page(page)
             else:
                 self._json(500, {"error": "no app page"})
             return
@@ -1055,14 +1427,46 @@ class Handler(BaseHandler):
                 return
             self._json(200, {"agents": app_agents(account["id"])})
             return
+        if path == "/api/app/agreements":
+            account = account_by_session(self._cookie_token())
+            if account is None:
+                self._json(401, {"error": "not_signed_in", "detail": "Sign in first."})
+                return
+            try:
+                self._json(200, agreements_for(account, query.get("introduction_id", "")))
+            except AgreementRefused as error:
+                self._json(409, {"error": error.code, "detail": error.detail})
+            return
+        if path.startswith("/api/verify/agreement/"):
+            agreement_id = path.rsplit("/", 1)[-1]
+            with connect() as connection:
+                row = connection.execute("SELECT * FROM agreements WHERE id = ?", (agreement_id,)).fetchone()
+            if row is None:
+                self._json(404, {"error": "unknown_agreement",
+                                 "detail": f"no agreement with the id {agreement_id}"})
+                return
+            self._json(200, {
+                "id": row["id"], "state": row["state"], "version": row["version"],
+                "terms": json.loads(row["terms"]),
+                "proposed_by": row["proposed_by_email"], "accepted_by": row["accepted_by_email"],
+                "signed_bytes": row["body"],
+                "signatures": {"proposer": json.loads(row["signature_proposer"]),
+                               "acceptor": (json.loads(row["signature_acceptor"])
+                                            if row["signature_acceptor"] else None)},
+                "verification": verify_agreement(row),
+                "note": "Anyone holding this id can check that both sides signed these exact bytes. No account "
+                        "is needed to check it, and nothing here moves money.",
+            })
+            return
         super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802
         path = self.path.split("?")[0]
         if path not in ("/api/agents", "/api/scan", "/api/negotiate", "/api/connect", "/api/intake",
                          "/api/app/register", "/api/app/login", "/api/app/logout",
-                         "/api/app/intake", "/api/app/introductions") and not (
-            path.startswith("/api/app/introductions/") or
+                         "/api/app/intake", "/api/app/introductions",
+                         "/api/app/agreements") and not (
+            path.startswith("/api/app/introductions/") or path.startswith("/api/app/agreements/") or
             path.startswith("/api/agents/") and len(path) > len("/api/agents/")
         ):
             super().do_POST()
@@ -1153,10 +1557,48 @@ class Handler(BaseHandler):
                                                  str(payload.get("message") or ""))
                 elif action == "messages":
                     result = send_introduction_message(account, intro_id, str(payload.get("body") or ""))
+                elif action == "agreement":
+                    result = propose_agreement(account, intro_id, payload)
                 else:
                     self._json(404, {"error": "not found", "path": path})
                     return
             except IntroductionRefused as error:
+                self._json(409, {"error": error.code, "detail": error.detail})
+                return
+            # A refusal from the terms is a refusal like any other, and an exception that escapes the handler
+            # closes the connection with no answer at all, which is the least useful thing a door can do.
+            except AgreementRefused as error:
+                self._json(409, {"error": error.code, "detail": error.detail})
+                return
+            self._json(200, result)
+            return
+
+        if path.startswith("/api/app/agreements/"):
+            parts = path.strip("/").split("/")
+            if len(parts) < 5:
+                self._json(404, {"error": "not found", "path": path})
+                return
+            agreement_id, action = parts[3], parts[4]
+            account = account_by_session(self._cookie_token())
+            if account is None:
+                self._json(401, {"error": "not_signed_in", "detail": "Sign in first."})
+                return
+            try:
+                if action == "decide":
+                    decision = str(payload.get("decision") or "").strip().lower()
+                    if decision not in ("accept", "decline"):
+                        self._json(400, {"error": "decision_required", "detail": "accept or decline"})
+                        return
+                    result = decide_agreement(account, agreement_id, decision == "accept",
+                                              str(payload.get("note") or ""))
+                elif action == "events":
+                    result = record_agreement_event(account, agreement_id,
+                                                    str(payload.get("kind") or ""),
+                                                    str(payload.get("note") or ""))
+                else:
+                    self._json(404, {"error": "not found", "path": path})
+                    return
+            except AgreementRefused as error:
                 self._json(409, {"error": error.code, "detail": error.detail})
                 return
             self._json(200, result)

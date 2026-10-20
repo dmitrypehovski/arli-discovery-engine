@@ -199,10 +199,11 @@ th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:
   }
   var mode = 'register';
 
-  function showApp(me){
+  function showApp(me0){
     $('auth').classList.add('hidden');
     $('app').classList.remove('hidden');
-    $('who').textContent = me && me.email ? me.email : '';
+    me = (me0 && me0.email) ? me0.email : '';
+    $('who').textContent = me;
     $('signOut').classList.remove('hidden');
     loadAgents();
     loadIntros();
@@ -353,6 +354,8 @@ th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:
         return '<div class="note"><span class="mono">' + esc(m.author) + '</span> · ' + esc(m.body) + '</div>'; }).join('') + '</div>';
       body += '<div style="margin-top:8px"><input placeholder="say something" id="body-' + esc(i.id) + '"></div>' +
         '<div class="row" style="margin-top:8px"><button class="btn" style="padding:6px 11px;font-size:12.5px" data-send="' + esc(i.id) + '">Send</button></div>';
+      body += '<div id="agr-' + esc(i.id) + '" style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--rule-strong)">' +
+        '<span class="note">Loading the record…</span></div>';
     } else if(i.note_on_contact){
       body += '<div class="note" style="margin-top:6px">' + esc(i.note_on_contact) + '</div>';
     }
@@ -379,6 +382,9 @@ th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:
           post('/api/app/introductions/' + id + '/decide', {decision: 'decline'}).then(function(){ loadIntros(); });
         });
       });
+      (d.incoming || []).concat(d.outgoing || []).forEach(function(i){
+        if(i.state === 'introduced'){ loadAgreements(i.id); }
+      });
       Array.prototype.forEach.call(document.querySelectorAll('[data-send]'), function(b){
         b.addEventListener('click', function(){
           var id = b.getAttribute('data-send'), box = document.getElementById('body-' + id);
@@ -389,6 +395,142 @@ th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:
         });
       });
     });
+  }
+
+  var me = '';
+
+  function termsLine(t){
+    var parts = [];
+    if(t.amount_minor !== undefined && t.amount_minor !== null){
+      parts.push((t.amount_minor / 100).toFixed(2) + ' ' + t.currency);
+    }
+    if(t.deliver_by){ parts.push('by ' + t.deliver_by); }
+    if(t.place){ parts.push('at ' + t.place); }
+    return parts.join(' · ');
+  }
+
+  function recordHtml(introId, a){
+    var html = '<div class="agent">';
+    html += '<div class="mono">record ' + esc(a.id) + ' · version ' + a.version + ' · ' + esc(a.state) + '</div>';
+    html += '<div><b>' + esc(a.terms.subject) + '</b>';
+    var line = termsLine(a.terms);
+    if(line){ html += ' <span class="chip">' + esc(line) + '</span>'; }
+    html += '</div>';
+    html += '<div class="note">proposed by ' + esc(a.proposed_by) + ' · ' + esc(a.created_at) + '</div>';
+    if(a.terms.notes){ html += '<div class="note">' + esc(a.terms.notes) + '</div>'; }
+
+    if(a.yours_to_decide){
+      html += '<div style="margin-top:8px"><input placeholder="a line with your answer" id="agn-' + esc(a.id) + '"></div>' +
+        '<div class="row" style="margin-top:8px">' +
+        '<button class="btn btn-p" style="padding:6px 11px;font-size:12.5px" data-acc="' + esc(a.id) + '">Accept and sign</button>' +
+        '<button class="btn" style="padding:6px 11px;font-size:12.5px" data-dec="' + esc(a.id) + '">Decline</button></div>';
+    }
+    if(a.state === 'proposed' && a.proposed_by === me){
+      html += '<div class="note" style="margin-top:6px">Waiting for their answer. Neither side sees a signature until both sign the same bytes.</div>';
+    }
+    if(a.state === 'declined'){
+      html += '<div class="note" style="margin-top:6px">Declined by ' + esc(a.accepted_by) + '. Nothing here is agreed, and nothing says why.</div>';
+    }
+    if(a.state === 'agreed'){
+      var v = a.verification || {};
+      html += '<div class="note" style="margin-top:8px">Both sides signed the same bytes. Checked: body recomputes <b>' +
+        (v.body_recomputes ? 'yes' : 'no') + '</b> · proposer signature <b>' + (v.proposer_signature_holds ? 'yes' : 'no') +
+        '</b> · acceptor signature <b>' + (v.acceptor_signature_holds ? 'yes' : 'no') + '</b> · evidence ids <b>' +
+        (v.evidence_ids_recompute ? 'yes' : 'no') + '</b></div>';
+      html += '<div class="note mono" style="margin-top:4px">' +
+        '<a href="/api/verify/agreement/' + esc(a.id) + '" target="_blank">check it without an account</a></div>';
+      html += '<div style="margin-top:8px"><input placeholder="a note with the milestone (a word is required for an issue)" id="evn-' + esc(a.id) + '"></div>' +
+        '<div class="row" style="margin-top:8px">' +
+        '<button class="btn" style="padding:6px 11px;font-size:12.5px" data-ev="delivered|' + esc(a.id) + '">Mark delivered</button>' +
+        '<button class="btn" style="padding:6px 11px;font-size:12.5px" data-ev="accepted|' + esc(a.id) + '">Mark accepted</button>' +
+        '<button class="btn" style="padding:6px 11px;font-size:12.5px" data-ev="issue|' + esc(a.id) + '">Raise an issue</button></div>';
+      html += (a.events || []).map(function(e){
+        return '<div class="note" style="margin-top:4px"><b>' + esc(e.kind) + '</b> · ' + esc(e.actor) +
+          (e.note ? ' · ' + esc(e.note) : '') + '</div>'; }).join('');
+    }
+    return html + '</div>';
+  }
+
+  function wireRecords(introId, container){
+    Array.prototype.forEach.call(container.querySelectorAll('[data-acc]'), function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-acc'), n = document.getElementById('agn-' + id);
+        post('/api/app/agreements/' + id + '/decide', {decision: 'accept', note: n ? n.value : ''}).then(function(res){
+          if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
+          loadAgreements(introId);
+        });
+      });
+    });
+    Array.prototype.forEach.call(container.querySelectorAll('[data-dec]'), function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-dec');
+        post('/api/app/agreements/' + id + '/decide', {decision: 'decline'}).then(function(){ loadAgreements(introId); });
+      });
+    });
+    Array.prototype.forEach.call(container.querySelectorAll('[data-ev]'), function(b){
+      b.addEventListener('click', function(){
+        var pair = b.getAttribute('data-ev').split('|'), kind = pair[0], id = pair[1];
+        var n = document.getElementById('evn-' + id);
+        post('/api/app/agreements/' + id + '/events', {kind: kind, note: n ? n.value : ''}).then(function(res){
+          if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
+          loadAgreements(introId);
+        });
+      });
+    });
+  }
+
+  function loadAgreements(introId){
+    fetch('/api/app/agreements?introduction_id=' + encodeURIComponent(introId))
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var box = document.getElementById('agr-' + introId);
+        if(!box){ return; }
+        if(!d.records){
+          box.innerHTML = '<div class="note">' + esc(d.detail || d.error || 'nothing here yet') + '</div>';
+          return;
+        }
+        var open = (d.records || []).filter(function(a){ return a.state !== 'superseded'; }).slice().reverse();
+        var agreed = open.some(function(a){ return a.state === 'agreed'; });
+        box.innerHTML =
+          (agreed ? '' :
+            '<label class="f">Put terms on the table</label>' +
+            '<input placeholder="what it is about, one line" id="t-subject-' + esc(introId) + '">' +
+            '<div class="grid2" style="margin-top:8px">' +
+              '<div><label class="f">Amount in minor units, optional</label><input id="t-amount-' + esc(introId) + '" placeholder="1200000"></div>' +
+              '<div><label class="f">Currency, if there is an amount</label><input id="t-currency-' + esc(introId) + '" placeholder="CNY"></div>' +
+            '</div>' +
+            '<div class="grid2" style="margin-top:8px">' +
+              '<div><label class="f">Deliver by, optional</label><input id="t-date-' + esc(introId) + '" placeholder="2026-11-15"></div>' +
+              '<div><label class="f">Place, optional</label><input id="t-place-' + esc(introId) + '" placeholder="Shenzhen"></div>' +
+            '</div>' +
+            '<label class="f">Anything else worth writing down</label>' +
+            '<input id="t-notes-' + esc(introId) + '" placeholder="optional">' +
+            '<div class="row" style="margin-top:10px"><button class="btn btn-p" id="t-go-' + esc(introId) + '">Sign and propose</button></div>' +
+            '<div class="note" style="margin-top:6px">Signing uses your account key. The other side signs the same bytes, and anyone holding the record id can check both afterwards.</div>') +
+          '<div id="agr-records-' + esc(introId) + '"></div>';
+
+        var propose = document.getElementById('t-go-' + introId);
+        if(propose){
+          propose.addEventListener('click', function(){
+            post('/api/app/introductions/' + introId + '/agreement', {
+              subject: document.getElementById('t-subject-' + introId).value,
+              amount_minor: document.getElementById('t-amount-' + introId).value,
+              currency: document.getElementById('t-currency-' + introId).value,
+              deliver_by: document.getElementById('t-date-' + introId).value,
+              place: document.getElementById('t-place-' + introId).value,
+              notes: document.getElementById('t-notes-' + introId).value
+            }).then(function(res){
+              if(res.code !== 200){ window.alert('Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? '\n' + res.body.detail : '')); return; }
+              loadAgreements(introId);
+            });
+          });
+        }
+
+        var records = document.getElementById('agr-records-' + introId);
+        if(!open.length){ records.innerHTML = '<div class="note">No record yet. The first proposal starts one.</div>'; return; }
+        records.innerHTML = open.map(function(a){ return recordHtml(introId, a); }).join('');
+        wireRecords(introId, records);
+      });
   }
 
   fetch('/api/app/me').then(function(r){ return r.json(); }).then(function(d){
