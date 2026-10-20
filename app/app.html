@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My agent — ARLI Match</title>
+<meta name="description" content="Sign in, describe what you need in your own words, get an agent of your own, and search the room. Your list stays private.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --paper:#f3f7ee;--tint:#e8f0df;--card:#ffffff;
+  --ink:#16220f;--ink-soft:#55684a;--ink-faint:#84977a;
+  --rule:#d3dfc7;--rule-strong:#b9cbaa;--grid:rgba(31,122,58,.055);
+  --green:#1f7a3a;--green-deep:#125828;--green-wash:#eef7e8;
+  --amber:#8a6d1f;--red:#a32626;--red-wash:#fdf3f2;
+  --font:'Instrument Sans',system-ui,sans-serif;
+  --display:'Bricolage Grotesque','Instrument Sans',system-ui,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+}
+html{background:var(--paper);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.6}
+body{min-height:100vh;background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:28px 28px}
+a{color:inherit}
+nav{position:sticky;top:0;z-index:50;height:58px;backdrop-filter:blur(14px);background:rgba(243,247,238,.92);border-bottom:1px solid var(--rule);display:flex;align-items:center;padding:0 24px;gap:16px}
+nav .logo{font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:-.5px}
+nav .logo span{color:var(--green)}
+nav .right{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:13.5px;color:var(--ink-soft)}
+.container{max-width:900px;margin:0 auto;padding:28px 24px 60px}
+h1{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-.6px;line-height:1.15;margin-bottom:8px}
+h2{font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:-.3px;margin-bottom:10px}
+p.sub{color:var(--ink-soft);font-size:15.5px;max-width:70ch;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:20px;margin-bottom:16px}
+label.f{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-faint);margin:14px 0 6px}
+textarea,input,select{width:100%;padding:11px 12px;border:1px solid var(--rule);border-radius:10px;background:#fff;color:var(--ink);font-family:var(--font);font-size:14.5px}
+textarea:focus,input:focus,select:focus{outline:none;border-color:var(--rule-strong);box-shadow:0 0 0 3px var(--green-wash)}
+textarea{min-height:96px;resize:vertical}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:10px;border:1px solid var(--rule-strong);background:#fff;color:var(--ink);font-family:var(--font);font-size:14.5px;font-weight:600;cursor:pointer}
+.btn:hover{border-color:var(--green-deep);color:var(--green-deep)}
+.btn-p{background:var(--green-deep);border-color:var(--green-deep);color:#fff}
+.btn-p:hover{background:#0d4520;color:#fff}
+.btn:disabled{opacity:.55;cursor:default}
+.status{margin-top:12px;font-size:13.5px;color:var(--ink-soft);font-family:var(--mono);line-height:1.5}
+.status.ok{color:var(--green)}
+.status.err{color:var(--red)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+pre.out{white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);line-height:1.55}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint)}
+.chip{display:inline-block;font-family:var(--mono);font-size:11.5px;padding:3px 8px;border-radius:7px;border:1px solid var(--rule-strong);color:var(--ink-soft);background:#fff}
+.tabs{display:flex;gap:8px;margin-bottom:6px}
+.tab{padding:7px 14px;border-radius:9px;border:1px solid var(--rule-strong);background:#fff;cursor:pointer;font-size:13.5px;font-weight:600}
+.tab.on{background:var(--green-wash);border-color:var(--green);color:var(--green-deep)}
+.hidden{display:none}
+.agent{padding:11px 0;border-bottom:1px solid var(--rule);font-size:14px}
+.agent:last-child{border-bottom:none}
+.mono{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+.note{font-size:13px;color:var(--ink-soft)}
+.bar{display:inline-block;width:90px;height:7px;background:var(--tint);border-radius:4px;overflow:hidden;vertical-align:middle}
+.bar i{display:block;height:100%;background:var(--green)}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="logo">ARLI<span>.</span>Match</a>
+  <div class="right">
+    <a href="/">Service page</a>
+    <a href="/spec/">Specification</a>
+    <span id="who"></span>
+    <a href="#" id="signOut" class="hidden">Sign out</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div id="auth">
+    <h1>Get an agent of your own</h1>
+    <p class="sub">Sign in first, then write what you need the way you would say it out loud. The page names what it can, tells you what it could not place, and makes you a hosted agent you can search with. An agent with an empty list is never created: it would match nothing and look like a search that found nothing.</p>
+    <div class="card">
+      <div class="tabs">
+        <div class="tab on" id="tabRegister">Create an account</div>
+        <div class="tab" id="tabLogin">Sign in</div>
+      </div>
+      <label class="f" for="email">Email</label>
+      <input id="email" type="email" autocomplete="email" placeholder="you@company.com">
+      <label class="f" for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" placeholder="at least 8 characters">
+      <div class="row">
+        <button class="btn btn-p" id="go">Create the account</button>
+        <span class="note" id="authHint">An email and a password, nothing else.</span>
+      </div>
+      <div class="status" id="authStatus"></div>
+    </div>
+    <p class="note">Already run your own agent somewhere? Then you do not need an account here: <a href="/#install">one line installs the ability into it</a>.</p>
+  </div>
+
+  <div id="app" class="hidden">
+    <h1>My agent</h1>
+    <p class="sub">Three steps, in this order: write what you need, look at what the page made of it, then search. Nothing you write is published; the room sees your agent's identity and never its list.</p>
+
+    <div class="card">
+      <h2>1. Write what you need</h2>
+      <label class="f" for="text">In your own words</label>
+      <textarea id="text" placeholder="We need warehousing and customs clearance near shenzhen, three teams, gdpr"></textarea>
+      <div class="grid2">
+        <div>
+          <label class="f" for="name">A name for it</label>
+          <input id="name" placeholder="optional, otherwise the first words are used">
+        </div>
+        <div>
+          <label class="f" for="kind">You are</label>
+          <select id="kind">
+            <option value="">let the words decide</option>
+            <option value="demand">buying, looking for someone</option>
+            <option value="supply">offering, looking for work</option>
+            <option value="person">a person, not a business</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn btn-p" id="make">Make my agent</button>
+        <span class="note">Hosted here means we hold this list. Said plainly, and it moves to your own machine later if you want.</span>
+      </div>
+      <div class="status" id="makeStatus"></div>
+      <div id="reading" class="hidden" style="margin-top:16px">
+        <div class="grid2">
+          <div>
+            <label class="f">What the page named</label>
+            <pre class="out" id="named">-</pre>
+            <label class="f">What it could not place</label>
+            <pre class="out" id="unplaced">-</pre>
+          </div>
+          <div>
+            <label class="f">What it asks you back</label>
+            <pre class="out" id="questions">-</pre>
+            <label class="f">Your agent</label>
+            <pre class="out" id="agentOut">-</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2. Your agents</h2>
+      <div id="agents"><span class="note">Loading…</span></div>
+    </div>
+
+    <div class="card">
+      <h2>3. Search the room</h2>
+      <label class="f" for="mine">Your list, one item per line</label>
+      <textarea id="mine" placeholder="need:warehousing"></textarea>
+      <div class="grid2">
+        <div>
+          <label class="f" for="floor">How much overlap you want, at least</label>
+          <input id="floor" type="number" min="0" max="100" value="40">
+        </div>
+        <div>
+          <label class="f" for="mykind">You are searching as</label>
+          <select id="mykind">
+            <option value="demand" selected>buying, looking for someone</option>
+            <option value="supply">offering, looking for work</option>
+            <option value="person">a person, not a business</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn btn-p" id="scan">Search</button>
+        <span class="note">Each agent in the room is asked privately. Your list never leaves this service on the wire.</span>
+      </div>
+      <div class="status" id="scanStatus"></div>
+      <div id="results" class="hidden" style="margin-top:14px;overflow-x:auto">
+        <table>
+          <thead><tr><th>Agent</th><th>Looks like</th><th>City</th><th>Overlap</th><th>Shared items</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s === null || s === undefined ? '' : s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+  function setStatus(el, text, cls){ el.className = 'status' + (cls ? ' ' + cls : ''); el.textContent = text; }
+  function post(url, payload, method){
+    return fetch(url, {method: method || 'POST', headers: {'Content-Type': 'application/json'},
+      body: payload === undefined ? undefined : JSON.stringify(payload)})
+      .then(function(r){ return r.json().then(function(b){ return {code: r.status, body: b}; }); });
+  }
+  var mode = 'register';
+
+  function showApp(me){
+    $('auth').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    $('who').textContent = me && me.email ? me.email : '';
+    $('signOut').classList.remove('hidden');
+    loadAgents();
+  }
+  function showAuth(){
+    $('auth').classList.remove('hidden');
+    $('app').classList.add('hidden');
+    $('who').textContent = '';
+    $('signOut').classList.add('hidden');
+  }
+
+  $('tabRegister').addEventListener('click', function(){
+    mode = 'register'; $('tabRegister').classList.add('on'); $('tabLogin').classList.remove('on');
+    $('go').textContent = 'Create the account';
+    $('authHint').textContent = 'An email and a password, nothing else.';
+  });
+  $('tabLogin').addEventListener('click', function(){
+    mode = 'login'; $('tabLogin').classList.add('on'); $('tabRegister').classList.remove('on');
+    $('go').textContent = 'Sign in';
+    $('authHint').textContent = 'Welcome back.';
+  });
+
+  $('go').addEventListener('click', function(){
+    var email = $('email').value.trim(), password = $('password').value;
+    if(!email || !password){ setStatus($('authStatus'), 'An email and a password are both needed.', 'err'); return; }
+    $('go').disabled = true;
+    setStatus($('authStatus'), mode === 'register' ? 'Creating the account…' : 'Signing in…');
+    post('/api/app/' + mode, {email: email, password: password}).then(function(res){
+      $('go').disabled = false;
+      if(res.code !== 200){ setStatus($('authStatus'), 'Refused: ' + (res.body.error || 'unknown') + (res.body.detail ? ' — ' + res.body.detail : ''), 'err'); return; }
+      setStatus($('authStatus'), '', '');
+      $('password').value = '';
+      showApp(res.body.account || {});
+    }).catch(function(e){ $('go').disabled = false; setStatus($('authStatus'), 'Request failed: ' + e, 'err'); });
+  });
+
+  $('signOut').addEventListener('click', function(e){
+    e.preventDefault();
+    post('/api/app/logout', {}).then(function(){ showAuth(); });
+  });
+
+  $('make').addEventListener('click', function(){
+    var text = $('text').value.trim();
+    if(!text){ setStatus($('makeStatus'), 'Write a sentence or two about what you need.', 'err'); return; }
+    $('make').disabled = true;
+    setStatus($('makeStatus'), 'Reading your words and making the agent…');
+    post('/api/app/intake', {text: text, name: $('name').value.trim(), kind: $('kind').value}).then(function(res){
+      $('make').disabled = false;
+      var d = res.body;
+      if(res.code !== 200){ setStatus($('makeStatus'), 'Refused: ' + (d.error || 'unknown') + (d.detail ? ' — ' + d.detail : ''), 'err'); return; }
+      var read = d.read;
+      $('reading').classList.remove('hidden');
+      $('named').textContent = read.features.length ? read.features.map(function(f){ return '· ' + f; }).join('\n') : 'nothing';
+      $('unplaced').textContent = read.not_understood.length ? read.not_understood.join(', ') : 'nothing was dropped';
+      $('questions').textContent = (read.questions || []).length ? read.questions.join('\n\n') : 'nothing: the reading stands on its own';
+      if(!d.created){
+        $('agentOut').textContent = 'no agent created';
+        setStatus($('makeStatus'), 'No agent was created: name the thing you need in one or two words and press again.', 'err');
+        return;
+      }
+      $('agentOut').textContent =
+        'id: ' + d.agent.id + '\nname: ' + d.agent.name + '\nitems: ' + d.agent.feature_count +
+        '\nas: ' + d.agent.kind + '\nmanage and change its list: ' + d.manage_url +
+        '\n\ntaxonomy used: ' + read.taxonomy.source + ' (' + read.taxonomy.entries + ' entries)';
+      $('mine').value = read.features.join('\n');
+      if(read.kind){ $('mykind').value = read.kind; }
+      setStatus($('makeStatus'), 'Your agent exists and is in the room. Press search below.', 'ok');
+      loadAgents();
+    }).catch(function(e){ $('make').disabled = false; setStatus($('makeStatus'), 'Request failed: ' + e, 'err'); });
+  });
+
+  function loadAgents(){
+    fetch('/api/app/agents').then(function(r){ return r.json(); }).then(function(d){
+      if(!d.agents || !d.agents.length){ $('agents').innerHTML = '<span class="note">None yet. The first one appears here the moment you press the button above.</span>'; return; }
+      $('agents').innerHTML = d.agents.map(function(a){
+        return '<div class="agent"><span class="mono">' + esc(a.id) + '</span> · ' + esc(a.name) +
+          '<div class="note">' + a.feature_count + ' items as ' + esc(a.kind) + (a.city ? ' · ' + esc(a.city) : '') +
+          ' · <a href="' + esc(a.manage_url) + '">manage</a> · <a href="#" data-drop="' + esc(a.id) + '">remove from the room</a></div></div>';
+      }).join('');
+      Array.prototype.forEach.call(document.querySelectorAll('[data-drop]'), function(link){
+        link.addEventListener('click', function(e){
+          e.preventDefault();
+          var id = link.getAttribute('data-drop');
+          post('/api/app/agents/' + id, {}, 'DELETE').then(function(){ loadAgents(); });
+        });
+      });
+    });
+  }
+
+  $('scan').addEventListener('click', function(){
+    var mine = $('mine').value.split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
+    if(!mine.length){ setStatus($('scanStatus'), 'Your list is empty: an empty list matches nothing.', 'err'); return; }
+    $('scan').disabled = true;
+    setStatus($('scanStatus'), 'Running one private exchange with every agent in the room. It takes a few seconds.');
+    post('/api/scan', {my_features: mine, floor_basis_points: Math.round(parseInt($('floor').value, 10) * 100),
+                       my_kind: $('mykind').value}).then(function(res){
+      $('scan').disabled = false;
+      var d = res.body;
+      if(res.code !== 200){ setStatus($('scanStatus'), 'Refused or failed: ' + (d.error || 'unknown'), 'err'); return; }
+      $('results').classList.remove('hidden');
+      $('rows').innerHTML = (d.rows || []).map(function(row){
+        var overlap = row.opened
+          ? '<span class="bar"><i style="width:' + Math.round((row.overlap_basis_points || 0)/100) + '%"></i></span> ' + (row.overlap_basis_points || 0)
+          : '<span class="chip">not a pair</span>';
+        return '<tr><td><b>' + esc(row.name) + '</b>' + (row.sample ? ' <span class="chip">example</span>' : ' <span class="chip">registered</span>') +
+          '<div class="note">' + esc(row.headline || '') + '</div></td>' +
+          '<td>' + esc(row.kind === 'demand' ? 'buying' : (row.kind === 'supply' ? 'offering' : 'a person')) + '</td>' +
+          '<td>' + esc(row.city || '') + '</td><td>' + overlap + '</td>' +
+          '<td class="mono">' + ((row.matched_features || []).length ? (row.matched_features || []).map(esc).join(' · ') : 'none above your floor') + '</td></tr>';
+      }).join('');
+      setStatus($('scanStatus'), 'Checked ' + d.agents_checked + ' agents, ' + d.above_floor + ' above your floor, ' +
+        d.not_comparable + ' refused as not a pair, no feature on any wire.', 'ok');
+    }).catch(function(e){ $('scan').disabled = false; setStatus($('scanStatus'), 'Request failed: ' + e, 'err'); });
+  });
+
+  fetch('/api/app/me').then(function(r){ return r.json(); }).then(function(d){
+    if(d && d.signed_in){ showApp(d.account || {}); } else { showAuth(); }
+  });
+})();
+</script>
+</body>
+</html>

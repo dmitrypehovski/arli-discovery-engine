@@ -13,12 +13,16 @@ Run: .venv/bin/python app/service.py --port 8141
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import secrets
 import sqlite3
+import ssl
 import sys
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timedelta, timezone
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
@@ -79,6 +83,22 @@ def connect() -> sqlite3.Connection:
     )
     # Added after the first rows existed: a remote agent that stops answering has to leave the room,
     # and the reason has to be visible rather than silent.
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS accounts (
+               id TEXT PRIMARY KEY,
+               email TEXT NOT NULL UNIQUE,
+               password_hash TEXT NOT NULL,
+               created_at TEXT NOT NULL
+           )"""
+    )
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS sessions (
+               token TEXT PRIMARY KEY,
+               account_id TEXT NOT NULL,
+               created_at TEXT NOT NULL,
+               expires_at TEXT NOT NULL
+           )"""
+    )
     for column, definition in (("failures", "INTEGER NOT NULL DEFAULT 0"),
                                ("last_checked", "TEXT NOT NULL DEFAULT ''"),
                                ("unreachable_reason", "TEXT NOT NULL DEFAULT ''")):
@@ -86,6 +106,11 @@ def connect() -> sqlite3.Connection:
             connection.execute(f"ALTER TABLE remotes ADD COLUMN {column} {definition}")
         except sqlite3.OperationalError:
             pass
+    # Which account made an agent, so a signed-in person can find their own again.
+    try:
+        connection.execute("ALTER TABLE agents ADD COLUMN owner_account TEXT NOT NULL DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
     return connection
 
 
@@ -509,6 +534,151 @@ def intake(payload: dict) -> dict:
     }
 
 
+# --- accounts on this service, for people who have no agent -----------------------------------------
+# Why a separate account system here rather than the platform's: this is the matching product, its app is
+# this site, and a person who registers to get an agent should land on the page that makes one. Two products,
+# two doors, one network underneath.
+SESSION_COOKIE = "arli_match_session"
+SESSION_DAYS = 30
+MIN_PASSWORD_CHARS = 8
+ATTEMPT_WINDOW_SECONDS = 600
+ATTEMPTS_ALLOWED = 8
+_attempts: dict = {}
+
+EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,24}$")
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _hash_password(password: str) -> str:
+    """scrypt with a per-account salt, from the standard library, so no password is ever stored, only its cost."""
+    salt = secrets.token_bytes(16)
+    digest = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2 ** 14, r=8, p=1, dklen=32)
+    return f"scrypt${salt.hex()}${digest.hex()}"
+
+
+def _verify_password(password: str, stored: str) -> bool:
+    try:
+        scheme, salt_hex, digest_hex = str(stored).split("$")
+        if scheme != "scrypt":
+            return False
+        digest = hashlib.scrypt(password.encode("utf-8"), salt=bytes.fromhex(salt_hex),
+                                n=2 ** 14, r=8, p=1, dklen=32)
+    except (ValueError, TypeError):
+        return False
+    return secrets.compare_digest(digest.hex(), digest_hex)
+
+
+def _clean_email(value) -> str:
+    email = str(value or "").strip().lower()
+    if not EMAIL_RE.match(email):
+        raise ValueError("that does not look like an email address")
+    return email
+
+
+def attempts_allowed(bucket: str) -> bool:
+    """A blunt limit on registering and signing in: enough for a person, too little for a script."""
+    now = time.time()
+    recent = [moment for moment in _attempts.get(bucket, []) if now - moment < ATTEMPT_WINDOW_SECONDS]
+    _attempts[bucket] = recent
+    return len(recent) < ATTEMPTS_ALLOWED
+
+
+def note_attempt(bucket: str) -> None:
+    _attempts.setdefault(bucket, []).append(time.time())
+
+
+def _open_session(connection: sqlite3.Connection, account_id: str) -> str:
+    token = secrets.token_urlsafe(32)
+    expires = (datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    connection.execute("INSERT INTO sessions (token, account_id, created_at, expires_at) VALUES (?,?,?,?)",
+                       (token, account_id, _now(), expires))
+    return token
+
+
+def _stored_hash(account_id: str) -> str:
+    with connect() as connection:
+        row = connection.execute("SELECT password_hash FROM accounts WHERE id = ?", (account_id,)).fetchone()
+    return str(row["password_hash"]) if row else ""
+
+
+def account_by_session(token: str) -> dict | None:
+    """Who is signed in, from the cookie and nothing else. An expired or unknown token is nobody."""
+    if not token:
+        return None
+    with connect() as connection:
+        row = connection.execute(
+            """SELECT a.id AS id, a.email AS email
+               FROM sessions AS s JOIN accounts AS a ON a.id = s.account_id
+               WHERE s.token = ? AND s.expires_at > ?""",
+            (token, _now()),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def register_account(email, password) -> tuple[dict, str]:
+    email = _clean_email(email)
+    password = str(password or "")
+    if len(password) < MIN_PASSWORD_CHARS:
+        raise ValueError(f"a password of at least {MIN_PASSWORD_CHARS} characters")
+    account_id = f"u-{secrets.token_hex(6)}"
+    with connect() as connection:
+        if connection.execute("SELECT id FROM accounts WHERE email = ?", (email,)).fetchone():
+            raise ValueError("an account with this email already exists: sign in instead")
+        connection.execute("INSERT INTO accounts (id, email, password_hash, created_at) VALUES (?,?,?,?)",
+                           (account_id, email, _hash_password(password), _now()))
+        token = _open_session(connection, account_id)
+    return {"id": account_id, "email": email}, token
+
+
+def sign_in(email, password) -> tuple[dict | None, str]:
+    """An unknown email and a wrong password give the same answer, on purpose: which one was wrong is not
+    something a stranger gets to learn."""
+    email = str(email or "").strip().lower()
+    with connect() as connection:
+        row = connection.execute("SELECT * FROM accounts WHERE email = ?", (email,)).fetchone()
+        if row is None or not _verify_password(str(password or ""), row["password_hash"]):
+            return None, ""
+        token = _open_session(connection, row["id"])
+    return {"id": row["id"], "email": row["email"]}, token
+
+
+def sign_out(token: str) -> None:
+    if not token:
+        return
+    with connect() as connection:
+        connection.execute("DELETE FROM sessions WHERE token = ?", (token,))
+
+
+def close_account(account_id: str) -> dict:
+    """Close the account and take its agents out of the room. Nothing is left behind for the room to see."""
+    with connect() as connection:
+        agents = [row["id"] for row in connection.execute(
+            "SELECT id FROM agents WHERE owner_account = ?", (account_id,)).fetchall()]
+        connection.execute("UPDATE agents SET active = 0 WHERE owner_account = ?", (account_id,))
+        removed = connection.execute("DELETE FROM sessions WHERE account_id = ?", (account_id,)).rowcount
+        connection.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+    return {"agents_removed": len(agents), "sessions_removed": removed}
+
+
+def app_agents(account_id: str) -> list[dict]:
+    """The agents this account made, with the link that manages each one and nothing of their lists."""
+    with connect() as connection:
+        rows = connection.execute(
+            """SELECT id, name, kind, city, headline, features, owner_token, created_at
+               FROM agents WHERE owner_account = ? AND active = 1 ORDER BY created_at DESC""",
+            (account_id,),
+        ).fetchall()
+    return [{
+        "id": row["id"], "name": row["name"], "kind": row["kind"], "city": row["city"],
+        "headline": row["headline"], "feature_count": len(json.loads(row["features"])),
+        "manage_url": f"https://match.arliwork.com/account?token={row['owner_token']}",
+        "created_at": row["created_at"],
+    } for row in rows]
+
+
 def entry_for(agent_id: str) -> dict | None:
     for agent in ROSTER:
         if agent["id"] == agent_id:
@@ -549,6 +719,41 @@ def update_agent(agent_id: str, token: str, payload: dict) -> dict | None:
 
 class Handler(BaseHandler):
     server_version = "arli-match/0.3"
+
+    def _cookie_token(self) -> str:
+        raw = self.headers.get("Cookie") or ""
+        for part in raw.split(";"):
+            name, _, value = part.strip().partition("=")
+            if name == SESSION_COOKIE:
+                return value
+        return ""
+
+    def _is_https(self) -> bool:
+        """Whether this request arrived over TLS.
+
+        It matters for the cookie: a Secure cookie is not sent back over plain HTTP, so marking it Secure on
+        a stand that speaks HTTP makes signing in fail silently. Production is behind nginx, which says so in
+        X-Forwarded-Proto; a direct TLS socket says so by itself.
+        """
+        if str(self.headers.get("X-Forwarded-Proto") or "").strip().lower() == "https":
+            return True
+        return isinstance(getattr(self, "connection", None), ssl.SSLSocket)
+
+    def _send_with_cookie(self, status: int, payload: dict, token: str, clear: bool = False) -> None:
+        """A session lives in an HttpOnly cookie: no script on the page can read it, and no page can
+        forge it, because the token is random and server-side."""
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        age = 0 if clear else SESSION_DAYS * 24 * 3600
+        secure = "; Secure" if self._is_https() else ""
+        self.send_header("Set-Cookie",
+                         f"{SESSION_COOKIE}={'' if clear else token}; Path=/; HttpOnly; SameSite=Lax"
+                         f"{secure}; Max-Age={age}")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
 
     def _serve_home(self) -> None:
         for name in ("home.html", "index.html"):
@@ -611,11 +816,31 @@ class Handler(BaseHandler):
                              "connected_agents": len(remote_agents()),
                              "database": str(DB_PATH), "network": "network-eu-design"})
             return
+        if path in ("/app", "/app/"):
+            page = HERE / "app.html"
+            if page.is_file():
+                self._send(200, page.read_bytes(), "text/html; charset=utf-8")
+            else:
+                self._json(500, {"error": "no app page"})
+            return
+        if path == "/api/app/me":
+            account = account_by_session(self._cookie_token())
+            self._json(200, {"signed_in": bool(account), "account": account or {}})
+            return
+        if path == "/api/app/agents":
+            account = account_by_session(self._cookie_token())
+            if account is None:
+                self._json(401, {"error": "not_signed_in", "detail": "Sign in first."})
+                return
+            self._json(200, {"agents": app_agents(account["id"])})
+            return
         super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802
         path = self.path.split("?")[0]
-        if path not in ("/api/agents", "/api/scan", "/api/negotiate", "/api/connect", "/api/intake") and not (
+        if path not in ("/api/agents", "/api/scan", "/api/negotiate", "/api/connect", "/api/intake",
+                         "/api/app/register", "/api/app/login", "/api/app/logout",
+                         "/api/app/intake") and not (
             path.startswith("/api/agents/") and len(path) > len("/api/agents/")
         ):
             super().do_POST()
@@ -643,6 +868,55 @@ class Handler(BaseHandler):
                              "in a readable form and is never shown again.",
                 "manage_url": f"/account?token={token}",
             })
+            return
+
+        if path in ("/api/app/register", "/api/app/login"):
+            here = f"auth:{self.client_address[0] if self.client_address else 'unknown'}"
+            if not attempts_allowed(here):
+                self._json(429, {"error": "too_many_attempts",
+                                 "detail": "Too many attempts from here. Try again in a few minutes."})
+                return
+            note_attempt(here)
+            if path.endswith("register"):
+                try:
+                    account, token = register_account(payload.get("email"), payload.get("password"))
+                except ValueError as error:
+                    self._json(400, {"error": "registration_refused", "detail": str(error)})
+                    return
+            else:
+                account, token = sign_in(payload.get("email"), payload.get("password"))
+                if account is None:
+                    self._json(401, {"error": "wrong_email_or_password",
+                                     "detail": "That email and password do not go together. Nothing is said "
+                                               "about which of the two was wrong."})
+                    return
+            self._send_with_cookie(200, {"signed_in": True, "account": account}, token)
+            return
+
+        if path == "/api/app/logout":
+            sign_out(self._cookie_token())
+            self._send_with_cookie(200, {"signed_in": False}, "", clear=True)
+            return
+
+        if path == "/api/app/intake":
+            account = account_by_session(self._cookie_token())
+            if account is None:
+                self._json(401, {"error": "not_signed_in",
+                                 "detail": "The agent you make from words belongs to an account, so sign in "
+                                           "first. That is the whole reason this door is not on the open page."})
+                return
+            text = str(payload.get("text") or "").strip()
+            if len(text) < 3:
+                self._json(400, {"error": "write_what_you_need", "detail": "A sentence at least, in your words."})
+                return
+            result = intake(payload)
+            if result.get("created"):
+                with connect() as connection:
+                    connection.execute("UPDATE agents SET owner_account = ? WHERE id = ?",
+                                       (account["id"], result["agent"]["id"]))
+                result["manage_url"] = f"https://match.arliwork.com/account?token={result['token']}"
+                result["owner"] = account["email"]
+            self._json(200, result)
             return
 
         if path == "/api/intake":
@@ -733,6 +1007,34 @@ class Handler(BaseHandler):
 
     def do_DELETE(self) -> None:  # noqa: N802
         path = self.path.split("?")[0]
+        if path == "/api/app/account" or path.startswith("/api/app/agents/"):
+            length = int(self.headers.get("Content-Length") or 0)
+            try:
+                payload = json.loads(self.rfile.read(length) or b"{}")
+            except json.JSONDecodeError:
+                payload = {}
+            account = account_by_session(self._cookie_token())
+            if account is None:
+                self._json(401, {"error": "not_signed_in", "detail": "Sign in first."})
+                return
+            if path == "/api/app/account":
+                if not _verify_password(str(payload.get("password") or ""), _stored_hash(account["id"])):
+                    self._json(403, {"error": "password_required",
+                                     "detail": "Closing an account needs the password that opens it."})
+                    return
+                closed = close_account(account["id"])
+                self._send_with_cookie(200, {"closed": True, **closed}, "", clear=True)
+                return
+            agent_id = path.rsplit("/", 1)[-1]
+            with connect() as connection:
+                cursor = connection.execute(
+                    "UPDATE agents SET active = 0 WHERE id = ? AND owner_account = ?",
+                    (agent_id, account["id"]))
+            if cursor.rowcount == 0:
+                self._json(404, {"error": "no such agent for this account"})
+                return
+            self._json(200, {"id": agent_id, "active": False})
+            return
         if not path.startswith("/api/agents/"):
             self._json(404, {"error": "not found", "path": path})
             return

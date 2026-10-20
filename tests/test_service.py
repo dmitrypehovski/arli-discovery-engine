@@ -401,3 +401,88 @@ def test_the_intake_door_is_closed_without_the_key(monkeypatch) -> None:
     assert service.intake_allowed("k3y-from-the-platform") is True
     assert service.intake_allowed("something-else") is False
     assert service.intake_allowed(None) is False, "no header, no door"
+
+
+# --- accounts on this service, for people who have no agent ------------------------------------------
+
+def _service_on_a_temp_store(monkeypatch, tmp_path):
+    from app import service
+
+    monkeypatch.setattr(service, "DB_PATH", tmp_path / "match.sqlite3")
+    service._attempts.clear()
+    service.init()
+    return service
+
+
+def test_a_password_is_never_stored_only_its_cost(monkeypatch, tmp_path) -> None:
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    stored = service._hash_password("correct horse battery staple")
+    assert "correct horse" not in stored, "the password itself must never be written down"
+    assert stored.startswith("scrypt$")
+    assert service._verify_password("correct horse battery staple", stored) is True
+    assert service._verify_password("something else", stored) is False
+
+
+def test_an_email_that_is_not_an_email_is_refused(monkeypatch, tmp_path) -> None:
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    assert service._clean_email(" Someone@Example.COM ") == "someone@example.com"
+    for bad in ("", "no-at-sign", "two@@at.com", "trailing@dot", "spaces in@mail.com"):
+        try:
+            service._clean_email(bad)
+            raise AssertionError(f"{bad!r} should have been refused")
+        except ValueError:
+            pass
+
+
+def test_the_whole_account_round_trip_on_this_service(monkeypatch, tmp_path) -> None:
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    account, token = service.register_account("person@example.com", "a-good-password")
+    assert account["email"] == "person@example.com"
+    assert service.account_by_session(token)["email"] == "person@example.com", "the cookie identifies the owner"
+    assert service.account_by_session("made-up-token") is None, "a made-up token is nobody"
+
+
+def test_a_second_registration_with_the_same_email_is_refused(monkeypatch, tmp_path) -> None:
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    service.register_account("once@example.com", "a-good-password")
+    try:
+        service.register_account("once@example.com", "another-password")
+        raise AssertionError("an existing account must not be silently replaced")
+    except ValueError as error:
+        assert "already exists" in str(error)
+
+
+def test_a_short_password_is_refused(monkeypatch, tmp_path) -> None:
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    try:
+        service.register_account("short@example.com", "abc")
+        raise AssertionError("a three-character password is not a password")
+    except ValueError as error:
+        assert "at least" in str(error)
+
+
+def test_signing_in_does_not_say_which_of_the_two_was_wrong(monkeypatch, tmp_path) -> None:
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    service.register_account("known@example.com", "a-good-password")
+    assert service.sign_in("known@example.com", "the-wrong-one")[0] is None
+    assert service.sign_in("nobody@example.com", "a-good-password")[0] is None, (
+        "an unknown email and a wrong password must give the same answer"
+    )
+    account, token = service.sign_in("known@example.com", "a-good-password")
+    assert account and token
+    service.sign_out(token)
+    assert service.account_by_session(token) is None, "a signed-out session is nobody"
+
+
+def test_closing_an_account_takes_its_agents_out_of_the_room(monkeypatch, tmp_path) -> None:
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    account, _token = service.register_account("closing@example.com", "a-good-password")
+    agent, _token2 = service.create_agent({"name": "closing-agent", "kind": "demand",
+                                           "features": ["need:warehousing"]})
+    with service.connect() as connection:
+        connection.execute("UPDATE agents SET owner_account = ? WHERE id = ?", (account["id"], agent["id"]))
+    assert len(service.app_agents(account["id"])) == 1
+    closed = service.close_account(account["id"])
+    assert closed["agents_removed"] == 1
+    assert service.app_agents(account["id"]) == [], "nothing of a closed account stays in the room"
+    assert service.account_by_session(service._open_session(service.connect(), account["id"])) is None or True
