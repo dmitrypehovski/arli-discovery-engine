@@ -10,6 +10,8 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+
+import pytest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -271,3 +273,58 @@ def test_the_one_line_is_on_the_page_twice_and_needs_no_flags() -> None:
     )
     assert 'id="register"' not in page, "the register form was removed on purpose"
     assert "wireCopy('copyOneLine'" in page and "wireCopy('copyOneLineTop'" in page
+
+
+def test_the_search_refuses_what_the_protocol_refuses() -> None:
+    """An audit found the service accepting three things the protocol does not allow.
+
+    A negative floor (accepted, and meaningless), an empty list (accepted, and it matches nothing),
+    and seventy features (accepted, while the text caps one exchange at sixty four). Each is refused
+    now with the reason, because a search that answers for an impossible exchange is a lie in numbers.
+    """
+    assert service.MAX_FEATURES == 64, "the cap is the protocol's, not ours to invent"
+
+    with pytest.raises(ValueError) as empty:
+        service.create_agent({"name": "Empty List", "kind": "supply", "features": []})
+    assert "empty list matches nothing" in str(empty.value)
+
+    with pytest.raises(ValueError) as too_many:
+        service.create_agent({"name": "Too Many", "kind": "supply",
+                              "features": [f"need:item-{index}" for index in range(65)]})
+    assert "above the cap" in str(too_many.value)
+
+    with pytest.raises(ValueError) as long_name:
+        service.create_agent({"name": "N" * (service.MAX_NAME_CHARS + 1), "kind": "supply",
+                              "features": ["skill:design"]})
+    assert "at most" in str(long_name.value)
+
+
+def test_a_name_that_does_not_resolve_is_not_called_private() -> None:
+    """The audit's other finding: a wrong name was reported as a private address.
+
+    Telling a host its address is private when the name simply does not exist sends it to fix the
+    wrong thing. The two cases are different sentences now.
+    """
+    from app.network import ConnectRefused, normalize_endpoint
+
+    with pytest.raises(ConnectRefused) as missing:
+        normalize_endpoint("https://no-such-host-xyz.invalid", allow_private=False)
+    assert missing.value.code == "address_not_reachable"
+    assert "does not resolve" in missing.value.detail, missing.value.detail
+
+    with pytest.raises(ConnectRefused) as private:
+        normalize_endpoint("http://127.0.0.1:8811", allow_private=False)
+    assert "loopback or private" in private.value.detail, private.value.detail
+
+
+def test_an_empty_list_is_not_the_example_list() -> None:
+    """The audit's worst find, in one line of code: `payload.get(...) or DEFAULT_MINE`.
+
+    An explicitly empty list is falsy, so it fell through to the example features. A caller who sent
+    nothing got eleven agents checked against somebody else's list and every reason to believe the
+    result was about theirs. The two cases are separate now, which is why the empty one can be refused.
+    """
+    assert service.features_from_payload({}) == list(service.DEFAULT_MINE), "absent uses the example"
+    assert service.features_from_payload({"my_features": None}) == list(service.DEFAULT_MINE)
+    assert service.features_from_payload({"my_features": []}) == [], "empty stays empty"
+    assert service.features_from_payload({"my_features": ["  need:warehouse ", ""]}) == ["need:warehouse"]

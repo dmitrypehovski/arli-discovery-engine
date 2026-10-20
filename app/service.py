@@ -222,6 +222,8 @@ def room_view() -> list[dict]:
 
 def create_agent(payload: dict) -> tuple[dict, str]:
     name = str(payload.get("name") or "").strip()
+    if len(name) > MAX_NAME_CHARS:
+        raise ValueError(f"a name of {MAX_NAME_CHARS} characters at most, not {len(name)}")
     kind = str(payload.get("kind") or "demand").strip()
     features = [str(item).strip() for item in (payload.get("features") or []) if str(item).strip()]
     if not name:
@@ -268,6 +270,9 @@ def owned_agent(agent_id: str, token: str) -> dict | None:
 # A connected agent that stops answering must not sit in the room for ever looking available. It
 # leaves after two failed attempts and comes back the moment a scan reaches it or someone connects it
 # again. Two, not one: a tunnel hiccup is not an agent that has gone away.
+# A name is for reading in a room, not for carrying a payload.
+MAX_NAME_CHARS = 80
+
 REMOTE_FAILURES_BEFORE_WITHDRAWAL = 2
 
 
@@ -297,6 +302,18 @@ def note_remote_success(agent_id: str) -> None:
                last_checked = ? WHERE id = ?""",
             (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), agent_id),
         )
+
+
+def features_from_payload(payload: dict) -> list[str]:
+    """The caller's own list, with the two cases kept apart.
+
+    Absent means "no list given, use the example". An empty list means an empty list, and the caller is
+    told it matches nothing. One `or` used to collapse the two, so a caller who sent nothing received a
+    full scan of the example features and no sign that the answer was not about their list.
+    """
+    raw = payload.get("my_features")
+    values = DEFAULT_MINE if raw is None else raw
+    return [str(item).strip() for item in values if str(item).strip()]
 
 
 def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
@@ -547,8 +564,7 @@ class Handler(BaseHandler):
             if entry is None:
                 self._json(404, {"error": f"no such agent in the room: {agent_id}"})
                 return
-            mine = [str(item).strip() for item in (payload.get("my_features") or DEFAULT_MINE)
-                    if str(item).strip()]
+            mine = features_from_payload(payload)
             floor = int(payload.get("floor_basis_points") or DEFAULT_FLOOR)
             my_kind = str(payload.get("my_kind") or "demand")
             try:
@@ -563,7 +579,7 @@ class Handler(BaseHandler):
                 self._json(500, {"error": f"{type(error).__name__}: {error}"})
             return
 
-        mine = [str(item).strip() for item in (payload.get("my_features") or DEFAULT_MINE) if str(item).strip()]
+        mine = features_from_payload(payload)
         floor = int(payload.get("floor_basis_points") or DEFAULT_FLOOR)
         my_kind = str(payload.get("my_kind") or "demand")
         if my_kind not in ("demand", "supply", "person"):
@@ -572,8 +588,20 @@ class Handler(BaseHandler):
         if not mine:
             self._json(400, {"error": "your side needs at least one feature: an empty set matches nothing"})
             return
-        if floor > 10000:
-            self._json(400, {"error": f"floor_basis_points={floor} is above the whole set"})
+        if not mine:
+            # The same rule as registration and as a single pair: an empty set matches nothing, so
+            # answering with a full scan would be work done for a question nobody asked.
+            self._json(400, {"error": "your side needs at least one feature: an empty set matches nothing"})
+            return
+        if floor < 0 or floor > 10000:
+            # Both ends, not just the top: a negative floor is not stricter, it is meaningless, and
+            # it used to be accepted without a word.
+            self._json(400, {"error": f"floor_basis_points must be between 0 and 10000, not {floor}"})
+            return
+        if len(mine) > MAX_FEATURES:
+            # The same cap registration enforces. Accepting more here would mean the search silently
+            # disagrees with the protocol it is built on.
+            self._json(400, {"error": f"{len(mine)} features is above the cap of {MAX_FEATURES} per exchange"})
             return
         try:
             self._json(200, scan_room(mine, floor, my_kind))

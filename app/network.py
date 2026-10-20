@@ -56,7 +56,9 @@ def _address_is_reachable(host: str, allow_private: bool) -> bool:
     try:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror:
-        return False
+        # Not the same thing as a private address: this name does not exist at all, and telling a
+        # host its address is private when the name is wrong sends it to fix the wrong problem.
+        raise ConnectRefused("address_not_reachable", f"{host} does not resolve to any address") from None
     for info in infos:
         address = info[4][0]
         try:

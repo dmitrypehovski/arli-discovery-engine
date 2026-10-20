@@ -763,7 +763,7 @@ $   -d '{"endpoint":"https://your-agent.example.com","kind":"supply"}'
   // Connecting an agent that runs somewhere else. The refusals are named one by one, because a
   // visitor who cannot see why an address was rejected cannot fix it.
   var connectReasons = {
-    address_not_reachable: 'the address is loopback, private, or not http/https. A room reaches agents over the network; give it a public address.',
+    address_not_reachable: 'the name does not resolve, or it points to a loopback or private address, or the scheme is not http or https. A room reaches agents over the network: give it a public address.',
     card_not_verified: 'the card at /.well-known/agent-card.json served, but its signature does not hold or its header carries no key.',
     agent_not_answering: 'the card served, then arli/identity/sign did not answer. Check the method is implemented and the port is the same one.',
     address_key_mismatch: 'it answered, but the signature does not verify with the key from its card. Usually a proxy that rewrote the body, or a second process on the same port.',
