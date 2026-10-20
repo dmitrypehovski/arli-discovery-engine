@@ -511,7 +511,7 @@ def test_an_agent_not_hosted_here_cannot_be_asked(monkeypatch, tmp_path) -> None
         raise AssertionError("an introduction to an agent we do not host has nowhere to go here")
     except service.IntroductionRefused as refused:
         assert refused.code == "peer_not_hosted_here"
-        assert "opportunity/decide" in refused.detail, "the gap is named, not smoothed over"
+        assert "an address to reach it at" in refused.detail, "the gap is named, not smoothed over"
 
 
 def test_an_agent_is_not_introduced_to_its_own_owner(monkeypatch, tmp_path) -> None:

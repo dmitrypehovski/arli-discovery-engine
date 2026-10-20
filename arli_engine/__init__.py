@@ -13,7 +13,7 @@ steps. Merging them into a single number would mean lying about one of the two s
 """
 
 __version__ = "0.1.0"
-EXTENSION_VERSION = "1.5.0"
+EXTENSION_VERSION = "1.6.0"
 
 from arli_engine.adapters.a2a.cards import EXTENSION_URI, build_card, capability_document
 from arli_engine.core.canonical import canonical_json, canonicalize

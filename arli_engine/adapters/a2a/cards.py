@@ -16,7 +16,9 @@ from arli_engine.core.intent import (
     PROVENANCE,
 )
 from arli_engine.core.match import MATCH_REJECTIONS
-from arli_engine.core.negotiate import ACTIONS, MAX_TURNS, OPENING_REJECTIONS, REJECTIONS
+from arli_engine.core.negotiate import (  # noqa: F401
+    ACTIONS, DECISION_REFUSALS, MAX_TURNS, OPENING_REJECTIONS, REJECTIONS,
+)
 from arli_engine.core.psi import MAX_FEATURES_PER_EXCHANGE
 from arli_engine.core.claims import CLAIM_LEVELS, CLAIM_REJECTIONS, CLAIM_STATES
 from arli_engine.core.registry import KEY_REVOCATION_REASONS, REGISTRY_REJECTIONS
@@ -122,6 +124,7 @@ def capability_document(operations: list[Operation]) -> dict:
             "max_turns": MAX_TURNS,
             "actions": list(ACTIONS),
             "turn_rejections": list(REJECTIONS),
+            "decision_rejections": list(DECISION_REFUSALS),
             "opening_rejections": list(OPENING_REJECTIONS),
             "note": (
                 "Both lists are closed. A turn or a pair that is refused always "

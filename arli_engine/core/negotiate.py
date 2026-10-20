@@ -24,6 +24,12 @@ ACTIONS = ("propose", "counter", "accept", "decline")
 # The list of rejection reasons. A closed list: a turn either passes or is rejected
 # with one of these codes. A test checks that each code is reachable, otherwise the
 # list is just decoration.
+# Отказы решения: отдельный перечень, потому что решение это другой вызов, а не ход.
+DECISION_REFUSALS = (
+    "not_agreed",
+    "not_a_seat",
+)
+
 REJECTIONS = (
     "not_a_seat",
     "unknown_action",
@@ -135,6 +141,22 @@ class NegotiationRejected(NegotiationError):
         super().__init__(f"{code}: {detail}" if detail else code)
 
 
+class DecisionRejected(NegotiationError):
+    """A decision was refused. The code is from the closed list DECISION_REFUSALS (clause 6.17).
+
+    Its own type because a decision is a different call from a turn: folding the decision codes into the turn
+    list would publish a code no turn can ever produce, and a closed list that contains unreachable codes is
+    a list nobody can trust.
+    """
+
+    def __init__(self, code: str, detail: str = "") -> None:
+        if code not in DECISION_REFUSALS:
+            raise ValueError(f"{code!r} is not in DECISION_REFUSALS")
+        self.code = code
+        self.detail = detail
+        super().__init__(f"{code}: {detail}" if detail else code)
+
+
 class OpeningRejected(RuntimeError):
     """The pair is not fit to open. The code is from the closed list OPENING_REJECTIONS."""
 
@@ -241,9 +263,9 @@ class Opportunity:
     def decide(self, actor: str, approve: bool) -> str:
         """A separate human action. One seat does not decide for the other."""
         if actor not in self.human_consent:
-            raise NegotiationError(f"{actor} is not an actor of this opportunity")
+            raise DecisionRejected("not_a_seat", f"{actor} is not an actor of this opportunity")
         if self.negotiation.outcome != "agreed":
-            raise NegotiationError("humans decide only after the agents agreed")
+            raise DecisionRejected("not_agreed", "humans decide only after the agents agreed")
         if self.human_consent[actor] is not None:
             raise NegotiationError(f"{actor} already decided")
         if any(v is False for v in self.human_consent.values()):

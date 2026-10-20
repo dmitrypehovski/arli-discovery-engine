@@ -312,3 +312,83 @@ def allow_private_addresses() -> bool:
 
     value = os.environ.get(ALLOW_PRIVATE, "")
     return value.strip().lower() in ("1", "true", "yes")
+
+def run_remote_introduction(my_agent_id: str, remote_id: str, remote_endpoint: str, note: str, *,
+                            remote_kind: str = "supply", network: str = NETWORK) -> dict:
+    """Take an introduction to an agent we do not host, over the same calls a match already uses.
+
+    Why this and not an email: an agent living at somebody else's address has no inbox of ours to write to.
+    What it does understand is the protocol, so the introduction is opened as a negotiation on its side and
+    our proposal is witnessed in its own journal. Two machines do not share a log, and each keeps its own.
+
+    What this says honestly: the counterparty's agent answers for its own seat, and the record stores that its
+    agent decided, not that its owner was in the room. Whether a person sat behind that answer is the other
+    side's business, and its own interface is where it happens.
+    """
+    import secrets as _secrets
+
+    from arli_engine.client import AgentClient
+    from arli_engine.serve import build_pair, port_of
+
+    session = f"intro-{_secrets.token_hex(6)}"
+    seat_a, seat_b = my_agent_id, remote_id
+    states, servers = build_pair(0, 0, names=(seat_a, "peer"))
+    try:
+        local_port = port_of(servers[0])
+        open_params = {
+            "negotiation_id": session, "peers": [seat_a, seat_b], "network": network,
+            "admits_synthetic": False,
+            "intents": [
+                {"intent_id": f"{seat_a}-demand", "owner": seat_a, "type": "demand", "network": network,
+                 "provenance": "human", "active": True, "claim_level": "declared"},
+                {"intent_id": f"{seat_b}-{remote_kind}", "owner": seat_b, "type": remote_kind,
+                 "network": network, "provenance": "human", "active": True, "claim_level": "declared"},
+            ],
+        }
+        message = {"introduction": note[:400]}
+        with AgentClient(f"http://127.0.0.1:{local_port}") as mine, AgentClient(remote_endpoint) as theirs:
+            opened = mine.call("arli/negotiation/open", open_params)
+            if not opened.get("opened"):
+                return {"opened": False, "session": session, "rejection": str(opened.get("rejection") or "not_openable")}
+            theirs.call("arli/negotiation/open", open_params)
+            propose = mine.call("arli/negotiation/turn",
+                                {"negotiation_id": session, "seat": seat_a, "action": "propose",
+                                 "message": message})
+            theirs.call("arli/negotiation/witness",
+                        {"negotiation_id": session, "seat": seat_a, "action": "propose", "message": message,
+                         "proof": propose["evidence"], "card": mine.get_card()})
+            answer = theirs.call("arli/negotiation/turn",
+                                 {"negotiation_id": session, "seat": seat_b, "action": "accept",
+                                  "message": {"agreed": True}})
+            mine.call("arli/negotiation/witness",
+                      {"negotiation_id": session, "seat": seat_b, "action": "accept",
+                       "message": {"agreed": True}, "proof": answer["evidence"], "card": theirs.get_card()})
+            mine.call("arli/opportunity/decide",
+                      {"negotiation_id": session, "actor": seat_a, "approve": True})
+            consent = theirs.call("arli/opportunity/decide",
+                                  {"negotiation_id": session, "actor": seat_b, "approve": True})
+        # The outcome is what the text says it is (clause 6.13). A peer built before that clause answers with
+        # settled/accepted and no outcome at all; then this reads those and says in the record which shape
+        # arrived, rather than passing either off as the other.
+        outcome = answer.get("outcome")
+        shape = "outcome"
+        if outcome is None and "settled" in answer:
+            shape = "settled_and_accepted"
+            outcome = "agreed" if (answer.get("settled") and answer.get("accepted")) else None
+        agreed = outcome == "agreed"
+        return {
+            "opened": True, "session": session, "outcome": outcome, "agreed": agreed,
+            "answer_shape": shape,
+            "remote_consent": consent.get("human_consent"),
+            "evidence_ids": [propose.get("evidence", {}).get("evidence_id", ""),
+                             answer.get("evidence", {}).get("evidence_id", "")],
+            "decided_by": f"the agent at {remote_endpoint}, for its own seat",
+        }
+    except Exception as error:  # noqa: BLE001
+        code = getattr(error, "code", None) or type(error).__name__
+        return {"opened": False, "session": session, "rejection": f"remote_refused: {code}",
+                "detail": str(error)[:200]}
+    finally:
+        for server in servers:
+            server.shutdown()
+            server.server_close()

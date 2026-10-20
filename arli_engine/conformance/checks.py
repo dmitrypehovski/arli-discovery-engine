@@ -45,6 +45,9 @@ EXPECTED_TURN_REJECTIONS = [
     "witness_proof_invalid",
     "witness_mismatch",
 ]
+
+# The decision call is a different method from a turn, so its refusals are their own closed list (6.17).
+EXPECTED_DECISION_REJECTIONS = ["not_agreed", "not_a_seat"]
 EXPECTED_OPENING_REJECTIONS = [
     "intent_inactive",
     "synthetic_not_admitted",
@@ -218,6 +221,8 @@ def run_conformance(target: Target, holder: Target | None = None) -> Report:
             problems.append(f"actions={rules.get('actions')}")
         if rules.get("turn_rejections") != EXPECTED_TURN_REJECTIONS:
             problems.append(f"turn_rejections={rules.get('turn_rejections')}")
+        if rules.get("decision_rejections") != EXPECTED_DECISION_REJECTIONS:
+            problems.append(f"decision_rejections={rules.get('decision_rejections')}")
         if rules.get("opening_rejections") != EXPECTED_OPENING_REJECTIONS:
             problems.append(f"opening_rejections={rules.get('opening_rejections')}")
         return (not problems), f"closed lists differ: {problems}"

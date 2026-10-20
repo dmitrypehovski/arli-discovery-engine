@@ -149,6 +149,8 @@ def connect() -> sqlite3.Connection:
                created_at TEXT NOT NULL,
                decided_at TEXT NOT NULL DEFAULT '',
                opened_at TEXT NOT NULL DEFAULT '',
+               negotiation_id TEXT NOT NULL DEFAULT '',
+               remote_endpoint TEXT NOT NULL DEFAULT '',
                evidence_ids TEXT NOT NULL DEFAULT '[]'
            )"""
     )
@@ -174,6 +176,13 @@ def connect() -> sqlite3.Connection:
         connection.execute("ALTER TABLE agents ADD COLUMN owner_account TEXT NOT NULL DEFAULT ''")
     except sqlite3.OperationalError:
         pass
+    # Introductions to agents we do not host carry the negotiation that happened on the other side.
+    for column, definition in (("negotiation_id", "TEXT NOT NULL DEFAULT ''"),
+                               ("remote_endpoint", "TEXT NOT NULL DEFAULT ''")):
+        try:
+            connection.execute(f"ALTER TABLE introductions ADD COLUMN {column} {definition}")
+        except sqlite3.OperationalError:
+            pass
     # An account has a signing key of its own, so what it agreed to can be checked by a stranger later.
     for column, definition in (("kid", "TEXT NOT NULL DEFAULT ''"),
                                ("public_jwk", "TEXT NOT NULL DEFAULT '{}'"),
@@ -831,12 +840,16 @@ def request_introduction(account: dict, peer_agent_id: str, note: str = "") -> d
         raise IntroductionRefused("unknown_introduction", "name the agent you want to be introduced to")
     with connect() as connection:
         peer_owner = _agent_owner(connection, peer_agent_id)
+        peer_remote = None
         if not peer_owner:
+            row = connection.execute(
+                "SELECT * FROM remotes WHERE id = ? AND active = 1", (peer_agent_id,)).fetchone()
+            peer_remote = dict(row) if row else None
+        if not peer_owner and peer_remote is None:
             raise IntroductionRefused(
                 "peer_not_hosted_here",
-                "this agent is not hosted on this service, so an introduction cannot be delivered here. A "
-                "connected agent would have to answer arli/opportunity/decide at its own address, and that "
-                "step is not built yet.",
+                "this agent is not in the room: it is either an example with no owner, or it was never "
+                "connected. An introduction needs either an account here or an address to reach it at.",
             )
         if peer_owner == account["id"]:
             raise IntroductionRefused("same_owner", "that agent is yours: an agent is not introduced to its own owner")
@@ -851,6 +864,45 @@ def request_introduction(account: dict, peer_agent_id: str, note: str = "") -> d
         if existing:
             raise IntroductionRefused("already_asked",
                                       f"you already asked for this introduction: it is {existing['state']}")
+        mine = mine or connection.execute(
+            "SELECT id FROM agents WHERE owner_account = ? AND active = 1 ORDER BY created_at LIMIT 1",
+            (account["id"],)).fetchone()
+
+        if peer_remote is not None:
+            # An agent living at its own address: the introduction travels there as a negotiation, and its
+            # journal records what we said. The contact is that address, because that is what it has.
+            from app.network import run_remote_introduction
+
+            wire = run_remote_introduction(mine["id"] if mine else account["email"], peer_agent_id,
+                                           peer_remote["endpoint"], note,
+                                           remote_kind=str(peer_remote.get("kind") or "supply"))
+            intro_id = f"in-{secrets.token_hex(6)}"
+            state = "introduced" if wire.get("agreed") else "declined"
+            envelope = _evidence("introduction.over_the_wire",
+                                 {"introduction_id": intro_id, "to_agent": peer_agent_id,
+                                  "endpoint": peer_remote["endpoint"], "negotiation_id": wire.get("session", ""),
+                                  "note": note.strip()[:400]},
+                                 {"state": state, "outcome": wire.get("outcome"),
+                                  "decided_by": wire.get("decided_by")}, authority="self-declared")
+            connection.execute(
+                """INSERT INTO introductions (id, from_account, from_agent, to_agent, to_account, note, state,
+                   created_at, decided_at, opened_at, negotiation_id, remote_endpoint, evidence_ids)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (intro_id, account["id"], mine["id"] if mine else "", peer_agent_id, "", note.strip()[:400],
+                 state, _now(), _now(), _now() if state == "introduced" else "",
+                 wire.get("session", ""), peer_remote["endpoint"],
+                 json.dumps([envelope["evidence_id"]]
+                            + [identifier for identifier in (wire.get("evidence_ids") or []) if identifier])))
+            return {
+                "id": intro_id, "state": state, "to_agent": peer_agent_id,
+                "over_the_wire": True, "endpoint": peer_remote["endpoint"],
+                "negotiation_id": wire.get("session", ""),
+                "rejection": wire.get("rejection") or wire.get("detail"),
+                "evidence_id": envelope["evidence_id"],
+                "note": ("Its agent answered for its own seat, and its own journal now records what we said. "
+                         "Our side keeps its own copy of the same trail."),
+            }
+
         intro_id = f"in-{secrets.token_hex(6)}"
         envelope = _evidence("introduction.requested",
                              {"introduction_id": intro_id, "from_agent": mine["id"] if mine else "",
@@ -930,6 +982,19 @@ def introduction_view(account: dict, row) -> dict:
         out["contact"] = None
         out["note_on_contact"] = ("The contact appears when both sides have agreed. Until then the other side "
                                   "is a matching agent and nothing more.")
+        return out
+    if not row["to_account"] and row["remote_endpoint"]:
+        out["contact"] = {
+            "endpoint": row["remote_endpoint"], "agent": row["to_agent"],
+            "how": "an agent at its own address, not hosted here",
+        }
+        out["negotiation_id"] = row["negotiation_id"]
+        out["note_on_contact"] = (
+            "This agent lives at its own address. The introduction was carried to it over the protocol and "
+            "its agent answered for its own seat; its journal records our proposal. There is no email to "
+            "show, because there is none on our side to show."
+        )
+        out["messages"] = []
         return out
     peer_account = row["to_account"] if not mine_to_receive else row["from_account"]
     with connect() as connection:
