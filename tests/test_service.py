@@ -976,3 +976,78 @@ def test_an_agent_with_no_address_registers_by_calling_and_is_still_found(monkey
         poller.join(timeout=5)
         server.shutdown()
         server.server_close()
+
+
+def _pull_registration(service, endpoint: str) -> dict:
+    """One registration, the way the agent's own loop does it."""
+    from arli_engine.client import AgentClient
+
+    with AgentClient(endpoint) as local:
+        card = local.get_card()
+        hello = service.pull_hello(card)
+        signed = local.call("arli/identity/sign", {"nonce": hello["nonce"], "purpose": hello["purpose"]})
+        profile = local.call("arli/profile")
+    return service.pull_register({"card": card, "nonce": hello["nonce"],
+                                 "signature": signed["signature"], "kind": "supply", "profile": profile})
+
+
+def test_a_pull_token_has_a_term_and_is_never_renewed_silently(monkeypatch, tmp_path) -> None:
+    """A token that lives forever is a key nobody can cancel, so it is issued with a term and refused by name."""
+    from arli_engine.adapters.a2a.server import start_agent
+    from arli_engine.agent import build_agent
+    from arli_engine.core.signing import KeyPair
+
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    monkeypatch.setattr(service, "PULL_TOKEN_DAYS", -1, raising=False)  # issued already expired
+    key = KeyPair.generate()
+    state = build_agent("short-lived", ["offer:warehousing"], "http://127.0.0.1:0", private_pem=key.private_pem)
+    server, _thread = start_agent(state, 0, host="127.0.0.1")
+    try:
+        answer = _pull_registration(service, "http://127.0.0.1:%d" % server.server_address[1])
+        assert answer["token_term_days"] == -1 and answer["token_expires_at"], answer
+        assert service.pull_token_state(answer["pull_token"])[0] == "expired", "the term is what was issued"
+        assert service.pull_token_of(answer["pull_token"]) is None, "an expired token is not a live registration"
+        assert service.remote_agents() == [], "an agent whose term ran out leaves the listing"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_pull_agent_that_stops_polling_leaves_the_listing(monkeypatch, tmp_path) -> None:
+    """A name nobody answers to is worse than a short list, and it must not cost a search its timeout."""
+    from arli_engine.adapters.a2a.server import start_agent
+    from arli_engine.agent import build_agent
+    from arli_engine.core.signing import KeyPair
+
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    key = KeyPair.generate()
+    state = build_agent("went-quiet", ["offer:warehousing"], "http://127.0.0.1:0", private_pem=key.private_pem)
+    server, _thread = start_agent(state, 0, host="127.0.0.1")
+    try:
+        _pull_registration(service, "http://127.0.0.1:%d" % server.server_address[1])
+        assert service.remote_agents() and service.remotes_to_check(), "just registered, so it is listed"
+        assert service.scan_room(["need:warehousing"], 2000, "demand")["agents_checked"] >= 1
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    monkeypatch.setattr(service, "PULL_IDLE_HOURS", 1, raising=False)
+    with service.connect() as connection:
+        connection.execute("UPDATE remotes SET last_poll = ? WHERE mode = 'pull'",
+                           ("2026-01-01T00:00:00Z",))
+    assert service.remote_agents() == [], "it stopped polling, so its name is not offered any more"
+    assert service.remotes_to_check() == [], "and a search does not sit waiting out its timeout either"
+
+
+def test_an_expired_token_is_refused_with_its_own_name(monkeypatch, tmp_path) -> None:
+    """Unknown and expired are different things to a client: one is a stranger, the other should register again."""
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    assert service.pull_token_state("no-such-token")[0] == "unknown"
+    with service.connect() as connection:
+        connection.execute(
+            """INSERT INTO remotes (id, name, kind, city, headline, endpoint, kid, jwk, connected_at, active,
+                                    profile, bucket_space, mode, pull_token, pull_expires_at, last_poll, card)
+               VALUES ('old','old','supply','','','','k','{}','2026-01-01T00:00:00Z',1,'{}','','pull','t-old',
+                       '2026-01-02T00:00:00Z','','{}')""")
+    assert service.pull_token_state("t-old")[0] == "expired"
+    assert service.pull_token_of("t-old") is None

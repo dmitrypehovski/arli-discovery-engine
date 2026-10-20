@@ -85,6 +85,8 @@ def connect() -> sqlite3.Connection:
                bucket_space TEXT NOT NULL DEFAULT '',
                mode TEXT NOT NULL DEFAULT 'address',
                pull_token TEXT NOT NULL DEFAULT '',
+               pull_expires_at TEXT NOT NULL DEFAULT '',
+               last_poll TEXT NOT NULL DEFAULT '',
                card TEXT NOT NULL DEFAULT '{}'
            )"""
     )
@@ -179,6 +181,8 @@ def connect() -> sqlite3.Connection:
                                ("bucket_space", "TEXT NOT NULL DEFAULT ''"),
                                ("mode", "TEXT NOT NULL DEFAULT 'address'"),
                                ("pull_token", "TEXT NOT NULL DEFAULT ''"),
+                               ("pull_expires_at", "TEXT NOT NULL DEFAULT ''"),
+                               ("last_poll", "TEXT NOT NULL DEFAULT ''"),
                                ("card", "TEXT NOT NULL DEFAULT '{}'")):
         try:
             connection.execute(f"ALTER TABLE remotes ADD COLUMN {column} {definition}")
@@ -314,6 +318,39 @@ def connect_agent(payload: dict, room: str = "") -> dict:
 # answered on the agent's next poll, so the exchange runs without any inbound path to the agent at all.
 PULL_WAIT_SECONDS = 45
 PULL_POLL_SECONDS = 20
+# A token issued at registration is issued with a term rather than living forever, and it is not renewed
+# silently: an agent that comes back gets a new one, and that is visible in its own log. An agent that stops
+# polling leaves the listing, because a listing that keeps a name nobody answers to is worse than a short one.
+PULL_TOKEN_DAYS = int(os.environ.get("ARLI_MATCH_PULL_DAYS") or 30)
+PULL_IDLE_HOURS = int(os.environ.get("ARLI_MATCH_PULL_IDLE_HOURS") or 72)
+
+
+def _after(**delta) -> str:
+    return (datetime.now(timezone.utc) + timedelta(**delta)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _is_past(stamp: str) -> bool:
+    if not stamp:
+        return False
+    try:
+        when = datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return True
+    return when <= datetime.now(timezone.utc)
+
+
+def _pull_is_live(row: dict) -> bool:
+    """Whether a pull agent is still somebody the room can reach: unexpired token and a recent poll."""
+    if _is_past(str(row.get("pull_expires_at") or "")):
+        return False
+    last = str(row.get("last_poll") or "")
+    if not last:
+        return True  # just registered, has not polled yet
+    try:
+        when = datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return False
+    return (datetime.now(timezone.utc) - when) <= timedelta(hours=PULL_IDLE_HOURS)
 _pull_lock = threading.Lock()
 _pull_queue: dict[str, list[str]] = {}
 _pull_calls: dict[str, dict] = {}
@@ -383,28 +420,49 @@ def pull_register(payload: dict) -> dict:
         connection.execute(
             """INSERT OR REPLACE INTO remotes
                (id, name, kind, city, headline, endpoint, kid, jwk, connected_at, active,
-                profile, bucket_space, mode, pull_token, card)
-               VALUES (?,?,?,?,?,'',?,?,?,1,?,?,'pull',?,?)""",
+                profile, bucket_space, mode, pull_token, pull_expires_at, last_poll, card)
+               VALUES (?,?,?,?,?,'',?,?,?,1,?,?,'pull',?,?,'',?)""",
             (agent_id, agent_id, str(payload.get("kind") or "supply").strip() or "supply",
              str(payload.get("city") or "").strip(), str(payload.get("headline") or "").strip(), subject,
              json.dumps(jwk), datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-             json.dumps(profile), str(profile.get("bucket_space") or ""), token, json.dumps(card)))
+             json.dumps(profile), str(profile.get("bucket_space") or ""), token,
+             _after(days=PULL_TOKEN_DAYS), json.dumps(card)))
     return {"registered": True, "id": agent_id, "pull_token": token,
+            "token_expires_at": _after(days=PULL_TOKEN_DAYS),
+            "token_term_days": PULL_TOKEN_DAYS,
             "checks": {"card_verified": True, "our_nonce_signed_by_the_card_key": True,
                        "reachability": "outbound only: this agent calls the room, and the room cannot call it"},
             "note": "There is no address to test here, and that is the point. The key was proved by what the "
-                    "agent signed, and every exchange with it now travels over the poll it holds open."}
+                    "agent signed, and every exchange with it now travels over the poll it holds open. The token "
+                    "is issued with a term and is not renewed silently: when it runs out, register again."}
+
+
+def pull_token_state(token: str) -> tuple[str, dict | None]:
+    """Ok, expired or unknown, and never a silent renewal: an expired token is refused by name."""
+    if not token:
+        return "unknown", None
+    with connect() as connection:
+        row = connection.execute(
+            "SELECT * FROM remotes WHERE pull_token = ? AND mode = 'pull' AND active = 1", (token,)).fetchone()
+    if row is None:
+        return "unknown", None
+    agent = dict(row)
+    if _is_past(str(agent.get("pull_expires_at") or "")):
+        return "expired", agent
+    return "ok", agent
 
 
 def pull_token_of(token: str) -> dict | None:
-    with connect() as connection:
-        row = connection.execute("SELECT * FROM remotes WHERE pull_token = ? AND mode = 'pull' AND active = 1",
-                                 (token,)).fetchone()
-    return dict(row) if row else None
+    """The agent this token belongs to, or None when it is unknown or its term has run out."""
+    state, agent = pull_token_state(token)
+    return agent if state == "ok" else None
 
 
 def pull_next(agent_id: str, wait_seconds: int = PULL_POLL_SECONDS) -> dict | None:
     """One pending call for this agent, or None if none arrived before the poll ends."""
+    with connect() as connection:
+        connection.execute("UPDATE remotes SET last_poll = ? WHERE id = ? AND mode = 'pull'",
+                           (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), agent_id))
     deadline = time.time() + wait_seconds
     while time.time() < deadline:
         with _pull_lock:
@@ -499,6 +557,8 @@ def remote_agents(include_endpoint: bool = False) -> list[dict]:
         rows = connection.execute("SELECT * FROM remotes WHERE active = 1 ORDER BY connected_at").fetchall()
     agents = []
     for row in rows:
+        if (row["mode"] if "mode" in row.keys() else "address") == "pull" and not _pull_is_live(dict(row)):
+            continue  # its term ran out, or it stopped polling: it is not reachable and must not be listed
         agent = {"id": row["id"], "name": row["name"], "kind": row["kind"], "city": row["city"],
                  "headline": row["headline"], "claim_level": "declared",
                  "will_not_publish": "whatever its owner keeps at home",
@@ -519,6 +579,13 @@ def remotes_to_check() -> list[dict]:
     """
     with connect() as connection:
         rows = connection.execute("SELECT * FROM remotes ORDER BY connected_at").fetchall()
+    keep = []
+    for row in rows:
+        # A stale pull agent must not be asked either, or every search would sit waiting out its timeout.
+        if (row["mode"] if "mode" in row.keys() else "address") == "pull" and not _pull_is_live(dict(row)):
+            continue
+        keep.append(row)
+    rows = keep
     return [{"id": row["id"], "name": row["name"], "kind": row["kind"], "city": row["city"],
              "headline": row["headline"], "endpoint": row["endpoint"], "active": row["active"],
              "failures": row["failures"], "profile": row["profile"] if "profile" in row.keys() else "{}",
@@ -1859,10 +1926,12 @@ class Handler(BaseHandler):
             })
             return
         if path == "/api/pull":
-            agent = pull_token_of(str(query.get("pull_token") or "") if isinstance(query, dict) else "")
-            if agent is None:
-                self._json(403, {"error": "pull_token_unknown",
-                                 "detail": "This token is not a live registration here."})
+            state, agent = pull_token_state(str(query.get("pull_token") or ""))
+            if state != "ok":
+                self._json(403, {"error": f"pull_token_{state}",
+                                 "detail": "The token is issued with a term and is not renewed silently: "
+                                           "register again to get a new one." if state == "expired"
+                                           else "This token is not a live registration here."})
                 return
             call = pull_next(agent["id"])
             self._json(200, call) if call else self._json(204, {})
@@ -2150,10 +2219,12 @@ class Handler(BaseHandler):
             return
 
         if path == "/api/pull/answer":
-            agent = pull_token_of(str(payload.get("pull_token") or ""))
-            if agent is None:
-                self._json(403, {"error": "pull_token_unknown",
-                                 "detail": "This token is not a live registration here."})
+            state, agent = pull_token_state(str(payload.get("pull_token") or ""))
+            if state != "ok":
+                self._json(403, {"error": f"pull_token_{state}",
+                                 "detail": "The token is issued with a term and is not renewed silently: "
+                                           "register again to get a new one." if state == "expired"
+                                           else "This token is not a live registration here."})
                 return
             accepted = pull_answer(agent["id"], str(payload.get("call_id") or ""),
                                    payload.get("result"), str(payload.get("error") or ""))
