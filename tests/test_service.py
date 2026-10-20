@@ -1,0 +1,96 @@
+"""Tests for ARLI Match as a service: storage, registration, and a scan over stored agents.
+
+Why these exist. A service makes promises a demonstration does not: your agent is still there next
+time, your feature list is never returned, and a scan runs against the agents actually in the room.
+Each promise gets a test that fails when it stops being true. The database is a throwaway file.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# The store path is read when the module loads, so it must be set before the import.
+_TMP = tempfile.NamedTemporaryFile(prefix="arli-match-test-", suffix=".sqlite3", delete=False)
+os.environ["ARLI_MATCH_DB"] = _TMP.name
+
+from app import service  # noqa: E402
+
+service.init()
+
+GOOD = {
+    "name": "Test Studio", "kind": "supply", "city": "berlin", "headline": "brand studio",
+    "will_not_publish": "client list",
+    "features": ["skill:brand-design", "city:berlin", "industry:retail", "need:infra"],
+}
+
+
+def test_registration_stores_the_agent_and_returns_a_key() -> None:
+    agent, token = service.create_agent(dict(GOOD, name="Registered One"))
+    assert agent["id"].startswith("a-")
+    assert agent["feature_count"] == 4
+    assert len(token) > 20, "the token is the only key to the agent"
+    assert service.owned_agent(agent["id"], token) is not None
+    assert service.owned_agent(agent["id"], "wrong-token") is None
+
+
+def test_registration_refuses_empty_or_absurd_lists() -> None:
+    for broken, expected in (
+        ({**GOOD, "features": []}, "at least one feature"),
+        ({**GOOD, "kind": "partner"}, "kind must be"),
+        ({**GOOD, "name": "   "}, "name is required"),
+        ({**GOOD, "features": [f"f:{index}" for index in range(service.MAX_FEATURES + 1)]}, "cap"),
+    ):
+        try:
+            service.create_agent(broken)
+        except ValueError as error:
+            assert expected in str(error), (expected, str(error))
+        else:
+            raise AssertionError(f"accepted a broken registration: {expected}")
+
+
+def test_the_room_never_publishes_a_feature_list() -> None:
+    service.create_agent(dict(GOOD, name="Registered Two"))
+    room = service.room_view()
+    stored = [agent for agent in room if not agent.get("sample")]
+    assert stored, "the registered agent must appear in the room"
+    blob = " ".join(str(value) for agent in stored for value in agent.values())
+    for feature in GOOD["features"]:
+        assert feature not in blob, f"the room published {feature}"
+    for agent in stored:
+        assert "features" not in agent
+        assert agent["feature_count"] == 4
+
+
+def test_a_scan_runs_against_stored_agents_and_finds_them() -> None:
+    service.create_agent(dict(GOOD, name="Registered Three"))
+    result = service.scan_room(["need:brand-design", "city:berlin", "industry:retail"], 3000, "demand")
+    assert result["registered_agents"] >= 1
+    assert result["wires_clean"] is True, "a feature reached a wire"
+    assert result["agents_checked"] == len(result["rows"])
+
+    stored_rows = [row for row in result["rows"] if not row.get("sample")]
+    assert stored_rows, "the registered agents must be scanned"
+    found = [row for row in stored_rows if row.get("passed_floor")]
+    assert found, "a registered agent with three shared features must clear the floor of 3000"
+    assert found[0]["matched_features"]
+
+
+def test_an_exchange_can_be_driven_for_a_stored_agent() -> None:
+    agent, _ = service.create_agent(dict(GOOD, name="Registered Four", kind="supply"))
+    entry = service.entry_for(agent["id"])
+    assert entry is not None and entry["features"], "the exchange needs the stored list"
+    assert entry["sample"] is False
+    assert service.entry_for("nobody") is None
+
+
+def test_a_buyer_does_not_pair_with_another_buyer() -> None:
+    result = service.scan_room(["need:brand-design", "city:berlin"], 1000, "demand")
+    buyers = [row for row in result["rows"] if row["kind"] == "demand"]
+    assert buyers, "the room holds buyers, so this test means something"
+    assert all(not row["opened"] for row in buyers)
+    assert all(row["rejection"] == "types_not_comparable" for row in buyers)
