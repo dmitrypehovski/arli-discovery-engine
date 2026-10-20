@@ -189,6 +189,34 @@ def entry_for(agent_id: str) -> dict | None:
     return None
 
 
+def update_agent(agent_id: str, token: str, payload: dict) -> dict | None:
+    """Change what the owner can change. Only the owner token opens this door."""
+    current = owned_agent(agent_id, token)
+    if current is None:
+        return None
+    fields = {}
+    for key in ("name", "kind", "city", "headline", "claim_level", "will_not_publish"):
+        if key in payload:
+            fields[key] = str(payload[key]).strip()
+    if "kind" in fields and fields["kind"] not in ("demand", "supply", "person"):
+        raise ValueError(f"kind must be demand, supply or person, not {fields['kind']}")
+    if "features" in payload:
+        features = [str(item).strip() for item in (payload["features"] or []) if str(item).strip()]
+        if not features:
+            raise ValueError("at least one feature is required: an empty list matches nothing")
+        if len(features) > MAX_FEATURES:
+            raise ValueError(f"{len(features)} features is above the cap of {MAX_FEATURES}")
+        fields["features"] = json.dumps(features)
+    if not fields:
+        return current
+
+    columns = ", ".join(f"{key} = ?" for key in fields)
+    with connect() as connection:
+        connection.execute(f"UPDATE agents SET {columns} WHERE id = ? AND owner_token = ?",
+                           (*fields.values(), agent_id, token))
+    return owned_agent(agent_id, token)
+
+
 class Handler(BaseHandler):
     server_version = "arli-match/0.3"
 
@@ -202,6 +230,13 @@ class Handler(BaseHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         path = self.path.split("?")[0]
+        if path == "/account":
+            page = HERE / "account.html"
+            if page.is_file():
+                self._send(200, page.read_bytes(), "text/html; charset=utf-8")
+            else:
+                self._json(500, {"error": "no account page"})
+            return
         query = dict(
             pair.split("=", 1) for pair in self.path.split("?", 1)[1].split("&") if "=" in pair
         ) if "?" in self.path else {}
@@ -241,7 +276,9 @@ class Handler(BaseHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = self.path.split("?")[0]
-        if path not in ("/api/agents", "/api/scan", "/api/negotiate"):
+        if path not in ("/api/agents", "/api/scan", "/api/negotiate") and not (
+            path.startswith("/api/agents/") and len(path) > len("/api/agents/")
+        ):
             super().do_POST()
             return
         length = int(self.headers.get("Content-Length") or 0)
@@ -267,6 +304,20 @@ class Handler(BaseHandler):
                              "in a readable form and is never shown again.",
                 "manage_url": f"/account?token={token}",
             })
+            return
+
+        if path.startswith("/api/agents/") and len(path) > len("/api/agents/"):
+            agent_id = path.rsplit("/", 1)[-1]
+            token = str(payload.get("token") or "")
+            try:
+                updated = update_agent(agent_id, token, payload)
+            except ValueError as error:
+                self._json(400, {"error": str(error)})
+                return
+            if updated is None:
+                self._json(404, {"error": "no such agent for this token"})
+                return
+            self._json(200, {"agent": updated})
             return
 
         if path == "/api/negotiate":

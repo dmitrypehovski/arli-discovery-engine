@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your agent — ARLI Match</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --paper:#f3f7ee;--tint:#e8f0df;--card:#ffffff;
+  --ink:#16220f;--ink-soft:#55684a;--ink-faint:#84977a;
+  --rule:#d3dfc7;--rule-strong:#b9cbaa;
+  --green:#1f7a3a;--green-deep:#125828;--green-wash:#eef7e8;
+  --amber:#8a6d1f;--red:#a32626;--red-wash:#fdf3f2;
+  --font:'Instrument Sans',system-ui,sans-serif;
+  --display:'Bricolage Grotesque','Instrument Sans',system-ui,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+}
+html{background:var(--paper);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.6}
+body{min-height:100vh;background-image:linear-gradient(rgba(31,122,58,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(31,122,58,.055) 1px,transparent 1px);background-size:28px 28px}
+a{color:inherit;text-decoration:none}
+.container{max-width:880px;margin:0 auto;padding:0 24px}
+nav{position:sticky;top:0;z-index:100;height:58px;backdrop-filter:blur(14px);background:rgba(243,247,238,.9);border-bottom:1px solid var(--rule);display:flex;align-items:center;padding:0 24px}
+nav .logo{font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:-.5px}
+nav .logo span{color:var(--green)}
+nav .links{margin-left:auto;display:flex;gap:18px}
+nav .links a{font-size:13.5px;color:var(--ink-soft)}
+header{padding:48px 0 14px}
+h1{font-family:var(--display);font-size:clamp(26px,3.6vw,38px);font-weight:800;letter-spacing:-1.3px;margin-bottom:10px}
+p.sub{color:var(--ink-soft);font-size:16.5px;max-width:640px}
+section{padding:24px 0}
+.panel{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:22px;margin-bottom:18px}
+.panel h2{font-family:var(--display);font-size:19px;font-weight:800;margin-bottom:4px}
+label.f{display:block;font-size:12.5px;font-family:var(--mono);color:var(--ink-soft);margin-bottom:6px;margin-top:12px}
+input[type=text],textarea,select{width:100%;font-family:var(--mono);font-size:13px;color:var(--ink);background:var(--green-wash);border:1px solid var(--rule);border-radius:10px;padding:10px 12px;line-height:1.7}
+textarea:focus,input:focus,select:focus{outline:2px solid var(--green-deep);outline-offset:1px}
+.btn{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:14.5px;border-radius:9px;padding:11px 20px;border:1px solid transparent;cursor:pointer}
+.btn-p{background:var(--green-deep);color:#fff}
+.btn-p:hover{background:var(--green)}
+.btn-o{background:transparent;color:var(--ink);border-color:var(--rule-strong)}
+.btn-danger{background:var(--red-wash);color:var(--red);border-color:#eedcd9}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.status{font-family:var(--mono);font-size:13px;color:var(--ink-soft);margin-top:12px;min-height:18px}
+.status.ok{color:var(--green-deep)}
+.status.err{color:var(--red)}
+.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.chip{font-family:var(--mono);font-size:12px;border-radius:999px;padding:3px 10px;background:var(--tint);border:1px solid var(--rule);color:var(--ink-soft)}
+.note{background:var(--green-wash);border:1px solid var(--rule);border-radius:12px;padding:14px 16px;font-size:14.5px;color:var(--ink-soft)}
+code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:1px solid var(--rule);border-radius:5px;padding:1px 5px}
+.hidden{display:none}
+footer{border-top:1px solid var(--rule);margin-top:36px;padding:22px 0 48px;color:var(--ink-faint);font-size:13px}
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="logo">ARLI<span>.</span></a>
+  <div class="links">
+    <a href="/">Run a match</a>
+    <a href="/engine">Engine</a>
+    <a href="/spec/">Specification</a>
+  </div>
+</nav>
+
+<header>
+  <div class="container">
+    <h1>Your agent</h1>
+    <p class="sub">This page opens with the key in the link. Nobody else can see your feature list,
+    and it is never returned by any public endpoint of the service.</p>
+  </div>
+</header>
+
+<section>
+  <div class="container">
+    <div id="agents"></div>
+    <div class="note" id="empty" class="hidden">
+      <b>No agent for this key.</b> Check that you copied the whole link. If you lost it, the key
+      cannot be recovered: create a new agent from the <a href="/">main page</a>.
+    </div>
+    <div class="status" id="status">—</div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    ARLI Match · your agent is stored on this service and used only inside an exchange ·
+    <a href="mailto:enterprise@arliwork.com" style="color:var(--ink-soft)">enterprise@arliwork.com</a>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var token = new URLSearchParams(location.search).get('token') || '';
+  var status = document.getElementById('status');
+  var wrap = document.getElementById('agents');
+
+  function lines(text){ return text.split('\n').map(function(s){return s.trim()}).filter(Boolean); }
+  function esc(s){ return String(s === null || s === undefined ? '' : s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+
+  function card(agent){
+    return '<div class="panel" data-id="' + esc(agent.id) + '">' +
+      '<h2>' + esc(agent.name) + '</h2>' +
+      '<div class="meta"><span class="chip">' + esc(agent.kind) + '</span>' +
+      '<span class="chip">' + esc(agent.city || 'no city') + '</span>' +
+      '<span class="chip">' + agent.features.length + ' features</span>' +
+      '<span class="chip">' + esc(agent.claim_level) + '</span></div>' +
+      '<label class="f">NAME</label><input type="text" class="f-name" value="' + esc(agent.name) + '">' +
+      '<label class="f">ONE LINE OTHERS SEE</label><input type="text" class="f-headline" value="' + esc(agent.headline || '') + '">' +
+      '<label class="f">CITY</label><input type="text" class="f-city" value="' + esc(agent.city || '') + '">' +
+      '<label class="f">WHAT YOU WILL NOT PUBLISH</label><input type="text" class="f-private" value="' + esc(agent.will_not_publish || '') + '">' +
+      '<label class="f">YOU ARE</label><select class="f-kind">' +
+        ['demand','supply','person'].map(function(k){
+          return '<option value="' + k + '"' + (k === agent.kind ? ' selected' : '') + '>' + k + '</option>';
+        }).join('') + '</select>' +
+      '<label class="f">YOUR FEATURES, ONE PER LINE (PRIVATE)</label>' +
+      '<textarea class="f-features" rows="7">' + esc(agent.features.join('\n')) + '</textarea>' +
+      '<div class="actions">' +
+        '<button class="btn btn-p act-save">Save changes</button>' +
+        '<button class="btn btn-o act-scan">Go to the room</button>' +
+        '<button class="btn btn-danger act-delete">Remove my agent</button>' +
+      '</div>' +
+      '<div class="status"></div>' +
+      '<div class="meta"><span class="chip">id ' + esc(agent.id) + '</span><span class="chip">created ' + esc(agent.created_at) + '</span></div>' +
+      '</div>';
+  }
+
+  function render(agents){
+    if(!agents.length){
+      wrap.innerHTML = '';
+      document.getElementById('empty').classList.remove('hidden');
+      status.textContent = 'Nothing to manage with this key.';
+      return;
+    }
+    document.getElementById('empty').classList.add('hidden');
+    wrap.innerHTML = agents.map(card).join('');
+
+    Array.prototype.forEach.call(wrap.querySelectorAll('.panel'), function(panel){
+      var id = panel.getAttribute('data-id');
+      var line = panel.querySelector('.status');
+      var payload = function(){
+        return {
+          token: token,
+          name: panel.querySelector('.f-name').value,
+          kind: panel.querySelector('.f-kind').value,
+          city: panel.querySelector('.f-city').value,
+          headline: panel.querySelector('.f-headline').value,
+          will_not_publish: panel.querySelector('.f-private').value,
+          features: lines(panel.querySelector('.f-features').value)
+        };
+      };
+      panel.querySelector('.act-save').addEventListener('click', function(){
+        line.className = 'status'; line.textContent = 'Saving…';
+        fetch('api/agents/' + encodeURIComponent(id), {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload())
+        }).then(function(r){ return r.json().then(function(b){ return {code: r.status, body: b}; }); })
+          .then(function(result){
+            if(result.code !== 200){ line.className = 'status err'; line.textContent = 'Not saved: ' + (result.body.error || 'unknown'); return; }
+            line.className = 'status ok';
+            line.textContent = 'Saved. ' + result.body.agent.features.length + ' features stored privately.';
+          }).catch(function(e){ line.className = 'status err'; line.textContent = 'Request failed: ' + e; });
+      });
+      panel.querySelector('.act-scan').addEventListener('click', function(){ location.href = '/'; });
+      panel.querySelector('.act-delete').addEventListener('click', function(){
+        if(!confirm('Remove this agent from the room? The feature list stays in the store but the agent stops appearing.')) return;
+        line.className = 'status'; line.textContent = 'Removing…';
+        fetch('api/agents/' + encodeURIComponent(id), {
+          method: 'DELETE', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({token: token})
+        }).then(function(r){ return r.json().then(function(b){ return {code: r.status, body: b}; }); })
+          .then(function(result){
+            if(result.code !== 200){ line.className = 'status err'; line.textContent = 'Not removed: ' + (result.body.error || 'unknown'); return; }
+            panel.style.opacity = .5;
+            line.className = 'status ok'; line.textContent = 'Removed. It no longer appears in the room.';
+          }).catch(function(e){ line.className = 'status err'; line.textContent = 'Request failed: ' + e; });
+      });
+    });
+  }
+
+  if(!token){
+    status.className = 'status err';
+    status.textContent = 'No key in the link. Open this page from the link you were given when you created your agent.';
+    document.getElementById('empty').classList.remove('hidden');
+    return;
+  }
+  fetch('api/agents?token=' + encodeURIComponent(token))
+    .then(function(r){ return r.json() })
+    .then(function(d){ render(d.agents || []); })
+    .catch(function(e){ status.className = 'status err'; status.textContent = 'Could not load: ' + e; });
+})();
+</script>
+</body>
+</html>

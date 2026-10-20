@@ -94,3 +94,43 @@ def test_a_buyer_does_not_pair_with_another_buyer() -> None:
     assert buyers, "the room holds buyers, so this test means something"
     assert all(not row["opened"] for row in buyers)
     assert all(row["rejection"] == "types_not_comparable" for row in buyers)
+
+
+def test_only_the_owner_key_can_change_an_agent() -> None:
+    agent, token = service.create_agent(dict(GOOD, name="Registered Five"))
+    assert service.update_agent(agent["id"], "not-my-token", {"headline": "hijack"}) is None
+    assert service.update_agent(agent["id"], token, {"headline": "mine now"})["headline"] == "mine now"
+
+    changed = service.update_agent(agent["id"], token,
+                                   {"features": ["skill:brand-design", "city:berlin", "need:infra"]})
+    assert len(changed["features"]) == 3, "the owner can replace the list"
+    assert service.stored_agents(include_features=True)
+    stored = [row for row in service.stored_agents(include_features=True) if row["id"] == agent["id"]][0]
+    assert stored["feature_count"] == 3
+
+
+def test_a_broken_change_is_refused_without_touching_the_list() -> None:
+    agent, token = service.create_agent(dict(GOOD, name="Registered Six"))
+    for broken, expected in (
+        ({"features": []}, "at least one feature"),
+        ({"kind": "partner"}, "kind must be"),
+        ({"features": [f"f:{index}" for index in range(service.MAX_FEATURES + 1)]}, "cap"),
+    ):
+        try:
+            service.update_agent(agent["id"], token, broken)
+        except ValueError as error:
+            assert expected in str(error), (expected, str(error))
+        else:
+            raise AssertionError(f"accepted a broken change: {expected}")
+    kept = service.owned_agent(agent["id"], token)
+    assert len(kept["features"]) == 4, "a refused change must leave the list alone"
+
+
+def test_a_removed_agent_leaves_the_room() -> None:
+    agent, token = service.create_agent(dict(GOOD, name="Registered Seven"))
+    assert any(row["id"] == agent["id"] for row in service.stored_agents())
+    with service.connect() as connection:
+        connection.execute("UPDATE agents SET active = 0 WHERE id = ? AND owner_token = ?",
+                           (agent["id"], token))
+    assert not any(row["id"] == agent["id"] for row in service.stored_agents())
+    assert service.entry_for(agent["id"]) is None, "a removed agent must not be matchable"
