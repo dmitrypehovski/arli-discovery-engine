@@ -342,3 +342,22 @@ def test_an_agent_that_matches_everything_says_it_might_be_your_own() -> None:
     )
     assert service.looks_like_own_agent({"overlap_basis_points": 3333}, ["need:warehouse"]) is False
     assert service.looks_like_own_agent({}, ["need:warehouse"]) is False
+
+
+def test_the_page_offers_a_direct_exchange_without_a_room() -> None:
+    """A participant who knows the other address should not need us in the session either.
+
+    The section states the command, the picture of what crosses, and the two refusals a person will
+    actually meet. If it disappears, the claim that nothing is in the middle goes back to covering only
+    the data.
+    """
+    page = (Path(__file__).resolve().parent.parent / "app" / "home.html").read_text(encoding="utf-8")
+    for needed in ('id="direct"', 'id="directLine"', 'id="copyDirectLine"', "wireCopy('copyDirectLine'"):
+        assert needed in page, f"the page must offer {needed}"
+    assert 'href="#direct"' in page, "the section has to be reachable from the navigation"
+    assert "arli_engine.exchange" in page, "the command is the surface"
+    section = page[page.index('id="direct"') : page.index('<section id="who">')]
+    assert "peer_card_unverified" in section and "types_not_comparable" in section, (
+        "both refusals a person meets have to be in the section"
+    )
+    assert section.count("<svg") == 1, "one figure carries the picture"

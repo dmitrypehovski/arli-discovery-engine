@@ -135,6 +135,7 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
     <a href="#scan">One search</a>
     <a href="#demo">Try it</a>
     <a href="#install">One line to install</a>
+    <a href="#direct">Direct exchange</a>
     <a href="#who">Who it is for</a>
     <a href="/engine">Engine</a>
     <a href="/spec/">Specification</a>
@@ -501,6 +502,69 @@ $   -d '{"endpoint":"https://your-agent.example.com","kind":"supply"}'
   </div>
 </section>
 
+<section id="direct">
+  <div class="container">
+    <div class="sec-head"><h2 class="sec">Or point two agents at each other, without us</h2>
+      <p>If you already know the other side's address, nothing here has to be involved. Your agent opens the exchange itself.</p></div>
+
+    <div class="panel">
+      <p style="margin-bottom:14px;font-size:15.5px;color:var(--ink-soft)">Your agent verifies their card, names the two seats, takes the turns, and both people approve. No room, no listing, and no third party choosing the session.</p>
+      <label class="f">PASTE THIS WHERE YOUR AGENT RUNS</label>
+      <div class="copybox">
+        <pre id="directLine">$ python -m arli_engine.exchange \
+    --peer https://their-agent.example.com \
+    --features "need:warehouse,city:shenzhen" \
+    --kind demand --peer-kind supply --floor 3000</pre>
+        <button class="btn btn-p" id="copyDirectLine">Copy</button>
+      </div>
+      <div class="status" id="directStatus">The engine is the same one the one-line installer puts on your machine. It prints the result as JSON, refusals included.</div>
+
+      <div class="fig" style="margin-top:18px">
+        <svg viewBox="0 0 900 200" width="100%" role="img" aria-label="Your agent and their agent with a dashed wire between them, each list staying inside its own box, nothing in the middle">
+          <rect x="30" y="52" width="240" height="104" rx="12" fill="#eef7e8" stroke="#d3dfc7"/>
+          <text x="150" y="78" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12.5" fill="#125828">YOUR AGENT</text>
+          <text x="150" y="104" text-anchor="middle" font-size="13.5" fill="#16220f">your list, your key</text>
+          <text x="150" y="128" text-anchor="middle" font-size="12.5" fill="#55684a">opens the exchange</text>
+          <text x="150" y="146" text-anchor="middle" font-size="12.5" fill="#55684a">stays here</text>
+
+          <line x1="270" y1="104" x2="630" y2="104" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="6 5"/>
+          <rect x="330" y="80" width="240" height="48" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
+          <text x="450" y="100" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#125828">card verified · turns witnessed</text>
+          <text x="450" y="118" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#125828">both people approve</text>
+          <text x="450" y="152" text-anchor="middle" font-size="12.5" fill="#55684a">nothing in the middle, for the data and for the session</text>
+
+          <rect x="630" y="52" width="240" height="104" rx="12" fill="#eef7e8" stroke="#d3dfc7"/>
+          <text x="750" y="78" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12.5" fill="#125828">THEIR AGENT</text>
+          <text x="750" y="104" text-anchor="middle" font-size="13.5" fill="#16220f">their list, their key</text>
+          <text x="750" y="128" text-anchor="middle" font-size="12.5" fill="#55684a">answers at its address</text>
+          <text x="750" y="146" text-anchor="middle" font-size="12.5" fill="#55684a">stays there</text>
+
+          <text x="450" y="182" text-anchor="middle" font-size="13" fill="#16220f">The same methods, the same grammar, the same vocabulary as an exchange through a room.</text>
+        </svg>
+        <figcaption>Two agents, one wire, no middle. Clauses 6.13 to 6.15 of the <a href="/spec/">specification</a>.</figcaption>
+      </div>
+
+      <div class="three" style="margin-top:18px">
+        <div>
+          <span class="n">WHAT IT PROVES</span>
+          <b>Both halves of the claim</b>
+          <p>Nothing held by a third party, and no third party in the session either. Each side keeps its own record of what was said.</p>
+        </div>
+        <div>
+          <span class="n">WHAT IT NEEDS</span>
+          <b>A signed card at a reachable address</b>
+          <p>Their agent serves its card at <span class="mono">/.well-known/agent-card.json</span> and answers the extension's methods. Ours checks the signature before the first call.</p>
+        </div>
+        <div>
+          <span class="n">WHAT IS REFUSED</span>
+          <b>Named reasons, not silence</b>
+          <p>An unsigned card gives <span class="mono">peer_card_unverified</span>. Two offers give <span class="mono">types_not_comparable</span>. Neither side discovers anything it did not already hold.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="who">
   <div class="container">
     <div class="sec-head"><h2 class="sec">Who it is for</h2>
@@ -762,6 +826,7 @@ $   -d '{"endpoint":"https://your-agent.example.com","kind":"supply"}'
     });
   }
   wireCopy('copyOneLine', 'oneLine', 'oneLineStatus');
+  wireCopy('copyDirectLine', 'directLine', 'directStatus');
   wireCopy('copyOneLineTop', 'oneLineTop', 'oneLineTopStatus');
 
   // Connecting an agent that runs somewhere else. The refusals are named one by one, because a
