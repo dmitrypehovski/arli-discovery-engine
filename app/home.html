@@ -59,6 +59,18 @@ textarea,input[type=text],input[type=number],select{width:100%;font-family:var(-
 textarea:focus,input:focus,select:focus{outline:2px solid var(--green-deep);outline-offset:1px}
 .grid2{display:grid;gap:16px}
 @media(min-width:800px){.grid2{grid-template-columns:1fr 1fr}}
+.whorows{border-top:1px solid var(--rule-strong)}
+.whorow{display:grid;grid-template-columns:190px 1fr 300px;gap:20px;padding:18px 0;border-bottom:1px solid var(--rule)}
+.whorow.muted{opacity:.72}
+.ws{font-family:var(--mono);font-size:12.5px;color:var(--green-deep);letter-spacing:.04em}
+.ws span{display:block;font-family:var(--font);font-size:13px;color:var(--ink-soft);letter-spacing:0;margin-top:3px}
+.wc b{display:block;font-family:var(--display);font-size:17px;font-weight:800;letter-spacing:-.2px;margin-bottom:6px}
+.wc p{margin:0;font-size:14.5px;color:var(--ink-soft);max-width:52ch}
+.wt{border-left:2px solid var(--rule);padding-left:16px}
+.wt .wl{display:inline-block;font-family:var(--mono);font-size:11px;color:var(--green-deep);background:var(--green-wash);border:1px solid var(--rule-strong);border-radius:5px;padding:2px 8px;margin-bottom:8px}
+.wt p{margin:0 0 6px;font-size:13.5px;color:var(--ink-soft)}
+.wt p.wp{margin:0;font-family:var(--mono);font-size:11.5px;color:var(--green-deep)}
+@media(max-width:900px){.whorow{grid-template-columns:1fr;gap:10px}.wt{border-left:none;padding-left:0;border-top:1px solid var(--rule);padding-top:10px}.wc p{max-width:none}}
 .copybox{position:relative}
 .copybox pre{margin:0;padding-right:96px}
 .copybox .btn{position:absolute;top:10px;right:10px;padding:7px 14px;font-size:13.5px}
@@ -286,18 +298,19 @@ code{font-family:var(--mono);font-size:13px;background:var(--green-wash);border:
         <svg viewBox="0 0 460 210" width="100%" role="img" aria-label="Every exchange is the same nine calls: open, offer, confirm, lock keys, sign, compare, record, approve">
           <text x="20" y="26" font-family="JetBrains Mono, monospace" font-size="12" fill="#84977a">EVERY EXCHANGE IS THESE CALLS</text>
           <rect x="20" y="46" width="420" height="52" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
-          <text x="230" y="66" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#125828">open · offer · counter · confirm · lock · sign · compare · record · approve</text>
-          <text x="230" y="86" text-anchor="middle" font-size="11.5" fill="#55684a">nine calls, each one signed, each one checkable afterwards</text>
+          <text x="230" y="66" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#125828">open · offer · counter · confirm</text>
+          <text x="230" y="84" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#125828">lock · sign · compare · record · approve</text>
+          <text x="230" y="104" text-anchor="middle" font-size="11.5" fill="#55684a">nine calls, each one signed and checkable afterwards</text>
 
-          <rect x="20" y="116" width="200" height="72" rx="10" fill="#eef7e8" stroke="#d3dfc7"/>
-          <text x="120" y="140" text-anchor="middle" font-size="12.5" fill="#16220f">what you can see</text>
-          <text x="120" y="160" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#1f7a3a">your own items that matched</text>
-          <text x="120" y="177" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#1f7a3a">the count, and how much</text>
+          <rect x="20" y="124" width="200" height="68" rx="10" fill="#eef7e8" stroke="#d3dfc7"/>
+          <text x="120" y="146" text-anchor="middle" font-size="12.5" fill="#16220f">what you can see</text>
+          <text x="120" y="165" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#1f7a3a">your items that matched</text>
+          <text x="120" y="182" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#1f7a3a">the count, and how much</text>
 
-          <rect x="240" y="116" width="200" height="72" rx="10" fill="#eef7e8" stroke="#d3dfc7"/>
-          <text x="340" y="140" text-anchor="middle" font-size="12.5" fill="#16220f">what nobody can see</text>
-          <text x="340" y="160" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#55684a">their items, ever</text>
-          <text x="340" y="177" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#55684a">the items they did not share</text>
+          <rect x="240" y="124" width="200" height="68" rx="10" fill="#eef7e8" stroke="#d3dfc7"/>
+          <text x="340" y="146" text-anchor="middle" font-size="12.5" fill="#16220f">what nobody can see</text>
+          <text x="340" y="165" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#55684a">their items, ever</text>
+          <text x="340" y="182" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#55684a">the items they did not share</text>
         </svg>
         <figcaption>Every exchange leaves the same trail, so a number in a report can be traced back to the calls that produced it.</figcaption>
       </div>
@@ -491,126 +504,120 @@ $   -d '{"endpoint":"https://your-agent.example.com","kind":"supply"}'
 <section id="who">
   <div class="container">
     <div class="sec-head"><h2 class="sec">Who it is for</h2>
-      <p>Private matching is not a new idea. It runs the advertising market, it is entering health care and finance, and it is the piece agent commerce is missing. Below: who uses it today, and where it has nowhere to go yet.</p></div>
+      <p>Private matching is already infrastructure in advertising, in clinical research and in bank fraud work. Everywhere else it is a phone call and a relationship. Each row: who, what stays private, and what exists today.</p></div>
 
-    <div class="fig" style="margin-bottom:18px">
-      <svg viewBox="0 0 900 250" width="100%" role="img" aria-label="Two columns: sectors where private matching already runs in production, and the sector where it has no home yet, which is agent commerce">
-        <text x="20" y="26" font-family="JetBrains Mono, monospace" font-size="12" fill="#125828">ALREADY IN PRODUCTION</text>
-        <text x="640" y="26" font-family="JetBrains Mono, monospace" font-size="12" fill="#8a6d1f">NO HOME YET</text>
-        <line x1="600" y1="16" x2="600" y2="230" stroke="#d3dfc7" stroke-width="1.5"/>
+    <div class="whorows">
+      <div class="whorow">
+        <div class="ws">ADVERTISING<span>and media measurement</span></div>
+        <div class="wc"><b>Compare audiences without moving the data</b>
+          <p>An advertiser, a retailer and a media owner want to know how much their customers overlap, to plan and to measure. Neither will hand over its customer file.</p></div>
+        <div class="wt"><span class="wl">Running today</span>
+          <p>InfoSum, Habu (LiveRamp), Decentriq and AWS Clean Rooms sell exactly this as a data clean room.</p>
+          <p class="wp">Kantar Media shared a media panel with Meta this way, on AWS Clean Rooms, 2024</p></div>
+      </div>
 
-        <rect x="20" y="42" width="560" height="180" rx="12" fill="#eef7e8" stroke="#d3dfc7"/>
-        <text x="44" y="72" font-size="14" fill="#16220f">Advertising and media measurement</text>
-        <text x="44" y="92" font-size="12" fill="#55684a">Audience overlap and campaign measurement, without moving either dataset.</text>
-        <text x="44" y="112" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#125828">InfoSum · Habu (LiveRamp) · Decentriq · AWS Clean Rooms</text>
-        <text x="44" y="136" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#55684a">Kantar Media panel sharing with Meta used this exact method (AWS, 2024)</text>
+      <div class="whorow">
+        <div class="ws">HEALTH CARE<span>and clinical research</span></div>
+        <div class="wc"><b>Find the cohort, never the patient</b>
+          <p>A hospital, a trial sponsor and a researcher need to know whether the patients they can reach match a study. Moving patient records between institutions is the legal problem, not the technical one.</p></div>
+        <div class="wt"><span class="wl">Running today</span>
+          <p>TriNetX federates more than a hundred health organisations: the query travels to the data, nothing leaves the hospital, and only counts come back.</p>
+          <p class="wp">Patient data never leaves the walls of the organisations that generate it (TriNetX)</p></div>
+      </div>
 
-        <text x="44" y="166" font-size="14" fill="#16220f">Health care, life sciences, government statistics</text>
-        <text x="44" y="186" font-size="12" fill="#55684a">Cohort and record matching where moving the data itself is the legal problem.</text>
-        <text x="44" y="206" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#125828">Clean rooms are already a documented sector, not a proposal</text>
+      <div class="whorow">
+        <div class="ws">BANKS<span>and fraud teams</span></div>
+        <div class="wc"><b>Share the signal, keep the customer</b>
+          <p>Fraud is caught faster by many institutions than by one, and regulated banks cannot hand each other customer records. They need "do we both have this entity?", not "show me everything".</p></div>
+        <div class="wt"><span class="wl">Research, and early pilots</span>
+          <p>Collaboration is studied as federated learning: a 2026 study across banks went from 0.64 to 0.90 on fraud detection without moving transaction data.</p>
+          <p class="wp">What is still ad hoc is the matching step itself: who is on both lists</p></div>
+      </div>
 
-        <rect x="620" y="42" width="260" height="180" rx="12" fill="#fdf3f2" stroke="#e3c9c5"/>
-        <text x="644" y="72" font-size="14" fill="#16220f">Agents trading for people</text>
-        <text x="644" y="92" font-size="12" fill="#55684a">A2A is in production at 150+ organisations, and payments are solved.</text>
-        <text x="644" y="118" font-size="12" fill="#55684a">What is missing is how two agents find out they are a pair without either owner publishing its list.</text>
-        <text x="644" y="146" font-family="JetBrains Mono, monospace" font-size="11.5" fill="#8a6d1f">today: a public registry, or nothing</text>
-        <text x="644" y="172" font-size="12" fill="#16220f">This is the gap ARLI Match fills.</text>
-        <text x="644" y="196" font-family="JetBrains Mono, monospace" font-size="11" fill="#55684a">Linux Foundation, A2A in production, April 2026</text>
+      <div class="whorow">
+        <div class="ws">AGENTS<span>that trade for people</span></div>
+        <div class="wc"><b>Discovery for a market that already moves money</b>
+          <p>Agents already delegate work and pay each other. Neither side wants its owner's list published, and both need to know whether they are a pair before anyone is introduced.</p></div>
+        <div class="wt"><span class="wl">Half built</span>
+          <p>A2A reached production at more than 150 organisations, and payments have their own protocols (AP2, UCP, x402).</p>
+          <p class="wp">Missing: how two agents compare without a registry holding the lists. This is that layer</p></div>
+      </div>
+
+      <div class="whorow">
+        <div class="ws">PROCUREMENT<span>and supply chains</span></div>
+        <div class="wc"><b>Shop without announcing what you buy</b>
+          <p>A buyer will not post its requirements to a public index; a supplier will not post its free capacity. Both want to know whether they fit, before either says anything to the market.</p></div>
+        <div class="wt"><span class="wl">Nothing standard</span>
+          <p>This runs on brokers, referrals and relationship calls, so the smaller side stays invisible.</p></div>
+      </div>
+
+      <div class="whorow">
+        <div class="ws">DEALS<span>that never get posted</span></div>
+        <div class="wc"><b>Off-market deals, executive search, quiet listings</b>
+          <p>Advisers, search firms and off-market property work by definition do not advertise their lists. Their business is knowing who overlaps, and the list is the asset they cannot hand over.</p></div>
+        <div class="wt"><span class="wl">People, not software</span>
+          <p>Deal sourcing and search run on relationships and spreadsheets, and every new mandate starts the networking from zero.</p></div>
+      </div>
+
+      <div class="whorow">
+        <div class="ws">NETWORKS<span>and consortiums</span></div>
+        <div class="wc"><b>Run your own room, on your own machines</b>
+          <p>An industry body, a franchisor, a platform operator or an accelerator can give members matching among themselves, with each member's list staying with that member.</p></div>
+        <div class="wt"><span class="wl">Our engine, yours</span>
+          <p>Membership, the domain and the branding are yours. The rules and the code are ours, open, and one command puts an agent in.</p></div>
+      </div>
+
+      <div class="whorow muted">
+        <div class="ws">NOT FOR THIS</div>
+        <div class="wc"><b>If your list is public anyway</b>
+          <p>A catalogue, a job board or a search engine is cheaper and better when you are happy for the world to read what you have.</p></div>
+        <div class="wt"><span class="wl">Say no</span>
+          <p>This exists for the lists you would not post. If that is not your situation, do not add machinery to a solved problem.</p></div>
+      </div>
+    </div>
+
+    <div class="sec-head" style="margin-top:34px"><h2 class="sec">Why it beats a catalogue, in six questions</h2>
+      <p>The same six questions a buyer asks before handing over a list.</p></div>
+    <table>
+      <thead><tr><th>Question</th><th>A public catalogue</th><th>A private comparison</th></tr></thead>
+      <tbody>
+        <tr><td>Who holds your list</td><td>The catalogue, and its buyers</td><td>You, on your machine</td></tr>
+        <tr><td>What the other side sees</td><td>Everyone's entries, including yours</td><td>Which of your items also exist there, above your minimum</td></tr>
+        <tr><td>What a competitor can do with it</td><td>Read your position, price against you, poach</td><td>Nothing: it never gets the list</td></tr>
+        <tr><td>What being found costs you</td><td>Your list, published for ever</td><td>One exchange, and nothing retained on the other side</td></tr>
+        <tr><td>Can you prove what was compared</td><td>No</td><td>Yes: every step is signed, and a stranger can check it</td></tr>
+        <tr><td>Who opens the introduction</td><td>Whoever holds the index decides</td><td>The two people, each approving separately</td></tr>
+      </tbody>
+    </table>
+
+    <div class="fig" style="margin-top:20px">
+      <svg viewBox="0 0 900 210" width="100%" role="img" aria-label="Left: in a catalogue your list is handed over and becomes the catalogue's asset. Right: in a private comparison the list stays home and only the overlap comes back">
+        <text x="30" y="28" font-family="JetBrains Mono, monospace" font-size="12.5" fill="#8a6d1f">A CATALOGUE</text>
+        <rect x="30" y="44" width="150" height="54" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
+        <text x="105" y="68" text-anchor="middle" font-size="13" fill="#16220f">your list</text>
+        <text x="105" y="86" text-anchor="middle" font-size="11.5" fill="#55684a">handed over</text>
+        <line x1="180" y1="71" x2="250" y2="71" stroke="#b9cbaa" stroke-width="1.5"/>
+        <rect x="250" y="44" width="160" height="54" rx="10" fill="#fdf3f2" stroke="#e3c9c5"/>
+        <text x="330" y="68" text-anchor="middle" font-size="13" fill="#16220f">their database</text>
+        <text x="330" y="86" text-anchor="middle" font-size="11.5" fill="#55684a">readable by them</text>
+        <text x="215" y="122" text-anchor="middle" font-size="11.5" fill="#a32626">once given, it is theirs</text>
+
+        <line x1="470" y1="20" x2="470" y2="190" stroke="#d3dfc7" stroke-width="1.5"/>
+
+        <text x="520" y="28" font-family="JetBrains Mono, monospace" font-size="12.5" fill="#125828">A PRIVATE COMPARISON</text>
+        <rect x="520" y="44" width="150" height="54" rx="10" fill="#eef7e8" stroke="#b9cbaa"/>
+        <text x="595" y="68" text-anchor="middle" font-size="13" fill="#16220f">your list</text>
+        <text x="595" y="86" text-anchor="middle" font-size="11.5" fill="#55684a">stays here</text>
+        <line x1="670" y1="71" x2="740" y2="71" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <text x="705" y="52" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#125828">locked values</text>
+        <rect x="740" y="44" width="130" height="54" rx="10" fill="#eef7e8" stroke="#b9cbaa"/>
+        <text x="805" y="68" text-anchor="middle" font-size="13" fill="#16220f">the overlap</text>
+        <text x="805" y="86" text-anchor="middle" font-size="11.5" fill="#55684a">and the count</text>
+        <text x="705" y="122" text-anchor="middle" font-size="11.5" fill="#125828">borrowed, never kept</text>
+
+        <text x="450" y="176" text-anchor="middle" font-size="13" fill="#16220f">One scan is one exchange per agent in the room. Neither side keeps a copy of the other.</text>
       </svg>
-      <figcaption>The method is established where the data is the asset. It has not reached the place where the list is the asset.</figcaption>
-    </div>
-
-    <div class="cards c3">
-      <div class="card">
-        <span class="tag">ADVERTISING AND COMMERCE MEDIA</span>
-        <h3>Match audiences without moving data</h3>
-        <p>Advertisers, retailers and media owners compare customer overlap to plan and measure campaigns. Today this means a data clean room, a vendor in the middle, and a legal review. An agent with its own list does the same comparison and keeps its own copy.</p>
-      </div>
-      <div class="card">
-        <span class="tag">HEALTH AND LIFE SCIENCES</span>
-        <h3>Find the cohort, not the patient</h3>
-        <p>Hospitals, trial sponsors and researchers need to know whether their cohorts overlap. Moving patient records between institutions is the legal problem, so the comparison has to happen without the records travelling.</p>
-      </div>
-      <div class="card">
-        <span class="tag">FINANCE AND FRAUD CONSORTIA</span>
-        <h3>Share the signal, keep the customer</h3>
-        <p>Banks and payment firms catch fraud faster together than alone, and cannot hand each other customer data. They need to ask "do we both have this?", not "show me yours".</p>
-      </div>
-      <div class="card">
-        <span class="tag">PROCUREMENT AND SUPPLY CHAINS</span>
-        <h3>Shop without announcing what you buy</h3>
-        <p>A buyer will not publish its requirements to a public index, and a supplier will not publish its capacity. Both want to know whether they fit, before either says anything to the market.</p>
-      </div>
-      <div class="card">
-        <span class="tag">DEALS THAT NEVER GET POSTED</span>
-        <h3>Off-market, executive search, pocket listings</h3>
-        <p>M&amp;A advisers, executive search firms and off-market property work by definition do not post their lists. Their business is knowing who overlaps, and the list is the asset they will not hand over.</p>
-      </div>
-      <div class="card">
-        <span class="tag">AGENT BUILDERS AND MARKETPLACES</span>
-        <h3>Discovery for the agents already trading</h3>
-        <p>A2A reached production at 150+ organisations and agent payments have their own protocols. Neither says how two agents learn they are a match. This is that layer: connect by address, compare, and prove what was compared.</p>
-      </div>
-      <div class="card">
-        <span class="tag">NETWORKS AND CONSORTIUMS</span>
-        <h3>Run your own room, on your own machines</h3>
-        <p>Industry bodies, franchisors and platform operators can run a room for their members: same rules, their machines, their members' lists staying with each member.</p>
-      </div>
-      <div class="card">
-        <span class="tag">NOT FOR THIS</span>
-        <h3>If your list is public anyway</h3>
-        <p>A catalogue, a search engine or a job board is cheaper and better when you are happy for everyone to read what you have. This exists for the lists you would not post.</p>
-      </div>
-    </div>
-
-    <div class="grid2" style="margin-top:18px">
-      <div class="fig">
-        <svg viewBox="0 0 460 220" width="100%" role="img" aria-label="With a catalogue the list is handed over once and sits in someone else's database; with a private comparison the list stays home and only the overlap comes back">
-          <text x="20" y="24" font-family="JetBrains Mono, monospace" font-size="12" fill="#8a6d1f">A CATALOGUE</text>
-          <rect x="20" y="38" width="130" height="60" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
-          <text x="85" y="62" text-anchor="middle" font-size="12.5" fill="#16220f">your list</text>
-          <text x="85" y="82" text-anchor="middle" font-size="11.5" fill="#55684a">handed over</text>
-          <rect x="200" y="38" width="150" height="60" rx="10" fill="#fdf3f2" stroke="#e3c9c5"/>
-          <text x="275" y="62" text-anchor="middle" font-size="12.5" fill="#16220f">their database</text>
-          <text x="275" y="82" text-anchor="middle" font-size="11.5" fill="#55684a">readable by them</text>
-          <line x1="150" y1="68" x2="200" y2="68" stroke="#b9cbaa" stroke-width="1.5"/>
-          <text x="175" y="120" text-anchor="middle" font-size="11.5" fill="#a32626">once given, it is theirs</text>
-
-          <text x="20" y="164" font-family="JetBrains Mono, monospace" font-size="12" fill="#125828">A PRIVATE COMPARISON</text>
-          <rect x="20" y="178" width="130" height="34" rx="10" fill="#eef7e8" stroke="#b9cbaa"/>
-          <text x="85" y="200" text-anchor="middle" font-size="12.5" fill="#16220f">your list</text>
-          <rect x="200" y="178" width="150" height="34" rx="10" fill="#eef7e8" stroke="#b9cbaa"/>
-          <text x="275" y="200" text-anchor="middle" font-size="12.5" fill="#16220f">the overlap</text>
-          <line x1="150" y1="195" x2="200" y2="195" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="5 4"/>
-          <text x="175" y="176" font-family="JetBrains Mono, monospace" font-size="11" fill="#125828">locked values</text>
-        </svg>
-        <figcaption>The difference in one picture: a catalogue takes your list, a comparison borrows it.</figcaption>
-      </div>
-
-      <div class="fig">
-        <svg viewBox="0 0 460 220" width="100%" role="img" aria-label="Today an agent joins by being listed publicly in a registry; with ARLI Match it joins by address and compares without a holder in the middle">
-          <text x="20" y="24" font-family="JetBrains Mono, monospace" font-size="12" fill="#8a6d1f">TODAY: JOIN BY BEING LISTED</text>
-          <rect x="20" y="38" width="120" height="48" rx="10" fill="#ffffff" stroke="#d3dfc7"/>
-          <text x="80" y="68" text-anchor="middle" font-size="12" fill="#16220f">your agent</text>
-          <rect x="170" y="38" width="120" height="48" rx="10" fill="#fdf3f2" stroke="#e3c9c5"/>
-          <text x="230" y="60" text-anchor="middle" font-size="12" fill="#16220f">public registry</text>
-          <text x="230" y="77" text-anchor="middle" font-size="11" fill="#55684a">your list, copied</text>
-          <line x1="140" y1="62" x2="170" y2="62" stroke="#b9cbaa" stroke-width="1.5"/>
-          <text x="300" y="68" font-size="11.5" fill="#a32626">the index is the product</text>
-
-          <text x="20" y="122" font-family="JetBrains Mono, monospace" font-size="12" fill="#125828">WITH ARLI MATCH: JOIN BY ADDRESS</text>
-          <rect x="20" y="136" width="120" height="60" rx="10" fill="#eef7e8" stroke="#b9cbaa"/>
-          <text x="80" y="160" text-anchor="middle" font-size="12" fill="#16220f">your agent</text>
-          <text x="80" y="180" text-anchor="middle" font-size="11" fill="#55684a">your address</text>
-          <rect x="170" y="136" width="120" height="60" rx="10" fill="#eef7e8" stroke="#b9cbaa"/>
-          <text x="230" y="160" text-anchor="middle" font-size="12" fill="#16220f">the other agent</text>
-          <text x="230" y="180" text-anchor="middle" font-size="11" fill="#55684a">its own address</text>
-          <line x1="140" y1="166" x2="170" y2="166" stroke="#b9cbaa" stroke-width="1.5" stroke-dasharray="5 4"/>
-          <text x="155" y="212" text-anchor="middle" font-size="11.5" fill="#125828">nothing in the middle</text>
-          <text x="330" y="166" font-size="11.5" fill="#55684a">no holder to pay, none to leak</text>
-        </svg>
-        <figcaption>Discovery does not require a registry. Address in, answer out.</figcaption>
-      </div>
+      <figcaption>The difference in one picture.</figcaption>
     </div>
   </div>
 </section>
