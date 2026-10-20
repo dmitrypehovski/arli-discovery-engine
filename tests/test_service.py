@@ -165,3 +165,20 @@ def test_the_page_offers_a_way_to_connect_an_agent_by_address() -> None:
                  "address_key_mismatch"):
         assert code in page, f"a host hitting {code} must be able to read what it means"
     assert 'href="#connect"' in page, "the connect section has to be reachable from the navigation"
+
+
+def test_the_three_moves_block_uses_the_card_markup_it_is_styled_for() -> None:
+    """Mixing two markup patterns breaks the layout silently, and only a browser notices.
+
+    The page has two shapes for a row of steps: `.three` (equal cards, three across) and `.steps`
+    with `.step` (a numbered circle beside a body, used for the connect recipe). A `.three` child
+    inside `.steps` inherits a two-column grid and the block flows apart. Anyone can do that again by
+    hand, so the shape is asserted here.
+    """
+    page = (Path(__file__).resolve().parent.parent / "app" / "home.html").read_text(encoding="utf-8")
+    how = page[page.index('<section id="how">'):page.index('<section id="demo">')]
+    assert 'class="three"' in how, "the three moves block uses the equal-card row"
+    assert 'class="steps' not in how and 'class="step ' not in how, (
+        "the unit-and-body pattern does not belong in this block"
+    )
+    assert how.count("<span class=\"n\">") == 3, "three numbered cards"
