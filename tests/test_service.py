@@ -1134,3 +1134,27 @@ def test_a_search_records_nothing_about_who_asked(monkeypatch, tmp_path) -> None
         for table, count in before.items():
             now = connection.execute("SELECT COUNT(*) AS n FROM %s" % table).fetchone()["n"]
             assert now == count, f"{table} gained a row from a search: a search must store nothing about the asker"
+
+
+def test_the_join_check_answers_about_the_agent_asked_with_grounds(monkeypatch, tmp_path) -> None:
+    """A lookup that answers every question with the first row is worse than no lookup: it says yes to a stranger."""
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    account, _token = service.register_account("join@example.com", "join-password")
+    hosted, _ = service.create_agent({"name": "Join Warehouse", "kind": "supply", "features": ["offer:warehousing"]})
+    with service.connect() as connection:
+        connection.execute("UPDATE agents SET owner_account = ? WHERE id = ?", (account["id"], hosted["id"]))
+    with service.connect() as connection:
+        connection.execute(
+            """INSERT INTO remotes (id, name, kind, city, headline, endpoint, kid, jwk, connected_at, active,
+                                    profile, bucket_space, mode, pull_token, pull_expires_at, last_poll, card)
+               VALUES ('joined-by-calling','joined-by-calling','supply','','','','k','{}',
+                       '2026-01-01T00:00:00Z',1,'{"buckets": {"manufacturing-and-production": 1}, "bucket_space": "arli-areas-v1"}',
+                       'arli-areas-v1','pull','t','2099-01-01T00:00:00Z','','{}')""")
+
+    assert service.join_check("nothing-like-this")["in_room"] is False, "an unknown name is not in the room"
+    answer = service.join_check("joined-by-calling")
+    assert answer["in_room"] is True and answer["pull"] is True, answer
+    assert answer["buckets"] == 1 and answer["vocabulary"] == "arli-areas-v1", answer
+    hosted_answer = service.join_check("Join Warehouse")
+    assert hosted_answer["hosted"] is True and hosted_answer["feature_count"] == 1, hosted_answer
+    assert service.join_check("  ")["in_room"] is False

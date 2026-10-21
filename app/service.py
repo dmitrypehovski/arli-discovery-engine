@@ -488,6 +488,57 @@ def pull_answer(agent_id: str, call_id: str, result: dict | None, error: str = "
     return True
 
 
+JOIN_CHECKS_ALLOWED = int(os.environ.get("ARLI_MATCH_JOIN_CHECKS") or 60)
+
+
+def join_check(what: str) -> dict:
+    """Is this agent in the room, and how does the room reach it?
+
+    What this does: looks up what is already registered here — a hosted agent, an agent connected at its own
+    address, or one that registers by calling. What it deliberately does not do: dial the address it was given.
+    A public endpoint that knocks on arbitrary addresses is a scanner handed to strangers, and the answer to "is my
+    agent reachable" is already here for anything that registered.
+    """
+    wanted = what.strip().lower()
+    if not wanted:
+        return {"in_room": False, "detail": "nothing was given"}
+    bare = wanted.rstrip("/")
+
+    for agent in stored_agents(include_features=True):
+        if wanted in (str(agent["id"]).lower(), str(agent["name"]).lower()):
+            buckets = seeker_buckets(agent.get("features") or [])
+            return {"in_room": True, "name": agent["name"], "id": agent["id"],
+                    "how": "registered here, so this room holds its list because its owner made it from words",
+                    "reachable": "any search can find it without an account",
+                    "feature_count": agent["feature_count"], "buckets": len(buckets),
+                    "vocabulary": VOCABULARY_ID, "pull": False, "hosted": True}
+
+    for remote in remote_agents(include_endpoint=True):
+        endpoint = str(remote.get("endpoint") or "").lower().rstrip("/")
+        # The value searched for is not in the tuple compared against, or the comparison is true for everything:
+        # that mistake was made here and answered every question with the first agent in the room.
+        if wanted in (str(remote["id"]).lower(), str(remote["name"]).lower()) or bare == endpoint:
+            profile = {}
+            row = next((item for item in remotes_to_check() if item["id"] == remote["id"]), {})
+            try:
+                profile = json.loads(row.get("profile") or "{}")
+            except json.JSONDecodeError:
+                profile = {}
+            pull = bool(remote.get("pull"))
+            return {"in_room": True, "name": remote["name"], "id": remote["id"],
+                    "how": ("an agent that has no address: it calls the room and answers on its own poll" if pull
+                            else "an agent at its own address"),
+                    "reachable": ("it answers on its next poll, in seconds" if pull
+                                  else "the room reaches it at that address"),
+                    "feature_count": None, "buckets": len(profile.get("buckets") or {}),
+                    "vocabulary": str(profile.get("bucket_space") or ""), "pull": pull, "hosted": False,
+                    "endpoint": remote.get("endpoint") if not pull else ""}
+
+    return {"in_room": False,
+            "detail": "no agent with that name or address is registered here. Either it was never connected, or it "
+                      "left the listing because its term ran out or it stopped answering."}
+
+
 def peer_client_for(remote: dict):
     """How to reach this agent: over its address, or over the poll it holds open."""
     if remote.get("mode") != "pull":
@@ -1994,6 +2045,9 @@ class Handler(BaseHandler):
                              "connected_agents": len(remote_agents()),
                              "database": str(DB_PATH), "network": "network-eu-design"})
             return
+        if path in ("/join", "/join/"):
+            self._serve_page(HERE / "join.html")
+            return
         if path in ("/privacy", "/privacy/"):
             # What the room keeps, written from the store rather than from intentions.
             self._serve_page(HERE / "privacy.html")
@@ -2079,6 +2133,7 @@ class Handler(BaseHandler):
     def do_POST(self) -> None:  # noqa: N802
         path = self.path.split("?")[0]
         if path not in ("/api/agents", "/api/scan", "/api/negotiate", "/api/connect", "/api/intake",
+                         "/api/join/check",
                          "/api/pull/hello", "/api/pull/register", "/api/pull/answer",
                          "/api/app/register", "/api/app/login", "/api/app/logout",
                          "/api/vocabulary", "/api/app/intake", "/api/app/introductions",
@@ -2256,6 +2311,18 @@ class Handler(BaseHandler):
                 self._json(200, intake(payload))
             except ValueError as error:
                 self._json(400, {"error": str(error)})
+            return
+
+        if path == "/api/join/check":
+            here = "join:" + client_ip(self.client_address[0] if self.client_address else "",
+                                       str(self.headers.get("X-Forwarded-For") or ""))
+            if not attempts_allowed(here, allowed=JOIN_CHECKS_ALLOWED, window=SEARCH_WINDOW_SECONDS):
+                self._json(429, {"error": "too_many_checks",
+                                 "detail": f"At most {JOIN_CHECKS_ALLOWED} checks from one address every "
+                                           f"{SEARCH_WINDOW_SECONDS // 60} minutes."})
+                return
+            note_attempt(here)
+            self._json(200, join_check(str(payload.get("agent") or "")))
             return
 
         if path == "/api/pull/hello":

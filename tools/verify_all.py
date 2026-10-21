@@ -284,6 +284,7 @@ def check_durability() -> None:
 def check_live() -> None:
     for path, what in ((f"{ROOM}/", "public page"), (f"{ROOM}/app", "product page"),
                        (f"{ROOM}/spec/", "specification page"), (f"{ROOM}/privacy", "storage page"),
+                       (f"{ROOM}/join", "join page"),
                        (f"{ROOM}/api/health", "health")):
         try:
             with urllib.request.urlopen(path, timeout=30) as response:
@@ -304,6 +305,16 @@ def check_live() -> None:
                        "the storage page is linked" if "/privacy" in body else "not linked")
         except Exception as error:  # noqa: BLE001
             record(f"live: {what}", False, f"{type(error).__name__}: {error}")
+
+    code, unknown = _json(f"{ROOM}/api/join/check", {"agent": "no-agent-with-this-name"})
+    record("live: the join check says no to an unknown name", code == 200 and unknown.get("in_room") is False,
+           "an unknown name is not in the room" if unknown.get("in_room") is False else str(unknown)[:120])
+
+    code, known = _json(f"{ROOM}/api/join/check", {"agent": "my-agent"})
+    record("live: the join check tells a joined agent how it is reached",
+           code == 200 and known.get("in_room") is True and known.get("pull") is True,
+           f"{known.get('name')}: {known.get('how')} ({known.get('buckets')} areas)" if known.get("in_room")
+           else str(known)[:120])
 
     code, health = _json(f"{ROOM}/api/health")
     record("live: the room answers with counts", code == 200,
