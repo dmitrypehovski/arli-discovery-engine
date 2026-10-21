@@ -1049,6 +1049,10 @@ SESSION_DAYS = 30
 MIN_PASSWORD_CHARS = 8
 ATTEMPT_WINDOW_SECONDS = 600
 ATTEMPTS_ALLOWED = 8
+# A search is the expensive public call: one closed exchange per agent that shares a bucket. Left open, one
+# address can burn the machine for everybody, and the cost is charged to us rather than to the caller.
+SEARCH_ATTEMPTS_ALLOWED = int(os.environ.get("ARLI_MATCH_SEARCH_ATTEMPTS") or 30)
+SEARCH_WINDOW_SECONDS = int(os.environ.get("ARLI_MATCH_SEARCH_WINDOW") or 600)
 _attempts: dict = {}
 
 EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,190}\.[A-Za-z]{2,24}$")
@@ -1084,12 +1088,30 @@ def _clean_email(value) -> str:
     return email
 
 
-def attempts_allowed(bucket: str) -> bool:
+def client_ip(peer: str, forwarded: str = "") -> str:
+    """Who to count, when a proxy stands in front.
+
+    Behind nginx every request arrives from loopback, so counting the connection address makes one limit shared by
+    everybody: it would either never fire or fire on the whole world. The forwarded address is used when the peer
+    is loopback, because that is the only case where the header was put there by our own proxy rather than by a
+    stranger talking to us directly.
+    """
+    peer = peer or "unknown"
+    if peer in ("127.0.0.1", "::1", "localhost") and forwarded.strip():
+        first = forwarded.split(",")[0].strip()
+        if first:
+            return first
+    return peer
+
+
+def attempts_allowed(bucket: str, allowed: int | None = None, window: int | None = None) -> bool:
     """A blunt limit on registering and signing in: enough for a person, too little for a script."""
     now = time.time()
-    recent = [moment for moment in _attempts.get(bucket, []) if now - moment < ATTEMPT_WINDOW_SECONDS]
+    span = ATTEMPT_WINDOW_SECONDS if window is None else window
+    cap = ATTEMPTS_ALLOWED if allowed is None else allowed
+    recent = [moment for moment in _attempts.get(bucket, []) if now - moment < span]
     _attempts[bucket] = recent
-    return len(recent) < ATTEMPTS_ALLOWED
+    return len(recent) < cap
 
 
 def note_attempt(bucket: str) -> None:
@@ -1972,6 +1994,10 @@ class Handler(BaseHandler):
                              "connected_agents": len(remote_agents()),
                              "database": str(DB_PATH), "network": "network-eu-design"})
             return
+        if path in ("/privacy", "/privacy/"):
+            # What the room keeps, written from the store rather than from intentions.
+            self._serve_page(HERE / "privacy.html")
+            return
         if path in ("/app", "/app/"):
             page = HERE / "app.html"
             if page.is_file():
@@ -2088,7 +2114,8 @@ class Handler(BaseHandler):
             return
 
         if path in ("/api/app/register", "/api/app/login"):
-            here = f"auth:{self.client_address[0] if self.client_address else 'unknown'}"
+            here = "auth:" + client_ip(self.client_address[0] if self.client_address else "",
+                                        str(self.headers.get("X-Forwarded-For") or ""))
             if not attempts_allowed(here):
                 self._json(429, {"error": "too_many_attempts",
                                  "detail": "Too many attempts from here. Try again in a few minutes."})
@@ -2324,6 +2351,16 @@ class Handler(BaseHandler):
             # disagrees with the protocol it is built on.
             self._json(400, {"error": f"{len(mine)} features is above the cap of {MAX_FEATURES} per exchange"})
             return
+        here = "scan:" + client_ip(self.client_address[0] if self.client_address else "",
+                                   str(self.headers.get("X-Forwarded-For") or ""))
+        if not attempts_allowed(here, allowed=SEARCH_ATTEMPTS_ALLOWED, window=SEARCH_WINDOW_SECONDS):
+            # One search is one closed exchange per agent sharing a bucket, which is our machine working for a
+            # stranger. Without a limit per address, one caller can spend the whole room's capacity.
+            self._json(429, {"error": "too_many_searches",
+                             "detail": f"At most {SEARCH_ATTEMPTS_ALLOWED} searches from one address every "
+                                       f"{SEARCH_WINDOW_SECONDS // 60} minutes."})
+            return
+        note_attempt(here)
         try:
             result = scan_room(mine, floor, my_kind)
             # An agent is not a pair with its own owner, and a search that shows a person their own agent at

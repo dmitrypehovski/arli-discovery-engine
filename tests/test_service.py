@@ -1096,3 +1096,41 @@ def test_a_remote_row_carries_its_door_so_the_page_can_offer_it(monkeypatch, tmp
         poller.join(timeout=5)
         server.shutdown()
         server.server_close()
+
+
+def test_the_limit_counts_the_real_client_behind_a_proxy(monkeypatch, tmp_path) -> None:
+    """Behind nginx every request is loopback, so counting the connection address makes one global limit."""
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    assert service.client_ip("127.0.0.1", "203.0.113.9") == "203.0.113.9", "the forwarded address is the client"
+    assert service.client_ip("203.0.113.9", "198.51.100.1") == "203.0.113.9", "a stranger's header is not trusted"
+    assert service.client_ip("127.0.0.1", "") == "127.0.0.1"
+    assert service.client_ip("127.0.0.1", "203.0.113.9, 10.0.0.1") == "203.0.113.9"
+
+
+def test_a_search_flood_from_one_address_is_cut_off(monkeypatch, tmp_path) -> None:
+    """The search is the expensive public call, and it was the one public call with no limit at all."""
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    service._attempts.clear()
+    for _ in range(service.SEARCH_ATTEMPTS_ALLOWED):
+        assert service.attempts_allowed("scan:203.0.113.9", allowed=service.SEARCH_ATTEMPTS_ALLOWED,
+                                        window=service.SEARCH_WINDOW_SECONDS) is True
+        service.note_attempt("scan:203.0.113.9")
+    assert service.attempts_allowed("scan:203.0.113.9", allowed=service.SEARCH_ATTEMPTS_ALLOWED,
+                                    window=service.SEARCH_WINDOW_SECONDS) is False
+    assert service.attempts_allowed("scan:203.0.113.10", allowed=service.SEARCH_ATTEMPTS_ALLOWED,
+                                    window=service.SEARCH_WINDOW_SECONDS) is True, "one address does not shut out another"
+
+
+def test_a_search_records_nothing_about_who_asked(monkeypatch, tmp_path) -> None:
+    """We say a search stores nothing about the asker. That is a claim about code, so it is tested on the tables."""
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    before = {}
+    with service.connect() as connection:
+        for table in ("agents", "remotes", "accounts", "introductions", "intro_messages", "agreements"):
+            before[table] = connection.execute("SELECT COUNT(*) AS n FROM %s" % table).fetchone()["n"]
+    result = service.scan_room(["need:warehousing"], 2000, "demand")
+    assert result["rows"], "the search ran"
+    with service.connect() as connection:
+        for table, count in before.items():
+            now = connection.execute("SELECT COUNT(*) AS n FROM %s" % table).fetchone()["n"]
+            assert now == count, f"{table} gained a row from a search: a search must store nothing about the asker"

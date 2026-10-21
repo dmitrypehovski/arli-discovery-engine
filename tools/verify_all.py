@@ -283,12 +283,16 @@ def check_durability() -> None:
 
 def check_live() -> None:
     for path, what in ((f"{ROOM}/", "public page"), (f"{ROOM}/app", "product page"),
-                       (f"{ROOM}/spec/", "specification page"), (f"{ROOM}/api/health", "health")):
+                       (f"{ROOM}/spec/", "specification page"), (f"{ROOM}/privacy", "storage page"),
+                       (f"{ROOM}/api/health", "health")):
         try:
             with urllib.request.urlopen(path, timeout=30) as response:
                 body = response.read().decode(errors="ignore")
             ok = response.status == 200
             record(f"live: {what}", ok, f"{response.status}")
+            if what == "storage page":
+                record("live: the storage page states the claim", "nothing about the asker" in body,
+                       "a search stores nothing is written down" if "nothing about the asker" in body else "missing")
             if what == "specification page":
                 version = re.search(r"Discovery Extension v([\d.]+)", body)
                 record("live: specification version", bool(version),
@@ -296,6 +300,8 @@ def check_live() -> None:
             if what == "public page":
                 record("live: the page offers the skill", "plugin marketplace add" in body,
                        "the skill line is on the page" if "plugin marketplace add" in body else "missing")
+                record("live: the page links to what the room keeps", "/privacy" in body,
+                       "the storage page is linked" if "/privacy" in body else "not linked")
         except Exception as error:  # noqa: BLE001
             record(f"live: {what}", False, f"{type(error).__name__}: {error}")
 
@@ -330,7 +336,32 @@ def check_install() -> None:
         record("install: the one-line script", False, f"{type(error).__name__}: {error}")
 
 
-GROUPS = {"engine": lambda fast: check_engine(fast), "spec": lambda fast: check_spec(fast),
+def check_ops() -> None:
+    """The things that are nobody's feature and everybody's outage: a copy of the store, and services that return."""
+    import glob
+    import sqlite3
+
+    copies = sorted(glob.glob("/var/backups/arli-match/match-*.sqlite3"))
+    record("a copy of the room's store exists", bool(copies), copies[-1] if copies else "no copies at all")
+    if copies:
+        try:
+            connection = sqlite3.connect(copies[-1])
+            tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            age_hours = int((time.time() - os.path.getmtime(copies[-1])) / 3600)
+            record("the newest copy opens and is current", bool(tables) and age_hours < 72,
+                   f"{len(tables)} tables, copied {age_hours}h ago")
+        except Exception as error:  # noqa: BLE001
+            record("the newest copy opens and is current", False, f"{type(error).__name__}: {error}")
+
+    code, out = run(["systemctl", "is-enabled", "arli-match-backup.timer"], timeout=30)
+    record("the daily copy is scheduled", out.strip() == "enabled", out.strip() or "not enabled")
+    for unit in ("arli-match", "nginx", "arli-platform"):
+        code, out = run(["systemctl", "is-enabled", unit], timeout=30)
+        active = run(["systemctl", "is-active", unit], timeout=30)[1].strip()
+        record(f"{unit} returns after a reboot", out.strip() == "enabled", f"enabled, active: {active}")
+
+
+GROUPS = {"ops": lambda fast: check_ops(), "engine": lambda fast: check_engine(fast), "spec": lambda fast: check_spec(fast),
           "conformance": lambda fast: check_conformance(), "road": lambda fast: check_road(),
           "durability": lambda fast: check_durability(), "live": lambda fast: check_live(),
           "install": lambda fast: check_install()}
