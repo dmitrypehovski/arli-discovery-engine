@@ -1191,3 +1191,35 @@ def test_the_room_listing_never_publishes_a_foreign_address(monkeypatch, tmp_pat
     listed = json.dumps(service.room_listing(), ensure_ascii=False)
     assert "do-not-publish.example.com" not in listed, "the listing published an address"
     assert "at-its-address" in listed, "but it does say the agent is there"
+
+
+def test_a_name_a_live_agent_holds_is_not_handed_to_a_second_one(monkeypatch, tmp_path) -> None:
+    """Two agents with one name is a way to be mistaken for somebody else, and the name is what a person reads."""
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    first, token = service.create_agent({"name": "Northern Warehouse", "kind": "supply",
+                                        "features": ["offer:warehousing"]})
+    try:
+        service.create_agent({"name": "northern warehouse", "kind": "supply", "features": ["offer:warehousing"]})
+        raise AssertionError("a second agent was allowed to take a live name")
+    except ValueError as error:
+        assert "name_already_taken" in str(error), error
+    # held by a connected agent too, not only by a hosted one
+    with service.connect() as connection:
+        connection.execute(
+            """INSERT INTO remotes (id, name, kind, city, headline, endpoint, kid, jwk, connected_at, active,
+                                    profile, bucket_space, mode, pull_token, pull_expires_at, last_poll, card)
+               VALUES ('at-its-address','At Its Address','supply','','','','k','{}','2026-01-01T00:00:00Z',1,
+                       '{}','','address','','','','{}')""")
+    try:
+        service.create_agent({"name": "At Its Address", "kind": "supply", "features": ["offer:warehousing"]})
+        raise AssertionError("a name held by a connected agent was handed out")
+    except ValueError as error:
+        assert "name_already_taken" in str(error), error
+    # renaming into a taken name is refused, renaming to its own name is not
+    try:
+        service.update_agent(first["id"], token, {"name": "At Its Address"})
+        raise AssertionError("a rename into a taken name was allowed")
+    except ValueError as error:
+        assert "name_already_taken" in str(error), error
+    kept = service.update_agent(first["id"], token, {"name": "Northern Warehouse"})
+    assert kept and kept["name"] == "Northern Warehouse", kept

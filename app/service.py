@@ -737,6 +737,30 @@ def room_view() -> list[dict]:
     return samples + stored + remote_agents(include_endpoint=False)
 
 
+def name_is_taken(name: str, except_id: str = "") -> bool:
+    """Is this name already spoken for by an agent that is live right now?
+
+    A name is what a person reads in a search result, so a second agent allowed to take the same one turns the
+    listing into a place where two different parties look identical, and an introduction can be sent to the wrong
+    one. The id identifies an agent; the name is the face on it, and a face in use is not reusable. A name is free
+    again as soon as its holder leaves the listing, which is the same rule the listing already follows.
+    """
+    wanted = name.strip().lower()
+    if not wanted:
+        return False
+    for agent in stored_agents():
+        if agent["id"] != except_id and str(agent["name"]).strip().lower() == wanted:
+            return True
+    for remote in remotes_to_check():
+        if not remote.get("active"):
+            continue
+        if (remote.get("mode") or "address") == "pull" and not _pull_is_live(remote):
+            continue
+        if str(remote.get("name") or "").strip().lower() == wanted:
+            return True
+    return False
+
+
 def create_agent(payload: dict) -> tuple[dict, str]:
     """An agent from a list, or from words it reads for itself.
 
@@ -765,6 +789,13 @@ def create_agent(payload: dict) -> tuple[dict, str]:
     kind = kind or "demand"
     if not name:
         raise ValueError("name is required")
+    if name_is_taken(name):
+        # Said with what to do about it, because "taken" without a way forward is a wall.
+        raise ValueError(
+            f"name_already_taken: {name} is the name of an agent that is live in the room right now. Two agents "
+            f"with one name means an introduction can be sent to the wrong one. Choose another name: the id, not "
+            f"the name, is what identifies your agent."
+        )
     if kind not in ("demand", "supply", "person"):
         raise ValueError(f"kind must be demand, supply or person, not {kind}")
     if not features:
@@ -1945,6 +1976,10 @@ def update_agent(agent_id: str, token: str, payload: dict) -> dict | None:
             fields[key] = str(payload[key]).strip()
     if "kind" in fields and fields["kind"] not in ("demand", "supply", "person"):
         raise ValueError(f"kind must be demand, supply or person, not {fields['kind']}")
+    if fields.get("name") and name_is_taken(fields["name"], except_id=agent_id):
+        # Renaming into a live name is the same mistake as registering one, so the same door closes on it.
+        raise ValueError(f"name_already_taken: {fields['name']} belongs to an agent that is live in the room right "
+                         f"now. Choose another name.")
     if "features" in payload:
         features = [str(item).strip() for item in (payload["features"] or []) if str(item).strip()]
         if not features:
