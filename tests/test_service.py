@@ -1051,3 +1051,48 @@ def test_an_expired_token_is_refused_with_its_own_name(monkeypatch, tmp_path) ->
                        '2026-01-02T00:00:00Z','','{}')""")
     assert service.pull_token_state("t-old")[0] == "expired"
     assert service.pull_token_of("t-old") is None
+
+
+def test_a_remote_row_carries_its_door_so_the_page_can_offer_it(monkeypatch, tmp_path) -> None:
+    """A pull agent is askable, and a row that does not say so makes the page hide a button that would work."""
+    import threading
+
+    from arli_engine.adapters.a2a.server import start_agent
+    from arli_engine.agent import build_agent
+    from arli_engine.client import AgentClient
+    from arli_engine.core.signing import KeyPair
+
+    monkeypatch.setenv("ARLI_TAXONOMY", "/llm-gateway/skill_taxonomy_v2.json")
+    monkeypatch.setenv("ARLI_DECLARED_AREAS", "manufacturing-and-production")
+    monkeypatch.delenv("ARLI_MATCH_ALLOW_PRIVATE", raising=False)
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    getattr(service.taxonomy, "cache_clear", lambda: None)()
+
+    key = KeyPair.generate()
+    state = build_agent("no-address", ["offer:packaging"], "http://127.0.0.1:0", private_pem=key.private_pem)
+    server, _thread = start_agent(state, 0, host="127.0.0.1")
+    endpoint = "http://127.0.0.1:%d" % server.server_address[1]
+    stop = threading.Event()
+
+    def hold_the_poll():
+        with AgentClient(endpoint) as local:
+            while not stop.is_set():
+                call = service.pull_next("no-address", wait_seconds=1)
+                if not call:
+                    continue
+                try:
+                    service.pull_answer("no-address", call["call_id"], local.call(call["method"], call["params"]))
+                except Exception as error:  # noqa: BLE001
+                    service.pull_answer("no-address", call["call_id"], None, error=str(error))
+
+    poller = threading.Thread(target=hold_the_poll, daemon=True)
+    poller.start()
+    try:
+        _pull_registration(service, endpoint)
+        rows = [row for row in service.scan_room(["need:packaging"], 2000, "demand")["rows"] if row.get("remote")]
+        assert rows and rows[0]["askable"] is True, rows
+    finally:
+        stop.set()
+        poller.join(timeout=5)
+        server.shutdown()
+        server.server_close()

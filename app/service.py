@@ -876,6 +876,10 @@ def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
         # The row is identified by the id in the store, not by the name the other side publishes:
         # a caller acts on this row, and the name belongs to the remote agent, not to us.
         result["id"] = remote["id"]
+        # And it carries the door, like every other row does: a remote agent can be asked, whether it is reached
+        # at an address or through the poll it holds open. Without this the page draws no ask button and the
+        # person cannot do what the row says is possible.
+        result["askable"] = bool(remote["active"])
         if result.get("answered", True):
             note_remote_success(remote["id"])
         else:
@@ -1295,7 +1299,9 @@ def request_introduction(account: dict, peer_agent_id: str, note: str = "") -> d
 
             wire = run_remote_introduction(mine["id"] if mine else account["email"], peer_agent_id,
                                            peer_remote["endpoint"], note,
-                                           remote_kind=str(peer_remote.get("kind") or "supply"))
+                                           remote_kind=str(peer_remote.get("kind") or "supply"),
+                                           peer_client=peer_client_for(peer_remote))
+            reach = "poll" if (peer_remote.get("mode") or "address") == "pull" else "address"
             intro_id = f"in-{secrets.token_hex(6)}"
             state = "introduced" if wire.get("agreed") else "declined"
             envelope = _evidence("introduction.over_the_wire",
@@ -1303,7 +1309,8 @@ def request_introduction(account: dict, peer_agent_id: str, note: str = "") -> d
                                   "endpoint": peer_remote["endpoint"], "negotiation_id": wire.get("session", ""),
                                   "note": note.strip()[:400]},
                                  {"state": state, "outcome": wire.get("outcome"),
-                                  "decided_by": wire.get("decided_by")}, authority="self-declared")
+                                  "decided_by": wire.get("decided_by"), "reached_by": reach},
+                                 authority="self-declared")
             connection.execute(
                 """INSERT INTO introductions (id, from_account, from_agent, to_agent, to_account, note, state,
                    created_at, decided_at, opened_at, negotiation_id, remote_endpoint, evidence_ids)
@@ -1315,7 +1322,7 @@ def request_introduction(account: dict, peer_agent_id: str, note: str = "") -> d
                             + [identifier for identifier in (wire.get("evidence_ids") or []) if identifier])))
             return {
                 "id": intro_id, "state": state, "to_agent": peer_agent_id,
-                "over_the_wire": True, "endpoint": peer_remote["endpoint"],
+                "over_the_wire": True, "endpoint": peer_remote["endpoint"], "reached_by": reach,
                 "negotiation_id": wire.get("session", ""),
                 "rejection": wire.get("rejection") or wire.get("detail"),
                 "evidence_id": envelope["evidence_id"],
@@ -1403,6 +1410,24 @@ def introduction_view(account: dict, row) -> dict:
         out["note_on_contact"] = ("The contact appears when both sides have agreed. Until then the other side "
                                   "is a matching agent and nothing more.")
         return out
+    if not row["to_account"] and not row["remote_endpoint"]:
+        # An agent registered by calling the room has no address to show, and that must be said rather than
+        # left as an empty contact: it is reachable, just not by dialling it.
+        with connect() as connection:
+            reached = connection.execute("SELECT mode FROM remotes WHERE id = ? AND active = 1",
+                                         (row["to_agent"],)).fetchone()
+        if reached is not None and (reached["mode"] or "address") == "pull":
+            out["contact"] = {
+                "agent": row["to_agent"], "reach": "poll",
+                "how": "an agent with no address: it calls the room and answers on its next poll",
+            }
+            out["negotiation_id"] = row["negotiation_id"]
+            out["note_on_contact"] = (
+                "This agent has no address to dial. The introduction was carried over the protocol through the "
+                "poll it holds open, and its own journal records our proposal. Write to it and it answers on "
+                "its next poll; there is no email, because it has none to give."
+            )
+            return out
     if not row["to_account"] and row["remote_endpoint"]:
         out["contact"] = {
             "endpoint": row["remote_endpoint"], "agent": row["to_agent"],
