@@ -397,7 +397,9 @@ dl.terms dd{color:var(--ink)}
           : (row.sample ? '<span class="chip">example: nobody to ask</span>'
                         : '<span class="chip">registered here with no account: nowhere for a request to land</span>');
         return '<div class="rrow"><div class="who"><b>' + esc(row.name) + '</b>' +
-          (row.sample ? ' <span class="chip">example</span>' : (row.askable ? ' <span class="chip ok">registered</span>' : ' <span class="chip">no door</span>')) +
+          (row.sample ? ' <span class="chip">example</span>'
+                      : (row.pull ? ' <span class="chip ok">no address: answers on its own poll</span>'
+                                  : (row.askable ? ' <span class="chip ok">registered</span>' : ' <span class="chip">no door</span>'))) +
           '<div class="small">' + esc(row.headline || '') + '</div></div>' +
           '<div class="small">' + kindWord(row.kind) + '</div><div class="small">' + esc(row.city || '') + '</div>' +
           '<div>' + overlap + '<div style="margin-top:6px">' + ask + '</div></div></div>';

@@ -76,3 +76,17 @@ def test_the_identity_window_is_a_deployment_decision(monkeypatch) -> None:
     assert identity_window_seconds() == 6
     monkeypatch.setenv("ARLI_IDENTITY_WINDOW_SECONDS", "not-a-number")
     assert identity_window_seconds() == IDENTITY_WINDOW_SECONDS, "a bad value falls back, it does not explode"
+
+
+def test_a_dropped_poll_is_waited_out_not_fatal(monkeypatch) -> None:
+    """A room restart drops the open poll. RemoteDisconnected is not a URLError, and catching only that killed
+    the loop on a normal operational event, after which the room could not reach the agent at all."""
+    import http.client
+
+    def dropped(*a, **k):
+        raise http.client.RemoteDisconnected("Remote end closed connection without response")
+
+    monkeypatch.setattr(pull, "register", dropped)
+    outcome, detail, wait = pull.registration_attempt("room", SimpleNamespace(), _args())
+    assert outcome == "wait" and wait == pull.RETRY_SECONDS, (outcome, detail)
+    assert "RemoteDisconnected" in detail

@@ -24,6 +24,7 @@ Or let it raise the agent itself:
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import sys
@@ -39,6 +40,10 @@ from arli_engine.client import AgentClient, AgentRefused
 DEFAULT_ROOM = "https://match.arliwork.com"
 DEFAULT_PORT = 8811
 RETRY_SECONDS = 3
+# A room restart drops the long poll that is open, and a dropped poll is not a failure of anything: the room went
+# away for a moment and will be back. RemoteDisconnected is not a URLError, so catching only that let a normal
+# operational event kill the loop, and then the room could not reach the agent at all.
+ROOM_GONE = (urllib.error.URLError, http.client.HTTPException, OSError)
 # Our own agent signs one nonce per address and purpose per minute, so a registration repeated inside that
 # window is refused by the agent the loop is registering. That is a wait, not a failure: retrying every three
 # seconds against our own rate window is how a restart turns into a crash instead of a delay.
@@ -103,8 +108,8 @@ def registration_attempt(room: str, local: AgentClient, args) -> tuple[str, str,
         if "rate_limited" in body:
             return "wait", f"the room refused for now: {error.code} {body}", RATE_WAIT_SECONDS
         return "fatal", f"registration refused: {error.code} {body}", 0
-    except urllib.error.URLError as error:
-        return "wait", f"room not reachable ({error})", RETRY_SECONDS
+    except ROOM_GONE as error:
+        return "wait", f"room not reachable ({type(error).__name__}: {error})", RETRY_SECONDS
     if not answer.get("registered"):
         return "fatal", f"registration did not take: {answer}", 0
     return "registered", str(answer.get("pull_token") or ""), 0
@@ -134,8 +139,9 @@ def serve(room: str, local: AgentClient, args) -> int:
             print(f"poll refused ({error.code}); trying again")
             time.sleep(RETRY_SECONDS)
             continue
-        except urllib.error.URLError as error:
-            print(f"poll failed ({error}); trying again")
+        except ROOM_GONE as error:
+            # The room restarted, or the network blinked: the poll was dropped, not refused.
+            print(f"poll dropped ({type(error).__name__}); polling again in {RETRY_SECONDS}s")
             time.sleep(RETRY_SECONDS)
             continue
         if not call:
@@ -151,8 +157,8 @@ def serve(room: str, local: AgentClient, args) -> int:
             body = {"pull_token": token, "call_id": call_id, "error": f"{type(error).__name__}: {error}"}
         try:
             _post(f"{room}/api/pull/answer", body)
-        except urllib.error.URLError as error:
-            print(f"answer could not be delivered ({error})")
+        except ROOM_GONE as error:
+            print(f"answer could not be delivered ({type(error).__name__}: {error})")
         served += 1
         print(f"answered {method} ({served} so far)")
 

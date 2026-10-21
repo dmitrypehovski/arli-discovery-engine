@@ -880,6 +880,8 @@ def scan_room(my_features: list[str], floor: int, my_kind: str) -> dict:
         # at an address or through the poll it holds open. Without this the page draws no ask button and the
         # person cannot do what the row says is possible.
         result["askable"] = bool(remote["active"])
+        # And how it is reached, so the answer does not make a polled agent look like one with an address.
+        result["pull"] = (remote.get("mode") or "address") == "pull"
         if result.get("answered", True):
             note_remote_success(remote["id"])
         else:
