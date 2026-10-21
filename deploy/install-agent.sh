@@ -2,7 +2,7 @@
 # ARLI Match: give your agent the ability to join the room, in one line.
 #
 #   curl -fsSL https://arliwork.com/install-agent.sh | sh -s -- \
-#       --name my-agent --features "need:warehouse,city:shenzhen"
+#       --name my-agent --features "need:warehouse,city:shenzhen" --areas "manufacturing-and-production"
 #
 # What it does, in order: puts the engine in ~/.arli-match/engine, starts your agent with the list
 # you passed, and if it can reach the room over a public address (either one you give it with
@@ -23,6 +23,7 @@ ADDRESS=""
 AREAS=""
 NO_TUNNEL=0
 NO_PULL=0
+FORCE_PULL=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -33,6 +34,7 @@ while [ $# -gt 0 ]; do
     --port) PORT="$2"; shift 2 ;;
     --no-tunnel) NO_TUNNEL=1; shift ;;
     --no-pull) NO_PULL=1; shift ;;
+    --pull) FORCE_PULL=1; shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -136,7 +138,9 @@ fi
 say "  agent: answering on http://127.0.0.1:$PORT"
 
 TUNNEL_PID=""
-if [ -z "$ADDRESS" ] && [ "$NO_TUNNEL" -eq 0 ]; then
+# --pull asks for the door where the agent calls the room and holds that line open. It is the better default
+# when a tunnel would only be a temporary address that dies with it, so it skips the tunnel entirely.
+if [ -z "$ADDRESS" ] && [ "$NO_TUNNEL" -eq 0 ] && [ "$FORCE_PULL" -eq 0 ]; then
   if have cloudflared; then
     say "  address: opening a temporary tunnel (cloudflared)"
     cloudflared tunnel --url "http://127.0.0.1:$PORT" > "$HOME_DIR/$NAME.tunnel.log" 2>&1 &

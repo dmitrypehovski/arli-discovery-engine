@@ -65,6 +65,20 @@ CARD_PATH = "/.well-known/agent-card.json"
 CAPS_PATH = "/.well-known/arli-capabilities.json"
 MIN_NONCE_CHARS = 16
 IDENTITY_WINDOW_SECONDS = 60
+
+
+def identity_window_seconds() -> int:
+    """How long one signed nonce stands for, per address and purpose.
+
+    A deployment may state its own. A test needs a short one: a minute is right for a real agent and useless for
+    proving that a loop refused inside the window waits it out instead of dying.
+    """
+    import os
+
+    try:
+        return int(os.environ.get("ARLI_IDENTITY_WINDOW_SECONDS") or IDENTITY_WINDOW_SECONDS)
+    except ValueError:
+        return IDENTITY_WINDOW_SECONDS
 RPC_PATH = "/a2a/rpc"
 HEALTH_PATH = "/api/health"
 
@@ -708,13 +722,14 @@ def _methods(state: AgentState) -> dict:
         if not state.private_pem:
             raise ValueError("internal: this agent has no private key to sign with")
 
+        window_seconds = identity_window_seconds()
         window = (state.peer, purpose.strip().lower())
         now = _time.time()
         last = state.identity_requests.get(window)
-        if last is not None and now - last < IDENTITY_WINDOW_SECONDS:
+        if last is not None and now - last < window_seconds:
             raise ValueError(
                 f"rate_limited: one signed nonce per address and purpose per "
-                f"{IDENTITY_WINDOW_SECONDS}s"
+                f"{window_seconds}s"
             )
         state.identity_requests[window] = now
 

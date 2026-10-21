@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 import urllib.error
@@ -33,11 +34,15 @@ from pathlib import Path
 
 from arli_engine.adapters.a2a.server import start_agent
 from arli_engine.agent import build_agent
-from arli_engine.client import AgentClient
+from arli_engine.client import AgentClient, AgentRefused
 
 DEFAULT_ROOM = "https://match.arliwork.com"
 DEFAULT_PORT = 8811
 RETRY_SECONDS = 3
+# Our own agent signs one nonce per address and purpose per minute, so a registration repeated inside that
+# window is refused by the agent the loop is registering. That is a wait, not a failure: retrying every three
+# seconds against our own rate window is how a restart turns into a crash instead of a delay.
+RATE_WAIT_SECONDS = int(os.environ.get("ARLI_PULL_RATE_WAIT") or 61)
 
 
 def _post(url: str, payload: dict, timeout: float = 120.0) -> dict:
@@ -65,31 +70,59 @@ def register(room: str, local: AgentClient, *, kind: str, city: str, headline: s
         raise RuntimeError(f"the room did not issue a nonce: {hello}")
     signed = local.call("arli/identity/sign", {"nonce": nonce, "purpose": str(hello.get("purpose") or "pull")})
     profile = local.call("arli/profile")
-    return _post(f"{room}/api/pull/register", {
+    answer = _post(f"{room}/api/pull/register", {
         "card": card, "nonce": nonce, "signature": signed.get("signature", ""),
         "kind": kind, "city": city, "headline": headline, "profile": profile,
     })
+    if answer.get("registered"):
+        print(f"registered as {answer.get('id')}: {(answer.get('checks') or {}).get('reachability')}")
+        print(f"token expires {answer.get('token_expires_at')} after {answer.get('token_term_days')} days, "
+              f"and is not renewed silently")
+    return answer
+
+
+def wait_for(error: Exception) -> int:
+    """How long to wait after this failure. A refusal from our own rate window is a wait, not a crash."""
+    return RATE_WAIT_SECONDS if "rate_limited" in str(error) else RETRY_SECONDS
+
+
+def registration_attempt(room: str, local: AgentClient, args) -> tuple[str, str, int]:
+    """One attempt, classified: registered, wait, or fatal. Kept apart from the loop so it can be tested."""
+    try:
+        answer = register(room, local, kind=args.kind, city=args.city, headline=args.headline)
+    except AgentRefused as error:
+        # Our own agent refused the signature, usually its own rate window. Saying "rate_limited" and dying
+        # would turn a minute of patience into a crash.
+        return "wait", f"our own agent refused the registration signature ({error})", wait_for(error)
+    except urllib.error.HTTPError as error:
+        body = ""
+        try:
+            body = error.read()[:200].decode(errors="ignore")
+        except Exception:  # noqa: BLE001
+            pass
+        if "rate_limited" in body:
+            return "wait", f"the room refused for now: {error.code} {body}", RATE_WAIT_SECONDS
+        return "fatal", f"registration refused: {error.code} {body}", 0
+    except urllib.error.URLError as error:
+        return "wait", f"room not reachable ({error})", RETRY_SECONDS
+    if not answer.get("registered"):
+        return "fatal", f"registration did not take: {answer}", 0
+    return "registered", str(answer.get("pull_token") or ""), 0
 
 
 def serve(room: str, local: AgentClient, args) -> int:
     """Register, then answer whatever the room asks through the poll, until stopped."""
     while True:
-        try:
-            answer = register(room, local, kind=args.kind, city=args.city, headline=args.headline)
+        outcome, detail, wait = registration_attempt(room, local, args)
+        if outcome == "registered":
+            token = detail
             break
-        except urllib.error.HTTPError as error:
-            print(f"registration refused: {error.code} {error.read()[:200].decode(errors='ignore')}")
+        if outcome == "fatal":
+            print(detail)
             return 1
-        except urllib.error.URLError as error:
-            print(f"room not reachable ({error}); trying again")
-            time.sleep(RETRY_SECONDS)
-    if not answer.get("registered"):
-        print(f"registration did not take: {answer}")
-        return 1
-    token = str(answer.get("pull_token") or "")
-    print(f"registered as {answer.get('id')}: {(answer.get('checks') or {}).get('reachability')}")
-    print(answer.get("note", ""))
-
+        print(f"{detail}; waiting {wait}s")
+        time.sleep(wait)
+    print("registration accepted: the room will reach this agent through its own poll")
     served = 0
     while True:
         try:
