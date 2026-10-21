@@ -284,7 +284,7 @@ def check_durability() -> None:
 def check_live() -> None:
     for path, what in ((f"{ROOM}/", "public page"), (f"{ROOM}/app", "product page"),
                        (f"{ROOM}/spec/", "specification page"), (f"{ROOM}/privacy", "storage page"),
-                       (f"{ROOM}/join", "join page"),
+                       (f"{ROOM}/join", "join page"), (f"{ROOM}/room", "room listing page"),
                        (f"{ROOM}/api/health", "health")):
         try:
             with urllib.request.urlopen(path, timeout=30) as response:
@@ -305,6 +305,15 @@ def check_live() -> None:
                        "the storage page is linked" if "/privacy" in body else "not linked")
         except Exception as error:  # noqa: BLE001
             record(f"live: {what}", False, f"{type(error).__name__}: {error}")
+
+    code, listing = _json(f"{ROOM}/api/listing")
+    published = json.dumps(listing)
+    record("live: the room listing separates participants from examples", code == 200 and "examples" in listing,
+           f"hosted {listing.get('counts', {}).get('hosted')}, connected {listing.get('counts', {}).get('connected')}, "
+           f"examples {listing.get('counts', {}).get('examples')}")
+    record("live: the listing publishes no foreign address", "endpoint" not in published
+           and "trycloudflare" not in published,
+           "a list of addresses would be a target list" if "endpoint" not in published else "an address is in it")
 
     code, unknown = _json(f"{ROOM}/api/join/check", {"agent": "no-agent-with-this-name"})
     record("live: the join check says no to an unknown name", code == 200 and unknown.get("in_room") is False,

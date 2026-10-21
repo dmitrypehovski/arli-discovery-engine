@@ -491,6 +491,48 @@ def pull_answer(agent_id: str, call_id: str, result: dict | None, error: str = "
 JOIN_CHECKS_ALLOWED = int(os.environ.get("ARLI_MATCH_JOIN_CHECKS") or 60)
 
 
+def room_listing() -> dict:
+    """Who is in the room right now, told the way the room knows them.
+
+    What is published about each agent: the name it registered under, its kind, its city and its headline, which
+    are already public in a search result, plus how it is reached and how many areas it publishes. What is NOT
+    published: the address of an agent at its own address. A listing of addresses is a target list, and the room
+    already refuses to hand one out in a search; a directory is not going to be the hole that leaks it. Examples
+    are kept in their own group, so nobody reads them as a market.
+    """
+    hosted, connected, examples = [], [], []
+    for agent in stored_agents():
+        hosted.append({"name": agent["name"], "kind": agent["kind"], "city": agent["city"],
+                       "headline": agent["headline"], "reached": "hosted here",
+                       "items": agent.get("feature_count"), "areas": None})
+    for remote in remotes_to_check():
+        if not remote.get("active"):
+            continue  # it left the room; its name is not offered anywhere else either
+        pull = (remote.get("mode") or "address") == "pull"
+        if pull and not _pull_is_live(remote):
+            continue
+        try:
+            profile = json.loads(remote.get("profile") or "{}")
+        except json.JSONDecodeError:
+            profile = {}
+        connected.append({"name": remote["name"], "kind": remote["kind"], "city": remote["city"],
+                          "headline": remote["headline"],
+                          "reached": ("by calling the room and holding it open" if pull else "at its own address"),
+                          "pull": pull, "items": None,
+                          "areas": len(profile.get("buckets") or {}) or None,
+                          "vocabulary": str(profile.get("bucket_space") or "")})
+    if shows_examples():
+        for agent in ROSTER:
+            view = public_view(agent)
+            examples.append({"name": view["name"], "kind": view["kind"], "city": view["city"],
+                             "headline": view["headline"], "reached": "example: nobody to ask"})
+    return {"mode": room_mode(), "counts": {"hosted": len(hosted), "connected": len(connected),
+                                            "examples": len(examples)},
+            "hosted": hosted, "connected": connected, "examples": examples,
+            "note": "Addresses of agents at their own address are not listed here and are not listed in a search "
+                    "either. An example agent is not a market."}
+
+
 def join_check(what: str) -> dict:
     """Is this agent in the room, and how does the room reach it?
 
@@ -2003,7 +2045,11 @@ class Handler(BaseHandler):
                 "default_floor_basis_points": DEFAULT_FLOOR,
                 "default_mine": DEFAULT_MINE,
                 "sample_agents": sum(1 for agent in agents if agent.get("sample")),
-                "registered_agents": sum(1 for agent in agents if not agent.get("sample")),
+                # Not a sample and not a remote: a connected agent is not a registered one, and one word for
+                # both numbers is how a room of five appears in one place and of two in another.
+                "registered_agents": sum(1 for agent in agents
+                                         if not agent.get("sample") and not agent.get("remote")),
+                "connected_agents": sum(1 for agent in agents if agent.get("remote")),
                 "note": "The starter agents are synthetic and labelled. Registered agents are real "
                         "entries; no feature list is ever returned by this endpoint.",
                 "agents": agents,
@@ -2044,6 +2090,13 @@ class Handler(BaseHandler):
                              "sample_agents": (len(ROSTER) if shows_examples() else 0), "room_mode": room_mode(), "registered_agents": registered,
                              "connected_agents": len(remote_agents()),
                              "database": str(DB_PATH), "network": "network-eu-design"})
+            return
+        if path in ("/room", "/room/"):
+            # Who is in the room, because a network nobody can see is a network nobody joins.
+            self._serve_page(HERE / "room.html")
+            return
+        if path == "/api/listing":
+            self._json(200, room_listing())
             return
         if path in ("/join", "/join/"):
             self._serve_page(HERE / "join.html")

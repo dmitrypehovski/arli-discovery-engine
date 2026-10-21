@@ -1158,3 +1158,36 @@ def test_the_join_check_answers_about_the_agent_asked_with_grounds(monkeypatch, 
     hosted_answer = service.join_check("Join Warehouse")
     assert hosted_answer["hosted"] is True and hosted_answer["feature_count"] == 1, hosted_answer
     assert service.join_check("  ")["in_room"] is False
+
+
+def test_the_room_listing_separates_what_is_here_from_what_is_an_example(monkeypatch, tmp_path) -> None:
+    """Examples and participants in one table would read as a market, which is the mistake this product must not make."""
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    service.create_agent({"name": "Hosted One", "kind": "supply", "features": ["offer:warehousing"]})
+    with service.connect() as connection:
+        connection.execute(
+            """INSERT INTO remotes (id, name, kind, city, headline, endpoint, kid, jwk, connected_at, active,
+                                    profile, bucket_space, mode, pull_token, pull_expires_at, last_poll, card)
+               VALUES ('calls-us','calls-us','supply','berlin','one line','','k','{}','2026-01-01T00:00:00Z',1,
+                       '{"buckets": {"manufacturing-and-production": 1}, "bucket_space": "arli-areas-v1"}',
+                       'arli-areas-v1','pull','t','2099-01-01T00:00:00Z','','{}')""")
+    listing = service.room_listing()
+    assert [agent["name"] for agent in listing["hosted"]] == ["Hosted One"]
+    assert [agent["name"] for agent in listing["connected"]] == ["calls-us"]
+    assert listing["counts"]["examples"] == len(listing["examples"]) > 0, listing["counts"]
+    assert all("example" in agent["reached"] for agent in listing["examples"])
+    assert listing["connected"][0]["pull"] is True and listing["connected"][0]["areas"] == 1
+
+
+def test_the_room_listing_never_publishes_a_foreign_address(monkeypatch, tmp_path) -> None:
+    """A directory of addresses is a target list. The room refuses to hand one out in a search, and must not here."""
+    service = _service_on_a_temp_store(monkeypatch, tmp_path)
+    with service.connect() as connection:
+        connection.execute(
+            """INSERT INTO remotes (id, name, kind, city, headline, endpoint, kid, jwk, connected_at, active,
+                                    profile, bucket_space, mode, pull_token, pull_expires_at, last_poll, card)
+               VALUES ('at-its-address','at-its-address','supply','','','https://do-not-publish.example.com','k',
+                       '{}','2026-01-01T00:00:00Z',1,'{}','','address','','','','{}')""")
+    listed = json.dumps(service.room_listing(), ensure_ascii=False)
+    assert "do-not-publish.example.com" not in listed, "the listing published an address"
+    assert "at-its-address" in listed, "but it does say the agent is there"
